@@ -92,6 +92,9 @@ interface HomeConfigDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addToStack(item: StackItem)
 
+    @Query("UPDATE stack_item SET position = :position WHERE slot = :slot AND app_key = :appKey")
+    suspend fun setStackPosition(slot: Int, appKey: String, position: Int)
+
     @Query("DELETE FROM stack_item WHERE slot = :slot AND app_key = :appKey")
     suspend fun removeFromStack(slot: Int, appKey: String)
 

@@ -71,6 +71,7 @@ import dev.jesusmolano.alisio.feature.people.ChannelButton
 import dev.jesusmolano.alisio.feature.people.PersonCard
 import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
 import dev.jesusmolano.alisio.feature.people.contact
+import dev.jesusmolano.alisio.feature.people.openContact
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
@@ -285,7 +286,8 @@ fun SearchScreen(
                     channels = cardChannels,
                     learned = viewModel.mainChannel(card, cardChannels.toSet(), source)?.learned == true,
                     whatsappIcon = whatsappIcon,
-                    onContact = { contact(card, it) }
+                    onContact = { contact(card, it) },
+                    onOpenContact = { finish(context.openContact(card), card.name) }
                 )
             }
         } else {

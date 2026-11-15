@@ -91,6 +91,11 @@ class HomeConfigRepository(private val dao: HomeConfigDao, private val scope: Co
         dao.clearSlot(position)
     }
 
+    /** Guarda el orden elegido a mano: cada app queda en el puesto que ocupa en [appKeys]. */
+    fun reorderStack(position: Int, appKeys: List<String>) = write {
+        appKeys.forEachIndexed { index, appKey -> dao.setStackPosition(position, appKey, index) }
+    }
+
     fun toggleInStack(position: Int, appKey: String) = write {
         if (dao.isInStack(position, appKey)) {
             dao.removeFromStack(position, appKey)

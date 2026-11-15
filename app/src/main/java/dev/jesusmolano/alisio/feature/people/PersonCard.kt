@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,13 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -62,6 +69,7 @@ fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
  *
  * @param channels en orden de uso; el primero es el principal y va marcado con el acento.
  * @param learned el canal principal sale del historial: la tarjeta lo dice.
+ * @param onOpenContact abre su ficha en la app de Contactos.
  */
 @Composable
 fun PersonCard(
@@ -70,6 +78,7 @@ fun PersonCard(
     learned: Boolean,
     whatsappIcon: Bitmap?,
     onContact: (Channel) -> Unit,
+    onOpenContact: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = AlisioTokens.CardShape
@@ -83,7 +92,7 @@ fun PersonCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(name, 56.dp)
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.titleLarge,
@@ -99,6 +108,23 @@ fun PersonCard(
                         color = AlisioTokens.TextSecondary
                     )
                 }
+            }
+            val openContact = stringResource(R.string.person_open_contact)
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .clickable(role = Role.Button, onClick = onOpenContact)
+                    .semantics { contentDescription = openContact },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_person),
+                    // El nombre de la acción ya está en la semántica del botón.
+                    contentDescription = null,
+                    tint = AlisioTokens.TextSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
         Spacer(Modifier.height(18.dp))

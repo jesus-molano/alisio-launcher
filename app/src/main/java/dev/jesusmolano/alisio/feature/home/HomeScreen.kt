@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +44,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,13 +56,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -66,9 +74,11 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.search.filterByName
+import dev.jesusmolano.alisio.core.search.moved
 import dev.jesusmolano.alisio.core.text.takeGraphemes
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.toSections
@@ -79,6 +89,7 @@ import dev.jesusmolano.alisio.feature.search.searchHint
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
+import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
@@ -87,6 +98,7 @@ import java.time.format.DateTimeFormatter
 private val DockIconSize = 52.dp
 private val StackMiniIconSize = 19.dp
 private val PillHeight = 56.dp
+private val StackOrderRowHeight = 56.dp
 private val DockHeight = 86.dp
 private val ScreenMargin = 24.dp
 
@@ -273,6 +285,7 @@ fun HomeScreen(
             onMakeStack = { viewModel.makeDockStack(position, defaultStackName) },
             onRenameStack = { viewModel.renameDockStack(position, it) },
             onSetStackIcon = { icon, glyph -> viewModel.setStackIcon(position, icon, glyph) },
+            onReorderStack = { viewModel.reorderStack(position, it) },
             onClear = {
                 viewModel.clearDockSlot(position)
                 editing = null
@@ -503,6 +516,7 @@ private fun SlotSheet(
     onMakeStack: () -> Unit,
     onRenameStack: (String) -> Unit,
     onSetStackIcon: (StackIcon, String) -> Unit,
+    onReorderStack: (List<AppEntry>) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -604,6 +618,11 @@ private fun SlotSheet(
                     }
                 }
             }
+            if (stack != null && query.isBlank() && stack.apps.size > 1) {
+                item { SectionLabel(stringResource(R.string.stack_order_title)) }
+                item { StackOrder(stack.apps, onReorderStack) }
+                item { SectionLabel(stringResource(R.string.stack_all_apps)) }
+            }
             items(filtered, key = { it.key.toString() }) { app ->
                 val checked = app.key in inStack
                 ItemRow(
@@ -645,5 +664,113 @@ private fun StackIconOption(preview: DockSlot.Stack, label: String, selected: Bo
             style = AlisioTokens.DockLabel,
             color = if (selected) AlisioTokens.Accent else AlisioTokens.TextSecondary
         )
+    }
+}
+
+/**
+ * Las apps de la pila en su orden, que es el de la hoja y el del icono de carpeta. Se reordenan
+ * arrastrando el asa de la derecha; TalkBack ofrece «subir» y «bajar» en el asa.
+ *
+ * El orden se lleva en local mientras dura el arrastre y se guarda al soltar: escribir en cada
+ * cruce de fila haría saltar la lista con cada respuesta de la base de datos.
+ */
+@Composable
+private fun StackOrder(apps: List<AppEntry>, onReorder: (List<AppEntry>) -> Unit) {
+    var order by remember(apps) { mutableStateOf(apps) }
+    var dragging by remember { mutableStateOf<AppEntry?>(null) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    val rowHeightPx = with(LocalDensity.current) { StackOrderRowHeight.toPx() }
+    val moveUp = stringResource(R.string.stack_move_up)
+    val moveDown = stringResource(R.string.stack_move_down)
+
+    fun move(app: AppEntry, by: Int): Boolean {
+        val index = order.indexOf(app)
+        val target = index + by
+        if (index < 0 || target !in order.indices) return false
+        order = order.moved(index, target)
+        return true
+    }
+
+    Column {
+        order.forEach { app ->
+            key(app.key.toString()) {
+                val isDragging = dragging === app
+                val handle = stringResource(R.string.stack_drag, app.label)
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(StackOrderRowHeight)
+                            .zIndex(if (isDragging) 1f else 0f)
+                            .graphicsLayer { translationY = if (isDragging) offset else 0f }
+                            .background(
+                                if (isDragging) AlisioTokens.SurfaceElevated else Color.Transparent,
+                                AlisioTokens.RowShape
+                            )
+                            .padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIcon(app.icon, 40.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Text(
+                        text = app.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = AlisioTokens.Text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .semantics {
+                                contentDescription = handle
+                                customActions =
+                                    listOf(
+                                        CustomAccessibilityAction(moveUp) {
+                                            move(app, -1).also { if (it) onReorder(order) }
+                                        },
+                                        CustomAccessibilityAction(moveDown) {
+                                            move(app, 1).also { if (it) onReorder(order) }
+                                        }
+                                    )
+                            }
+                            .pointerInput(app.key) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragging = app
+                                        offset = 0f
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        offset += amount.y
+                                        // Al pasar de media fila, la app cambia de puesto y el arrastre sigue desde ahí.
+                                        val step =
+                                            when {
+                                                offset > rowHeightPx / 2 -> 1
+                                                offset < -rowHeightPx / 2 -> -1
+                                                else -> 0
+                                            }
+                                        if (step != 0 && move(app, step)) offset -= step * rowHeightPx
+                                    },
+                                    onDragEnd = {
+                                        dragging = null
+                                        offset = 0f
+                                        onReorder(order)
+                                    },
+                                    onDragCancel = {
+                                        dragging = null
+                                        offset = 0f
+                                        order = apps
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("≡", style = MaterialTheme.typography.titleLarge, color = AlisioTokens.TextSecondary)
+                    }
+                }
+            }
+        }
     }
 }

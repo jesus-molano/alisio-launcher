@@ -18,6 +18,11 @@
     <string name="stack_icon_first">First app</string>
     <string name="stack_icon_symbol">Symbol</string>
     <string name="stack_symbol_hint">A symbol or an emoji</string>
+    <string name="stack_order_title">IN THIS STACK</string>
+    <string name="stack_all_apps">ALL APPS</string>
+    <string name="stack_drag">Drag to move %1$s</string>
+    <string name="stack_move_up">Move up</string>
+    <string name="stack_move_down">Move down</string>
     <string name="stack_edit">Edit this stack</string>
     <string name="slot_title">Dock slot</string>
     <string name="slot_make_stack">Turn into a stack</string>
@@ -32,6 +37,7 @@
     <string name="channel_whatsapp_video">WhatsApp video</string>
     <string name="channel_call">Call</string>
     <string name="channel_sms" translatable="false">SMS</string>
+    <string name="person_open_contact">Open contact</string>
     <string name="person_reason">You usually use %1$s</string>
     <string name="search_section_people">PEOPLE</string>
     <string name="people_allow">Find people from here</string>

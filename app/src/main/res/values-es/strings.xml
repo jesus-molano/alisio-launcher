@@ -16,6 +16,11 @@
     <string name="stack_icon_first">Primera app</string>
     <string name="stack_icon_symbol">Símbolo</string>
     <string name="stack_symbol_hint">Un símbolo o un emoji</string>
+    <string name="stack_order_title">EN ESTA PILA</string>
+    <string name="stack_all_apps">TODAS LAS APPS</string>
+    <string name="stack_drag">Arrastra para mover %1$s</string>
+    <string name="stack_move_up">Subir</string>
+    <string name="stack_move_down">Bajar</string>
     <string name="stack_edit">Editar esta pila</string>
     <string name="slot_title">Hueco del dock</string>
     <string name="slot_make_stack">Convertir en pila</string>
@@ -28,6 +33,7 @@
     <string name="channel_whatsapp_call">Llamada de WhatsApp</string>
     <string name="channel_whatsapp_video">Vídeo de WhatsApp</string>
     <string name="channel_call">Llamar</string>
+    <string name="person_open_contact">Abrir contacto</string>
     <string name="person_reason">Sueles usar %1$s</string>
     <string name="search_section_people">PERSONAS</string>
     <string name="people_allow">Busca personas desde aquí</string>

@@ -51,6 +51,14 @@ internal fun Context.contact(person: Person, channel: Channel, direct: Boolean =
     }
 }
 
+/** Abre la ficha de la persona en la app de Contactos: ahí están sus datos y se edita. */
+internal fun Context.openContact(person: Person): Boolean = start(
+    Intent(
+        Intent.ACTION_VIEW,
+        Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_LOOKUP_URI, person.lookupKey)
+    )
+)
+
 /** `wa.me` solo admite cifras; un número guardado sin prefijo de país puede no encontrar el chat. */
 private fun waMe(phone: String): Intent =
     Intent(Intent.ACTION_VIEW, "https://wa.me/${phone.filter(Char::isDigit)}".toUri()).setPackage(WHATSAPP_PACKAGE)

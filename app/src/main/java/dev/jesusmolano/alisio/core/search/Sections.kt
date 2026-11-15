@@ -24,3 +24,9 @@ fun <T> List<T>.filterByName(query: String, label: (T) -> String): List<T> {
 /** Claves ordenadas de la apertura más reciente a la más antigua. */
 fun Map<String, List<Long>>.mostRecentKeys(): List<String> =
     entries.filter { it.value.isNotEmpty() }.sortedByDescending { it.value.max() }.map { it.key }
+
+/** La lista con el elemento de [from] movido a [to]; los demás conservan su orden. */
+fun <T> List<T>.moved(from: Int, to: Int): List<T> {
+    if (from == to || from !in indices || to !in indices) return this
+    return toMutableList().apply { add(to, removeAt(from)) }
+}

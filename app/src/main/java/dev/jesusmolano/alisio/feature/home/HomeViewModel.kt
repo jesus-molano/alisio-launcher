@@ -71,6 +71,9 @@ class HomeViewModel(
 
     fun clearDockSlot(position: Int) = homeConfig.clear(position)
 
+    fun reorderStack(position: Int, apps: List<AppEntry>) =
+        homeConfig.reorderStack(position, apps.map { it.key.toString() })
+
     fun toggleInStack(position: Int, app: AppEntry) = homeConfig.toggleInStack(position, app.key.toString())
 
     /** El rol de inicio da acceso a los accesos directos: hay que volver a leerlos al obtenerlo. */

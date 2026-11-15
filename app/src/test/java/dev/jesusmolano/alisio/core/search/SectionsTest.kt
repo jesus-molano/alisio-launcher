@@ -28,4 +28,13 @@ class SectionsTest {
         val openings = mapOf("a" to listOf(1L, 9L), "b" to listOf(5L), "c" to listOf(10L), "d" to emptyList())
         assertEquals(listOf("c", "a", "b"), openings.mostRecentKeys())
     }
+
+    @Test
+    fun `mover un elemento conserva el orden de los demas`() {
+        val apps = listOf("a", "b", "c", "d")
+        assertEquals(listOf("b", "c", "a", "d"), apps.moved(0, 2))
+        assertEquals(listOf("d", "a", "b", "c"), apps.moved(3, 0))
+        assertEquals(apps, apps.moved(1, 1))
+        assertEquals(apps, apps.moved(1, 9))
+    }
 }
