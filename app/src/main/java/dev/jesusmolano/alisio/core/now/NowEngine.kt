@@ -11,7 +11,7 @@ enum class NowRule {
     /** App instalada o actualizada hace menos de 24 h y sin abrir desde entonces. */
     NEW_VERSION,
 
-    /** La app que más se abre al poco de conectar el dispositivo de audio que está conectado ahora. */
+    /** La app que más se abre al poco de conectar el dispositivo de audio que se acaba de conectar. */
     BLUETOOTH,
 
     /** App que se suele abrir a esta hora en días como hoy y que hoy aún no se ha abierto. */
@@ -38,7 +38,7 @@ class NowFeedback(val dismissals: Int, val lastDismissedAt: Long)
  * @param openings horas de apertura por clave de app.
  * @param dockKeys apps del dock (también dentro de sus pilas): ya están a un toque y la regla de
  *   costumbre no las sugiere.
- * @param bluetoothDevice dispositivo de audio conectado ahora, si lo hay.
+ * @param bluetooth dispositivo de audio conectado ahora, si lo hay, con su hora de conexión.
  * @param bluetoothOpenings por dispositivo, cuántas veces se abrió cada app al poco de conectarlo.
  */
 class NowInput(
@@ -47,7 +47,7 @@ class NowInput(
     val apps: List<NowApp>,
     val openings: Map<String, List<Long>>,
     val dockKeys: Set<String>,
-    val bluetoothDevice: String? = null,
+    val bluetooth: ConnectedAudio? = null,
     val bluetoothOpenings: Map<String, Map<String, Int>> = emptyMap(),
     val feedback: Map<Pair<NowRule, String>, NowFeedback> = emptyMap()
 )
@@ -57,6 +57,12 @@ const val NEW_VERSION_WINDOW_MILLIS = 24 * HOUR_MILLIS
 const val DISMISS_HIDE_MILLIS = 6 * HOUR_MILLIS
 const val DISMISSALS_TO_SILENCE = 3
 private const val BLUETOOTH_MIN_CASES = 3
+
+/**
+ * Cuánto dura la sugerencia de Bluetooth tras conectar. Más que [BLUETOOTH_WINDOW_MILLIS], la ventana
+ * en la que una apertura cuenta como caso: el teléfono no siempre se mira nada más conectar.
+ */
+const val BLUETOOTH_SUGGEST_MILLIS = 15 * 60 * 1000L
 private const val RECENT_USE_MILLIS = 6 * HOUR_MILLIS
 private const val HABIT_WINDOW_MINUTES = 30
 private const val HABIT_DAYS = 5
@@ -78,14 +84,21 @@ private fun newVersion(input: NowInput): NowSuggestion? = input.apps
     ?.let { NowSuggestion(NowRule.NEW_VERSION, it.key, since = it.updatedAt) }
 
 private fun bluetooth(input: NowInput): NowSuggestion? {
-    val device = input.bluetoothDevice ?: return null
+    val connected = input.bluetooth ?: return null
+    // La regla habla del momento de conectar. Con el dispositivo puesto durante horas, seguir
+    // proponiendo su app taparía la regla de costumbre todo ese tiempo.
+    if (input.now - connected.since !in 0 until BLUETOOTH_SUGGEST_MILLIS) return null
     val installed = input.apps.mapTo(HashSet()) { it.key }
-    return input.bluetoothOpenings[device].orEmpty()
+    return input.bluetoothOpenings[connected.name].orEmpty()
         .filter { (key, cases) ->
-            cases >= BLUETOOTH_MIN_CASES && key in installed && !input.suppressed(NowRule.BLUETOOTH, key)
+            cases >= BLUETOOTH_MIN_CASES &&
+                key in installed &&
+                // Abierta ya en esta conexión, no hay nada que proponer.
+                input.openings[key].orEmpty().none { it >= connected.since } &&
+                !input.suppressed(NowRule.BLUETOOTH, key)
         }
         .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenByDescending { it.key })
-        ?.let { NowSuggestion(NowRule.BLUETOOTH, it.key, device = device) }
+        ?.let { NowSuggestion(NowRule.BLUETOOTH, it.key, device = connected.name) }
 }
 
 private fun habit(input: NowInput): NowSuggestion? {

@@ -13,6 +13,7 @@ import android.os.UserHandle
 import android.os.UserManager
 import android.util.Log
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toBitmap
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,9 @@ class ShortcutEntry(
     val info: ShortcutInfo,
     val isConversation: Boolean
 )
+
+/** Clave de un acceso directo en el índice, en el historial y en el destino secundario de un icono. */
+fun shortcutKey(packageName: String, id: String, userSerial: Long): String = "shortcut:$packageName/$id#$userSerial"
 
 /**
  * Apps con icono de inicio de todos los perfiles y sus accesos directos, al día con instalaciones,
@@ -130,9 +134,37 @@ class AppsRepository(
         launcherApps.startShortcut(shortcut.info, null, null)
         true
     } catch (e: RuntimeException) {
-        Log.w(TAG, "No se ha podido abrir ${shortcut.key}", e)
+        // Solo el paquete: el id de un acceso directo de conversación puede llevar datos del contacto.
+        Log.w(TAG, "No se ha podido abrir un acceso directo de ${shortcut.info.`package`}", e)
         reload()
         false
+    }
+
+    /** Abre la ficha de la app en los ajustes del sistema. Devuelve `false` si no se ha podido. */
+    fun openDetails(app: AppEntry): Boolean = try {
+        launcherApps.startAppDetailsActivity(app.component, app.user, null, null)
+        true
+    } catch (e: RuntimeException) {
+        Log.w(TAG, "No se ha podido abrir la ficha de ${app.key}", e)
+        false
+    }
+
+    /**
+     * El icono propio de un acceso directo, o `null` si no tiene o no se deja leer. Se pide solo
+     * para los pocos que enseña el Interior de app; al indexar, todos llevan el icono de su app.
+     */
+    suspend fun shortcutIcon(shortcut: ShortcutEntry): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            launcherApps
+                .getShortcutIconDrawable(shortcut.info, appContext.resources.displayMetrics.densityDpi)
+                ?.toBitmap(iconSizePx, iconSizePx)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Icono de acceso directo imposible de leer", e)
+            null
+        } catch (e: OutOfMemoryError) {
+            Log.w(TAG, "Icono de acceso directo demasiado grande", e)
+            null
+        }
     }
 
     private fun loadApps(): List<AppEntry> {
@@ -210,7 +242,7 @@ class AppsRepository(
                 val label = (info.shortLabel ?: info.longLabel)?.toString()?.takeIf { it.isNotBlank() }
                 if (!info.isEnabled || label == null) return@mapNotNull null
                 ShortcutEntry(
-                    key = "shortcut:${info.`package`}/${info.id}#$serial",
+                    key = shortcutKey(info.`package`, info.id, serial),
                     label = label,
                     app = app,
                     info = info,

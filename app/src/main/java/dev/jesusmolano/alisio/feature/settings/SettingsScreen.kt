@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -46,13 +50,16 @@ import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.data.settings.WallpaperDim
 import dev.jesusmolano.alisio.feature.search.appLabel
 import dev.jesusmolano.alisio.feature.search.webSearchApps
+import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.SectionLabel
+import dev.jesusmolano.alisio.ui.components.UnreadDot
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 private val ScreenMargin = 16.dp
+private val UnreadAppIconSize = 48.dp
 
 /** Las listas de apps que se despliegan dentro de la pantalla. */
 private enum class Choice { ASSISTANT, WEB_SEARCH }
@@ -75,6 +82,11 @@ private val KNOWN_ASSISTANTS =
  * tocarla, sin botón de guardar.
  *
  * @param onContactsClick pide el permiso de contactos o, si ya está concedido, abre la ficha de la app.
+ * @param bluetoothDevice nombre del dispositivo de audio Bluetooth conectado ahora, si lo hay.
+ * @param onBluetoothClick lo mismo que [onContactsClick], con el permiso de dispositivos cercanos.
+ * @param onNotificationsClick abre el acceso a notificaciones del sistema, donde se da y se quita.
+ * @param dockApps las apps del dock y de sus pilas: cada una puede apagar su punto de no leído.
+ * @param onUsageClick abre el acceso a uso del sistema, donde se da y se quita.
  */
 @Composable
 fun SettingsScreen(
@@ -83,6 +95,14 @@ fun SettingsScreen(
     apps: List<AppEntry>,
     contactsGranted: Boolean,
     onContactsClick: () -> Unit,
+    bluetoothGranted: Boolean,
+    bluetoothDevice: String?,
+    onBluetoothClick: () -> Unit,
+    notificationsGranted: Boolean,
+    onNotificationsClick: () -> Unit,
+    dockApps: List<AppEntry>,
+    usageGranted: Boolean,
+    onUsageClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -293,6 +313,66 @@ fun SettingsScreen(
                 onClick = { settings.toggleNow() }
             )
         }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_bluetooth)),
+                leadingIcon = R.drawable.ic_bluetooth,
+                // Con permiso, la fila enseña lo que la regla ve ahora mismo en vez de explicarla.
+                subtitle =
+                    when {
+                        !bluetoothGranted -> stringResource(R.string.settings_bluetooth_hint)
+                        bluetoothDevice != null -> stringResource(R.string.now_reason_bluetooth, bluetoothDevice)
+                        else -> stringResource(R.string.settings_bluetooth_none)
+                    },
+                trailing =
+                    stringResource(if (bluetoothGranted) R.string.settings_on else R.string.settings_allow),
+                highlighted = bluetoothGranted,
+                onClick = onBluetoothClick
+            )
+        }
+
+        item { SectionLabel(stringResource(R.string.settings_notifications)) }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_notification_access)),
+                leadingIcon = R.drawable.ic_notifications,
+                subtitle =
+                    stringResource(
+                        if (notificationsGranted) {
+                            R.string.settings_notification_access_on
+                        } else {
+                            R.string.settings_notification_access_hint
+                        }
+                    ),
+                trailing =
+                    stringResource(if (notificationsGranted) R.string.settings_on else R.string.settings_allow),
+                highlighted = notificationsGranted,
+                onClick = onNotificationsClick
+            )
+        }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_player)),
+                leadingIcon = R.drawable.ic_play,
+                subtitle = stringResource(R.string.settings_player_hint),
+                trailing = stringResource(if (prefs.playerEnabled) R.string.settings_on else R.string.settings_off),
+                highlighted = prefs.playerEnabled,
+                onClick = { settings.togglePlayer() }
+            )
+        }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_unread)),
+                leadingIcon = R.drawable.ic_dot,
+                subtitle = stringResource(R.string.settings_unread_hint),
+                trailing = stringResource(if (prefs.unreadDots) R.string.settings_on else R.string.settings_off),
+                highlighted = prefs.unreadDots,
+                onClick = { settings.toggleUnreadDots() }
+            )
+        }
+        if (prefs.unreadDots) {
+            item { UnreadApps(dockApps, prefs.unreadMuted, settings::toggleUnreadFor) }
+        }
 
         item { SectionLabel(stringResource(R.string.settings_dock)) }
         item {
@@ -303,6 +383,27 @@ fun SettingsScreen(
                 trailing = stringResource(if (prefs.dockLabels) R.string.settings_on else R.string.settings_off),
                 highlighted = prefs.dockLabels,
                 onClick = { settings.toggleDockLabels() }
+            )
+        }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_dock_gestures)),
+                leadingIcon = R.drawable.ic_swipe_up,
+                subtitle = stringResource(R.string.settings_dock_gestures_hint),
+                trailing = stringResource(if (prefs.dockGestures) R.string.settings_on else R.string.settings_off),
+                highlighted = prefs.dockGestures,
+                onClick = { settings.toggleDockGestures() }
+            )
+        }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_usage)),
+                leadingIcon = R.drawable.ic_schedule,
+                subtitle =
+                    stringResource(if (usageGranted) R.string.settings_usage_on else R.string.settings_usage_hint),
+                trailing = stringResource(if (usageGranted) R.string.settings_on else R.string.settings_allow),
+                highlighted = usageGranted,
+                onClick = onUsageClick
             )
         }
     }
@@ -322,6 +423,44 @@ private fun Option(@StringRes title: Int, values: @Composable () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) { values() }
+}
+
+/**
+ * Las apps del dock tal como se ven en él: con su punto si está encendido y atenuadas sin él si está
+ * apagado. Tocar una lo cambia. Se enseñan con el punto puesto aunque ahora no tengan nada sin leer:
+ * aquí se elige cómo quedará, no se mira el estado.
+ */
+@Composable
+private fun UnreadApps(apps: List<AppEntry>, muted: Set<String>, onToggle: (String) -> Unit) {
+    Text(
+        text =
+            stringResource(
+                if (apps.isEmpty()) R.string.settings_unread_apps_empty else R.string.settings_unread_apps
+            ),
+        style = MaterialTheme.typography.bodyMedium,
+        color = AlisioTokens.TextSecondary,
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp)
+    )
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 4.dp)) {
+        apps.forEach { app ->
+            val packageName = app.component.packageName
+            val on = packageName !in muted
+            val description = stringResource(R.string.settings_unread_app, app.label)
+            Box(
+                Modifier
+                    .size(64.dp)
+                    .clip(AlisioTokens.RowShape)
+                    .toggleable(value = on, role = Role.Switch, onValueChange = { onToggle(packageName) })
+                    .semantics { contentDescription = description },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.size(UnreadAppIconSize)) {
+                    AppIcon(app.icon, UnreadAppIconSize, Modifier.alpha(if (on) 1f else 0.38f))
+                    if (on) UnreadDot()
+                }
+            }
+        }
+    }
 }
 
 @Composable

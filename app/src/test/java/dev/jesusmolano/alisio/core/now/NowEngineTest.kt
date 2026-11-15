@@ -13,6 +13,9 @@ class NowEngineTest {
     private val now = at(2026, 11, 11, 9, 0)
     private val hour = 60L * 60 * 1000
 
+    // El coche, conectado hace un minuto.
+    private val justConnected = ConnectedAudio("Coche", now - 60_000)
+
     private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
         LocalDateTime.of(year, month, day, hour, minute).toInstant(zone).toEpochMilli()
 
@@ -20,10 +23,10 @@ class NowEngineTest {
         apps: List<NowApp> = listOf(NowApp("gym", 0), NowApp("news", 0), NowApp("music", 0)),
         openings: Map<String, List<Long>> = emptyMap(),
         dockKeys: Set<String> = emptySet(),
-        bluetoothDevice: String? = null,
+        bluetooth: ConnectedAudio? = null,
         bluetoothOpenings: Map<String, Map<String, Int>> = emptyMap(),
         feedback: Map<Pair<NowRule, String>, NowFeedback> = emptyMap()
-    ) = NowInput(now, zone, apps, openings, dockKeys, bluetoothDevice, bluetoothOpenings, feedback)
+    ) = NowInput(now, zone, apps, openings, dockKeys, bluetooth, bluetoothOpenings, feedback)
 
     /** Aperturas a las 09:10 en los laborables anteriores que se indiquen (1 = ayer laborable). */
     private fun weekdayMornings(vararg daysAgo: Int): List<Long> = daysAgo.map { at(2026, 11, 11 - it, 9, 10) }
@@ -58,13 +61,45 @@ class NowEngineTest {
     @Test
     fun `con un dispositivo conectado gana la app que mas se abre con el`() {
         val cases = mapOf("Coche" to mapOf("music" to 5, "news" to 3, "gym" to 2), "Cascos" to mapOf("gym" to 9))
-        val suggestion = suggest(input(bluetoothDevice = "Coche", bluetoothOpenings = cases))
+        val suggestion = suggest(input(bluetooth = justConnected, bluetoothOpenings = cases))
         assertEquals(NowSuggestion(NowRule.BLUETOOTH, "music", device = "Coche"), suggestion)
     }
 
     @Test
     fun `menos de tres casos con el dispositivo no bastan`() {
-        assertNull(suggest(input(bluetoothDevice = "Coche", bluetoothOpenings = mapOf("Coche" to mapOf("music" to 2)))))
+        assertNull(suggest(input(bluetooth = justConnected, bluetoothOpenings = mapOf("Coche" to mapOf("music" to 2)))))
+    }
+
+    @Test
+    fun `pasado un rato desde la conexion el dispositivo deja de sugerir y pasa la costumbre`() {
+        val cases = mapOf("Coche" to mapOf("music" to 5))
+        val habit = mapOf("gym" to weekdayMornings(1, 2, 5))
+        val lastMinute = ConnectedAudio("Coche", now - BLUETOOTH_SUGGEST_MILLIS + 1)
+        assertEquals(
+            "music",
+            suggest(input(openings = habit, bluetooth = lastMinute, bluetoothOpenings = cases))?.appKey
+        )
+        val longAgo = ConnectedAudio("Coche", now - BLUETOOTH_SUGGEST_MILLIS)
+        assertEquals(
+            NowSuggestion(NowRule.HABIT, "gym"),
+            suggest(input(openings = habit, bluetooth = longAgo, bluetoothOpenings = cases))
+        )
+    }
+
+    @Test
+    fun `la app ya abierta en esta conexion deja paso a la siguiente`() {
+        val cases = mapOf("Coche" to mapOf("music" to 5, "news" to 3))
+        val opened = mapOf("music" to listOf(justConnected.since + 1000))
+        assertEquals(
+            "news",
+            suggest(input(openings = opened, bluetooth = justConnected, bluetoothOpenings = cases))?.appKey
+        )
+        // Haberla abierto antes de conectar no cuenta.
+        val before = mapOf("music" to listOf(justConnected.since - hour))
+        assertEquals(
+            "music",
+            suggest(input(openings = before, bluetooth = justConnected, bluetoothOpenings = cases))?.appKey
+        )
     }
 
     @Test
@@ -103,7 +138,7 @@ class NowEngineTest {
             input(
                 apps = listOf(NowApp("gym", now - hour), NowApp("news", 0), NowApp("music", 0)),
                 openings = mapOf("news" to weekdayMornings(1, 2, 5)),
-                bluetoothDevice = "Coche",
+                bluetooth = justConnected,
                 bluetoothOpenings = mapOf("Coche" to mapOf("music" to 4))
             )
         assertEquals(NowRule.NEW_VERSION, suggest(everything)?.rule)
@@ -131,7 +166,7 @@ class NowEngineTest {
         val openings = mapOf("borrada" to weekdayMornings(1, 2, 5))
         assertNull(suggest(input(openings = openings)))
         assertNull(
-            suggest(input(bluetoothDevice = "Coche", bluetoothOpenings = mapOf("Coche" to mapOf("borrada" to 9))))
+            suggest(input(bluetooth = justConnected, bluetoothOpenings = mapOf("Coche" to mapOf("borrada" to 9))))
         )
     }
 

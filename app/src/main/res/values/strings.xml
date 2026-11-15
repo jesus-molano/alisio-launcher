@@ -32,6 +32,33 @@
     <string name="picker_clear">Leave empty</string>
     <string name="picker_checked">In the stack</string>
 
+    <string name="dock_swipe_open">Swipe up: open %1$s</string>
+    <string name="dock_app_menu">Shortcuts and options</string>
+    <string name="app_usage_today">%1$s today</string>
+    <string name="app_usage_none">Not opened today</string>
+    <string name="usage_under_minute">&lt; 1 min</string>
+    <string name="usage_minutes">%1$d min</string>
+    <string name="usage_hours">%1$d h</string>
+    <string name="usage_hours_minutes">%1$d h %2$d min</string>
+    <string name="app_usage_allow">See today\'s usage</string>
+    <string name="appmenu_shortcuts">SHORTCUTS</string>
+    <string name="appmenu_swipe">SWIPE UP ON THE ICON</string>
+    <string name="appmenu_swipe_none">No destination yet</string>
+    <string name="appmenu_swipe_none_hint">Another app or a shortcut, one swipe away</string>
+    <string name="appmenu_swipe_choose">Choose</string>
+    <string name="appmenu_swipe_title">Swipe-up destination</string>
+    <string name="appmenu_swipe_search">Search apps and shortcuts</string>
+    <string name="appmenu_swipe_clear">Remove the destination</string>
+    <string name="appmenu_back">Back</string>
+    <string name="appmenu_app_info">App info</string>
+    <string name="appmenu_slot">DOCK SLOT</string>
+    <string name="appmenu_change_app">Change app</string>
+    <string name="settings_dock_gestures">Swipe up on dock icons</string>
+    <string name="settings_dock_gestures_hint">Each app opens a second destination you choose</string>
+    <string name="settings_usage">Usage access</string>
+    <string name="settings_usage_hint">Needed to see how long you used each app today</string>
+    <string name="settings_usage_on">Hold a dock app to see its usage today</string>
+
     <string name="channel_whatsapp" translatable="false">WhatsApp</string>
     <string name="channel_whatsapp_call">WhatsApp call</string>
     <string name="channel_whatsapp_video">WhatsApp video</string>
@@ -51,6 +78,27 @@
     <string name="now_dismiss">Dismiss this suggestion</string>
     <string name="settings_now">Suggestion on the home screen</string>
     <string name="settings_now_hint">One app at a time, always with the reason</string>
+    <string name="settings_bluetooth">Bluetooth audio</string>
+    <string name="settings_bluetooth_hint">Suggests what you open with your car or earbuds</string>
+    <string name="settings_bluetooth_none">No audio device connected right now</string>
+
+    <string name="dock_unread">%1$s, unread notifications</string>
+    <string name="player_open">Open %1$s</string>
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_next">Next track</string>
+    <string name="player_subtitle" translatable="false">%1$s · %2$s</string>
+    <string name="settings_notifications">NOTIFICATIONS</string>
+    <string name="settings_notification_access">Notification access</string>
+    <string name="settings_notification_access_hint">Needed for the player and the unread dots</string>
+    <string name="settings_notification_access_on">Alisio only counts them, it never reads them</string>
+    <string name="settings_player">Player on Home</string>
+    <string name="settings_player_hint">What is playing, with pause and next</string>
+    <string name="settings_unread">Unread dots</string>
+    <string name="settings_unread_hint">A dot on dock apps that have notifications</string>
+    <string name="settings_unread_apps">Tap an app to turn its dot on or off</string>
+    <string name="settings_unread_apps_empty">Add apps to the dock to choose their dots</string>
+    <string name="settings_unread_app">Unread dot for %1$s</string>
 
     <string name="settings_title">Alisio settings</string>
     <string name="settings_appearance">APPEARANCE</string>

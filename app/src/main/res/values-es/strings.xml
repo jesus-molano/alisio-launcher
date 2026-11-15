@@ -30,6 +30,33 @@
     <string name="picker_clear">Dejar vacío</string>
     <string name="picker_checked">En la pila</string>
 
+    <string name="dock_swipe_open">Deslizar hacia arriba: abrir %1$s</string>
+    <string name="dock_app_menu">Accesos directos y opciones</string>
+    <string name="app_usage_today">%1$s hoy</string>
+    <string name="app_usage_none">Sin abrir hoy</string>
+    <string name="usage_under_minute">&lt; 1 min</string>
+    <string name="usage_minutes">%1$d min</string>
+    <string name="usage_hours">%1$d h</string>
+    <string name="usage_hours_minutes">%1$d h %2$d min</string>
+    <string name="app_usage_allow">Ver el uso de hoy</string>
+    <string name="appmenu_shortcuts">ACCESOS DIRECTOS</string>
+    <string name="appmenu_swipe">DESLIZAR HACIA ARRIBA SOBRE EL ICONO</string>
+    <string name="appmenu_swipe_none">Sin destino todavía</string>
+    <string name="appmenu_swipe_none_hint">Otra app o un acceso directo, a un gesto</string>
+    <string name="appmenu_swipe_choose">Elegir</string>
+    <string name="appmenu_swipe_title">Destino al deslizar</string>
+    <string name="appmenu_swipe_search">Buscar apps y accesos directos</string>
+    <string name="appmenu_swipe_clear">Quitar el destino</string>
+    <string name="appmenu_back">Volver</string>
+    <string name="appmenu_app_info">Información de la app</string>
+    <string name="appmenu_slot">HUECO DEL DOCK</string>
+    <string name="appmenu_change_app">Cambiar la app</string>
+    <string name="settings_dock_gestures">Deslizar sobre los iconos del dock</string>
+    <string name="settings_dock_gestures_hint">Cada app abre un segundo destino que tú eliges</string>
+    <string name="settings_usage">Acceso a uso</string>
+    <string name="settings_usage_hint">Hace falta para ver cuánto has usado hoy cada app</string>
+    <string name="settings_usage_on">Mantén una app del dock para ver su uso de hoy</string>
+
     <string name="channel_whatsapp_call">Llamada de WhatsApp</string>
     <string name="channel_whatsapp_video">Vídeo de WhatsApp</string>
     <string name="channel_call">Llamar</string>
@@ -47,6 +74,26 @@
     <string name="now_dismiss">Descartar esta sugerencia</string>
     <string name="settings_now">Sugerencia en el Inicio</string>
     <string name="settings_now_hint">Una sola app cada vez, siempre con su motivo</string>
+    <string name="settings_bluetooth">Audio Bluetooth</string>
+    <string name="settings_bluetooth_hint">Sugiere lo que abres con el coche o los cascos</string>
+    <string name="settings_bluetooth_none">Ningún dispositivo de audio conectado ahora</string>
+
+    <string name="dock_unread">%1$s, notificaciones sin leer</string>
+    <string name="player_open">Abrir %1$s</string>
+    <string name="player_play">Reproducir</string>
+    <string name="player_pause">Pausar</string>
+    <string name="player_next">Pista siguiente</string>
+    <string name="settings_notifications">NOTIFICACIONES</string>
+    <string name="settings_notification_access">Acceso a notificaciones</string>
+    <string name="settings_notification_access_hint">Hace falta para el reproductor y los puntos de no leído</string>
+    <string name="settings_notification_access_on">Alisio solo las cuenta, nunca las lee</string>
+    <string name="settings_player">Reproductor en el Inicio</string>
+    <string name="settings_player_hint">Lo que suena, con pausa y siguiente</string>
+    <string name="settings_unread">Puntos de no leído</string>
+    <string name="settings_unread_hint">Un punto en las apps del dock con notificaciones</string>
+    <string name="settings_unread_apps">Toca una app para encender o apagar su punto</string>
+    <string name="settings_unread_apps_empty">Añade apps al dock para elegir sus puntos</string>
+    <string name="settings_unread_app">Punto de no leído de %1$s</string>
 
     <string name="settings_title">Ajustes de Alisio</string>
     <string name="settings_appearance">APARIENCIA</string>

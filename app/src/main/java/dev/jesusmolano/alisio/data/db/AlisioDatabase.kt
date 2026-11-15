@@ -21,7 +21,7 @@ data class LaunchEvent(
     val type: String,
     val key: String,
     val at: Long,
-    // Se rellena desde la fase 3 (regla Bluetooth de Ahora).
+    // Solo en las aperturas hechas al poco de conectar ese dispositivo de audio (regla Bluetooth de Ahora).
     @ColumnInfo(name = "bluetooth_device") val bluetoothDevice: String? = null
 )
 
@@ -52,7 +52,22 @@ data class SuggestionFeedback(
     @ColumnInfo(name = "last_dismissed_at") val lastDismissedAt: Long
 )
 
+/**
+ * Destino secundario del icono de [appKey] (deslizar hacia arriba sobre él): otra app
+ * ([targetAppKey]) o un acceso directo, que se identifica por paquete, id y serie de usuario.
+ */
+@Entity(tableName = "icon_gesture")
+data class IconGesture(
+    @PrimaryKey @ColumnInfo(name = "app_key") val appKey: String,
+    @ColumnInfo(name = "target_app_key") val targetAppKey: String? = null,
+    @ColumnInfo(name = "shortcut_package") val shortcutPackage: String? = null,
+    @ColumnInfo(name = "shortcut_id") val shortcutId: String? = null,
+    @ColumnInfo(name = "shortcut_user") val shortcutUser: Long? = null
+)
+
 class KeyAt(val key: String, val at: Long)
+
+class DeviceKeyAt(@ColumnInfo(name = "bluetooth_device") val device: String, val key: String, val at: Long)
 
 /** De la 2 a la 3: el icono de las pilas. Con migración, para no borrar el dock ya configurado. */
 val MIGRATION_2_3 =
@@ -74,6 +89,30 @@ val MIGRATION_3_4 =
             )
         }
     }
+
+/** De la 4 a la 5: el destino secundario de los iconos. */
+val MIGRATION_4_5 =
+    object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `icon_gesture` (" +
+                    "`app_key` TEXT NOT NULL, `target_app_key` TEXT, `shortcut_package` TEXT, " +
+                    "`shortcut_id` TEXT, `shortcut_user` INTEGER, PRIMARY KEY(`app_key`))"
+            )
+        }
+    }
+
+@Dao
+interface IconGestureDao {
+    @Query("SELECT * FROM icon_gesture")
+    fun all(): Flow<List<IconGesture>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun set(gesture: IconGesture)
+
+    @Query("DELETE FROM icon_gesture WHERE app_key = :appKey")
+    suspend fun clear(appKey: String)
+}
 
 @Dao
 interface SuggestionFeedbackDao {
@@ -98,6 +137,13 @@ interface LaunchEventDao {
 
     @Query("SELECT `key`, at FROM launch_event WHERE at >= :since ORDER BY at")
     fun since(since: Long): Flow<List<KeyAt>>
+
+    /** Aperturas de [type] que llevan dispositivo Bluetooth: las hechas al poco de conectarlo. */
+    @Query(
+        "SELECT bluetooth_device, `key`, at FROM launch_event " +
+            "WHERE bluetooth_device IS NOT NULL AND type = :type AND at >= :since ORDER BY at"
+    )
+    fun withBluetooth(type: String, since: Long): Flow<List<DeviceKeyAt>>
 
     @Query("DELETE FROM launch_event WHERE at < :before")
     suspend fun deleteBefore(before: Long)
@@ -146,8 +192,14 @@ interface HomeConfigDao {
 }
 
 @Database(
-    entities = [LaunchEvent::class, DockSlot::class, StackItem::class, SuggestionFeedback::class],
-    version = 4,
+    entities = [
+        LaunchEvent::class,
+        DockSlot::class,
+        StackItem::class,
+        SuggestionFeedback::class,
+        IconGesture::class
+    ],
+    version = 5,
     exportSchema = false
 )
 abstract class AlisioDatabase : RoomDatabase() {
@@ -156,4 +208,6 @@ abstract class AlisioDatabase : RoomDatabase() {
     abstract fun homeConfig(): HomeConfigDao
 
     abstract fun suggestionFeedback(): SuggestionFeedbackDao
+
+    abstract fun iconGestures(): IconGestureDao
 }

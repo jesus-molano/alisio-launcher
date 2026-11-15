@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.feature.home.HomeScreen
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
+import dev.jesusmolano.alisio.feature.home.dockApps
 import dev.jesusmolano.alisio.feature.onboarding.OnboardingScreen
 import dev.jesusmolano.alisio.feature.search.SearchScreen
 import dev.jesusmolano.alisio.feature.search.SearchViewModel
@@ -61,7 +62,13 @@ class MainActivity : ComponentActivity() {
     private var searchSession by mutableIntStateOf(0)
     private var contactsAskedAt = 0L
     private var contactsRequestPending = false
+    private var bluetoothAskedAt = 0L
+    private var bluetoothRequestPending = false
     private var settingsOpen by mutableStateOf(false)
+
+    // Se sale a una pantalla del sistema a conceder algo: al volver, los ajustes deben seguir abiertos
+    // para ver el resultado en la fila que se tocó.
+    private var leavingForSystemSettings = false
 
     // El resultado no importa: onResume vuelve a comprobar el rol.
     private val requestHomeRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
@@ -75,6 +82,16 @@ class MainActivity : ComponentActivity() {
             // que queda es la ficha de la app, y se abre para que el botón no parezca roto.
             val answeredWithoutDialog = SystemClock.uptimeMillis() - contactsAskedAt < NO_DIALOG_MILLIS
             if (!contacts.granted.value && answeredWithoutDialog) openAppDetails()
+        }
+
+    private val requestBluetooth =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            bluetoothRequestPending = false
+            val bluetooth = (application as AlisioApp).container.bluetoothAudio
+            bluetooth.onPermissionChanged()
+            // Como en los contactos: denegado para siempre no hay diálogo, y se abre la ficha de la app.
+            val answeredWithoutDialog = SystemClock.uptimeMillis() - bluetoothAskedAt < NO_DIALOG_MILLIS
+            if (!bluetooth.granted.value && answeredWithoutDialog) openAppDetails()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +120,7 @@ class MainActivity : ComponentActivity() {
                             searchOpen = searchOpen || settingsOpen,
                             prefs = prefs,
                             onOpenSettings = { settingsOpen = true },
+                            onGrantUsage = ::openUsageAccess,
                             onOpenSearch = {
                                 searchSession++
                                 searchOpen = true
@@ -135,12 +153,27 @@ class MainActivity : ComponentActivity() {
                             val apps by homeViewModel.apps.collectAsStateWithLifecycle()
                             val contacts = (application as AlisioApp).container.contacts
                             val contactsGranted by contacts.granted.collectAsStateWithLifecycle()
+                            val bluetooth = (application as AlisioApp).container.bluetoothAudio
+                            val bluetoothGranted by bluetooth.granted.collectAsStateWithLifecycle()
+                            val bluetoothConnected by bluetooth.connected.collectAsStateWithLifecycle()
+                            val notificationAccess = (application as AlisioApp).container.notificationAccess
+                            val notificationsGranted by notificationAccess.granted.collectAsStateWithLifecycle()
+                            val dock by homeViewModel.dock.collectAsStateWithLifecycle()
+                            val usageGranted by homeViewModel.usageGranted.collectAsStateWithLifecycle()
                             SettingsScreen(
                                 prefs = prefs,
                                 settings = settings,
                                 apps = apps.orEmpty(),
                                 contactsGranted = contactsGranted,
-                                onContactsClick = { if (contactsGranted) openAppDetails() else askContacts() }
+                                onContactsClick = { if (contactsGranted) openAppDetails() else askContacts() },
+                                bluetoothGranted = bluetoothGranted,
+                                bluetoothDevice = bluetoothConnected?.name,
+                                onBluetoothClick = { if (bluetoothGranted) openAppDetails() else askBluetooth() },
+                                notificationsGranted = notificationsGranted,
+                                onNotificationsClick = ::openNotificationAccess,
+                                dockApps = dock.orEmpty().dockApps(),
+                                usageGranted = usageGranted,
+                                onUsageClick = ::openUsageAccess
                             )
                         }
                     }
@@ -162,6 +195,12 @@ class MainActivity : ComponentActivity() {
         homeViewModel.refreshNow()
         // El permiso de contactos también se puede cambiar desde los ajustes del sistema.
         (application as AlisioApp).container.contacts.onPermissionChanged()
+        (application as AlisioApp).container.bluetoothAudio.onPermissionChanged()
+        // El acceso a notificaciones se concede en los ajustes del sistema: al volver ya puede estar.
+        (application as AlisioApp).container.notificationAccess.refresh()
+        (application as AlisioApp).container.mediaSessions.refresh()
+        // Lo mismo con el acceso a uso.
+        (application as AlisioApp).container.usageAccess.refresh()
         val holdsRole = holdsHomeRole()
         if (holdsRole && !isDefaultHome) homeViewModel.onHomeRoleGranted()
         isDefaultHome = holdsRole
@@ -171,7 +210,9 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Al volver de otra app el Inicio aparece limpio, sin la barra ni los ajustes a medias.
         searchOpen = false
-        settingsOpen = false
+        if (!leavingForSystemSettings) settingsOpen = false
+        // Vale para una sola salida: si después se va a otra app, el Inicio vuelve limpio.
+        leavingForSystemSettings = false
     }
 
     /** Pulsar «inicio» estando ya en Alisio llega aquí: se cierran la barra y las hojas. */
@@ -194,9 +235,58 @@ class MainActivity : ComponentActivity() {
         requestContacts.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE))
     }
 
+    /** Dispositivos cercanos: solo para saber qué audio Bluetooth está conectado (regla de Ahora). */
+    private fun askBluetooth() {
+        // Igual que en [askContacts]: un segundo toque no debe parecer un «denegado para siempre».
+        if (bluetoothRequestPending) return
+        bluetoothRequestPending = true
+        bluetoothAskedAt = SystemClock.uptimeMillis()
+        requestBluetooth.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
     /** La ficha de Alisio en los ajustes del sistema: ahí se retiran los permisos. */
-    private fun openAppDetails() =
+    private fun openAppDetails() {
+        leavingForSystemSettings = true
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()))
+    }
+
+    /**
+     * El acceso a notificaciones no se pide con un diálogo: se da en una pantalla del sistema. Se abre
+     * directamente la de Alisio y, si este sistema no la tiene, la lista de todas las apps.
+     */
+    private fun openNotificationAccess() {
+        leavingForSystemSettings = true
+        val component = (application as AlisioApp).container.notificationAccess.component
+        val detail =
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, component.flattenToString())
+        try {
+            startActivity(detail)
+        } catch (_: ActivityNotFoundException) {
+            try {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            } catch (_: ActivityNotFoundException) {
+                openAppDetails()
+            }
+        }
+    }
+
+    /**
+     * El acceso a uso tampoco se pide con un diálogo. Se intenta abrir la pantalla de Alisio dentro
+     * de «Acceso a datos de uso»; el sistema que no admite ir a una app concreta abre la lista.
+     */
+    private fun openUsageAccess() {
+        leavingForSystemSettings = true
+        try {
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri()))
+        } catch (_: ActivityNotFoundException) {
+            try {
+                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            } catch (_: ActivityNotFoundException) {
+                openAppDetails()
+            }
+        }
+    }
 
     private fun holdsHomeRole(): Boolean = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
 

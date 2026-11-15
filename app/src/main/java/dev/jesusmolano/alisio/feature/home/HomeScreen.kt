@@ -5,7 +5,9 @@ import android.content.Intent
 import android.provider.AlarmClock
 import android.text.format.DateFormat
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +19,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -34,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +53,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +69,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -77,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.notify.packagesWithDot
 import dev.jesusmolano.alisio.core.now.NowRule
 import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.search.filterByName
@@ -85,17 +94,23 @@ import dev.jesusmolano.alisio.core.text.takeGraphemes
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.toSections
 import dev.jesusmolano.alisio.data.home.StackIcon
+import dev.jesusmolano.alisio.data.home.SwipeTarget
 import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.feature.appmenu.AppMenuSheet
+import dev.jesusmolano.alisio.feature.appmenu.AppUsage
+import dev.jesusmolano.alisio.feature.appmenu.SlotActions
 import dev.jesusmolano.alisio.feature.search.appLabel
 import dev.jesusmolano.alisio.feature.search.searchHint
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.SectionLabel
+import dev.jesusmolano.alisio.ui.components.UnreadDot
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private val DockIconSize = 52.dp
 private val StackMiniIconSize = 19.dp
@@ -108,8 +123,17 @@ private val ScreenMargin = 24.dp
 private val BottomAreaHeight = 176.dp
 private val OpenSearchDrag = 48.dp
 
+// Recorrido hacia arriba sobre un icono del dock que abre su destino secundario.
+private val SwipeOpenDrag = 40.dp
+private val SwipeMaxLift = 14.dp
+private val SwipeMarkGap = 7.dp
+private const val SWIPE_LIFT_RATIO = 0.5f
+
 // Alto de la tarjeta de Ahora con su separación: el índice de Trazo se acorta ese tanto cuando sale.
 private val NowCardSpace = 96.dp
+
+// Separación entre el reproductor y el dock; con el alto del reproductor, lo que este le quita al índice.
+private val PlayerGap = 16.dp
 private const val STACK_ICON_APPS = 4
 private const val STACK_GLYPH_LENGTH = 2
 private const val TAG = "HomeScreen"
@@ -132,13 +156,24 @@ fun HomeScreen(
     prefs: Prefs,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    onGrantUsage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val shortcuts by viewModel.shortcuts.collectAsStateWithLifecycle()
+    val swipeTargets by viewModel.swipeTargets.collectAsStateWithLifecycle()
+    val usageGranted by viewModel.usageGranted.collectAsStateWithLifecycle()
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val loadedDock by viewModel.dock.collectAsStateWithLifecycle()
     val dock = loadedDock.orEmpty()
     val nowSuggestion by viewModel.now.collectAsStateWithLifecycle()
     val now = nowSuggestion?.takeIf { prefs.nowEnabled }
+    val nowPlaying by viewModel.player.collectAsStateWithLifecycle()
+    val player = nowPlaying?.takeIf { prefs.playerEnabled }
+    val unread by viewModel.unread.collectAsStateWithLifecycle()
+    val dotted =
+        remember(unread, prefs.unreadDots, prefs.unreadMuted) {
+            if (prefs.unreadDots) packagesWithDot(unread, prefs.unreadMuted) else emptySet()
+        }
     val context = LocalContext.current
     val resources = LocalResources.current
     val bars = WindowInsets.systemBars.asPaddingValues()
@@ -146,17 +181,25 @@ fun HomeScreen(
     // Posición del hueco que se está configurando y de la pila abierta.
     var editing by remember { mutableStateOf<Int?>(null) }
     var openStack by remember { mutableStateOf<Int?>(null) }
+    // Posición de la app del dock cuyo Interior está abierto.
+    var appMenu by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(homePresses) {
         editing = null
         openStack = null
+        appMenu = null
+    }
+
+    fun launchFailed(label: String) {
+        Toast.makeText(context, resources.getString(R.string.app_launch_failed, label), Toast.LENGTH_SHORT).show()
     }
 
     fun launch(app: AppEntry) {
-        if (!viewModel.launch(app)) {
-            Toast.makeText(context, resources.getString(R.string.app_launch_failed, app.label), Toast.LENGTH_SHORT)
-                .show()
-        }
+        if (!viewModel.launch(app)) launchFailed(app.label)
+    }
+
+    fun launch(target: SwipeTarget) {
+        if (!viewModel.launch(target)) launchFailed(target.label)
     }
 
     Box(
@@ -210,6 +253,18 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(16.dp))
             }
+            player?.let { playing ->
+                val playingApp = apps.orEmpty().firstOrNull { it.component.packageName == playing.packageName }
+                PlayerBar(
+                    player = playing,
+                    appIcon = playingApp?.icon,
+                    // Por la lista de apps siempre que se pueda: así la apertura cuenta en el historial.
+                    onOpen = { if (playingApp != null) launch(playingApp) else viewModel.openPlayerApp() },
+                    onToggle = viewModel::togglePlayback,
+                    onNext = viewModel::skipToNext
+                )
+                Spacer(Modifier.height(PlayerGap))
+            }
             // Mientras carga, el dock guarda su sitio para que la píldora no salte.
             Row(Modifier.fillMaxWidth().heightIn(min = DockHeight)) {
                 dock.forEachIndexed { position, slot ->
@@ -226,15 +281,21 @@ fun HomeScreen(
                                 modifier = itemModifier
                             ) { Glyph("+", muted = true) }
 
-                        is DockSlot.App ->
+                        is DockSlot.App -> {
+                            // Con los gestos apagados el destino sigue guardado, pero el icono no lo anuncia.
+                            val target = swipeTargets[slot.app.key.toString()]?.takeIf { prefs.dockGestures }
                             DockItem(
                                 label = slot.app.label,
                                 description = null,
                                 onClick = { launch(slot.app) },
-                                onLongClick = { editing = position },
+                                onLongClick = { appMenu = position },
+                                longClickLabel = stringResource(R.string.dock_app_menu),
                                 showLabel = showLabel,
+                                unread = slot.app.component.packageName in dotted,
+                                swipe = target?.let { DockSwipe(it.label) { launch(it) } },
                                 modifier = itemModifier
                             ) { AppIcon(slot.app.icon, DockIconSize) }
+                        }
 
                         is DockSlot.Stack ->
                             DockItem(
@@ -243,6 +304,7 @@ fun HomeScreen(
                                 onClick = { if (slot.apps.isEmpty()) editing = position else openStack = position },
                                 onLongClick = { editing = position },
                                 showLabel = showLabel,
+                                unread = slot.apps.any { it.component.packageName in dotted },
                                 modifier = itemModifier
                             ) { StackSlotIcon(slot) }
                     }
@@ -263,7 +325,8 @@ fun HomeScreen(
                         top = bars.calculateTopPadding() + 16.dp,
                         bottom =
                             bars.calculateBottomPadding() + BottomAreaHeight +
-                                if (now != null) NowCardSpace else 0.dp
+                                (if (now != null) NowCardSpace else 0.dp) +
+                                (if (player != null) PlayerBarHeight + PlayerGap else 0.dp)
                     ),
                 onLaunch = ::launch
             )
@@ -290,8 +353,53 @@ fun HomeScreen(
         }
     }
 
+    val defaultStackName = stringResource(R.string.stack_default_name)
+    appMenu?.let { position ->
+        val app = (dock.getOrNull(position) as? DockSlot.App)?.app
+        if (app == null) {
+            // La app se ha desinstalado o el hueco ha cambiado con la hoja abierta.
+            appMenu = null
+        } else {
+            AppMenuSheet(
+                app = app,
+                apps = apps.orEmpty(),
+                shortcuts = shortcuts,
+                target = swipeTargets[app.key.toString()],
+                gesturesEnabled = prefs.dockGestures,
+                usage = AppUsage(usageGranted, today = { viewModel.usageToday(app) }, onGrant = onGrantUsage),
+                slot =
+                    SlotActions(
+                        onChangeApp = {
+                            appMenu = null
+                            editing = position
+                        },
+                        onMakeStack = {
+                            // Como en la hoja del hueco: se convierte y se pasa a elegir sus apps.
+                            viewModel.makeDockStack(position, defaultStackName)
+                            appMenu = null
+                            editing = position
+                        },
+                        onClear = {
+                            viewModel.clearDockSlot(position)
+                            appMenu = null
+                        }
+                    ),
+                shortcutIcon = viewModel::shortcutIcon,
+                onOpenShortcut = { shortcut ->
+                    appMenu = null
+                    launch(SwipeTarget.Shortcut(shortcut))
+                },
+                onSetTarget = { viewModel.setSwipeTarget(app, it) },
+                onAppInfo = {
+                    appMenu = null
+                    viewModel.openAppInfo(app)
+                },
+                onDismiss = { appMenu = null }
+            )
+        }
+    }
+
     editing?.let { position ->
-        val defaultStackName = stringResource(R.string.stack_default_name)
         SlotSheet(
             slot = dock.getOrNull(position) ?: DockSlot.Empty,
             apps = apps.orEmpty(),
@@ -373,6 +481,13 @@ private fun Context.open(intent: Intent) {
     }
 }
 
+/** Destino secundario de un icono del dock: [label] es lo que abre [open], para decirlo en voz alta. */
+private class DockSwipe(val label: String, val open: () -> Unit)
+
+/**
+ * @param swipe con destino secundario, deslizar hacia arriba sobre el icono lo abre y el icono lleva
+ *   una marca; sin él, el gesto sigue de largo y abre la barra, como en una zona vacía.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DockItem(
@@ -382,8 +497,20 @@ private fun DockItem(
     onLongClick: () -> Unit,
     showLabel: Boolean,
     modifier: Modifier = Modifier,
+    longClickLabel: String? = null,
+    unread: Boolean = false,
+    swipe: DockSwipe? = null,
     icon: @Composable () -> Unit
 ) {
+    val name = description ?: label
+    // El punto no se lee solo: lo que significa va en la descripción del icono.
+    val spoken = if (unread) stringResource(R.string.dock_unread, name) else name
+    val swipeAction = swipe?.let { stringResource(R.string.dock_swipe_open, it.label) }
+    // El detector vive lo que vive el icono; así abre siempre el destino de ahora, no el de cuando empezó.
+    val currentSwipe by rememberUpdatedState(swipe)
+    val lift = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
     Column(
         modifier =
             modifier
@@ -391,19 +518,88 @@ private fun DockItem(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
+                    onLongClickLabel = longClickLabel,
                     onLongClick = onLongClick
                 )
+                .then(
+                    if (swipe == null) {
+                        Modifier
+                    } else {
+                        // Va en el propio icono para ganarle el arrastre al Inicio: al consumirlo aquí,
+                        // el detector de fuera (el que abre la barra) lo da por perdido.
+                        Modifier.pointerInput(Unit) {
+                            val openAt = -SwipeOpenDrag.toPx()
+                            val maxLift = SwipeMaxLift.toPx()
+                            var dragged = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { dragged = 0f },
+                                onVerticalDrag = { _, amount ->
+                                    val wasArmed = dragged <= openAt
+                                    dragged += amount
+                                    // Un toque al cruzar el umbral: soltar a partir de aquí abre el destino.
+                                    if (!wasArmed && dragged <= openAt) {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    }
+                                    // El icono acompaña al dedo a medio paso y con tope: se nota que
+                                    // responde sin que parezca que se puede arrastrar a otro sitio.
+                                    val target = (dragged * SWIPE_LIFT_RATIO).coerceIn(-maxLift, 0f)
+                                    scope.launch { lift.snapTo(target) }
+                                },
+                                onDragEnd = {
+                                    if (dragged <= openAt) currentSwipe?.open?.invoke()
+                                    scope.launch { lift.animateTo(0f) }
+                                },
+                                onDragCancel = { scope.launch { lift.animateTo(0f) } }
+                            )
+                        }
+                    }
+                )
                 // Sin etiqueta visible, el nombre sigue llegando a TalkBack.
-                .semantics { contentDescription = description ?: label }
+                .semantics {
+                    contentDescription = spoken
+                    // El gesto no existe para TalkBack: el destino secundario va como acción con nombre.
+                    if (swipeAction != null) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction(swipeAction) {
+                                    currentSwipe?.open?.invoke()
+                                    true
+                                }
+                            )
+                    }
+                }
                 .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.size(DockIconSize), contentAlignment = Alignment.Center) { icon() }
+        Box(
+            Modifier.size(DockIconSize).graphicsLayer { translationY = lift.value },
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
+            if (unread) UnreadDot()
+            if (swipe != null) SwipeMark()
+        }
         if (showLabel) {
             Spacer(Modifier.height(6.dp))
             DockLabel(label)
         }
     }
+}
+
+/**
+ * Marca de que el icono tiene destino secundario: un trazo corto de acento justo encima, como un
+ * tirador. Decorativa; TalkBack recibe el destino como acción del icono.
+ */
+@Composable
+private fun BoxScope.SwipeMark() {
+    Box(
+        Modifier
+            .align(Alignment.TopCenter)
+            // Por fuera del icono, para no tapar su dibujo ni chocar con el punto de no leído.
+            .offset(y = -SwipeMarkGap)
+            .size(width = 14.dp, height = 3.dp)
+            .background(AlisioTokens.Accent.copy(alpha = 0.9f), CircleShape)
+    )
 }
 
 @Composable

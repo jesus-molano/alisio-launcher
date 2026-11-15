@@ -1,6 +1,7 @@
 package dev.jesusmolano.alisio.ui.components
 
 import android.graphics.Bitmap
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +58,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
  *
  * @param highlighted la marca como mejor resultado: borde y fondo de acento.
  * @param leading lo que va en lugar del icono cuando no hay uno (ajustes, cálculo).
+ * @param leadingIcon dibujo vectorial en lugar del icono; tiene preferencia sobre [leading].
  * @param actions botones propios de la fila, al final: tocar uno no dispara [onClick].
  */
 @Composable
@@ -64,6 +68,7 @@ fun ItemRow(
     modifier: Modifier = Modifier,
     icon: Bitmap? = null,
     leading: String? = null,
+    @DrawableRes leadingIcon: Int? = null,
     subtitle: String? = null,
     trailing: String? = null,
     highlighted: Boolean = false,
@@ -94,13 +99,22 @@ fun ItemRow(
                 Modifier.size(44.dp).background(AlisioTokens.SurfaceElevated, AlisioTokens.DockIconShape),
                 contentAlignment = Alignment.Center
             ) {
-                // Decorativo: sin esto TalkBack leería el símbolo antes del título.
-                Text(
-                    text = leading.orEmpty(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AlisioTokens.Accent,
-                    modifier = Modifier.clearAndSetSemantics {}
-                )
+                if (leadingIcon != null) {
+                    Icon(
+                        painter = painterResource(leadingIcon),
+                        contentDescription = null,
+                        tint = AlisioTokens.Accent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    // Decorativo: sin esto TalkBack leería el símbolo antes del título.
+                    Text(
+                        text = leading.orEmpty(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = AlisioTokens.Accent,
+                        modifier = Modifier.clearAndSetSemantics {}
+                    )
+                }
             }
         }
         Spacer(Modifier.width(14.dp))
