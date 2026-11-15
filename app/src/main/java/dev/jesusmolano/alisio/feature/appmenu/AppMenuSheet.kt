@@ -41,7 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.search.filterByName
 import dev.jesusmolano.alisio.core.usage.usageDuration
+import dev.jesusmolano.alisio.core.zones.ZoneId
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.ShortcutEntry
 import dev.jesusmolano.alisio.data.home.SwipeTarget
@@ -57,6 +58,7 @@ import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
+import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
@@ -71,15 +73,27 @@ class AppUsage(val granted: Boolean, val today: suspend () -> Long?, val onGrant
 /** Lo que se puede hacer con el hueco del dock que ocupa la app; es lo mismo que ofrece su hoja. */
 class SlotActions(val onChangeApp: () -> Unit, val onMakeStack: () -> Unit, val onClear: () -> Unit)
 
+/** Una isla de Zonas con el nombre que se enseña. */
+class ZoneChoice(val id: ZoneId, val name: String)
+
 /**
- * Interior de app (§5.6, §6): la hoja que sale al mantener pulsada una app del dock. Enseña su uso
- * de hoy, abre sus accesos directos, elige a dónde lleva deslizar hacia arriba sobre su icono y deja
- * a mano la ficha del sistema y las acciones del hueco.
+ * «Mover a otra zona»: la isla en la que está la app y las demás a las que puede ir.
+ *
+ * @param choices [current] y sus destinos posibles, en el orden en que se ven en Zonas.
+ */
+class ZoneMove(val current: ZoneId, val choices: List<ZoneChoice>, val onMove: (ZoneId) -> Unit)
+
+/**
+ * Interior de app (§5.6, §6): la hoja que sale al mantener pulsada una app del dock o de Zonas.
+ * Enseña su uso de hoy, abre sus accesos directos, elige a dónde lleva deslizar hacia arriba sobre
+ * su icono, la cambia de isla y deja a mano la ficha del sistema y las acciones del hueco.
  *
  * @param shortcuts todos los accesos directos conocidos: los de [app] se listan, y cualquiera puede
  *   elegirse como destino.
  * @param target destino secundario actual del icono, si lo tiene.
  * @param gesturesEnabled con los gestos del dock apagados en los ajustes no se ofrece elegir destino.
+ * @param slot acciones del hueco del dock; `null` cuando la hoja no sale de un hueco.
+ * @param zones `null` mientras Zonas no ha cargado: entonces no se ofrece cambiar de isla.
  * @param shortcutIcon carga el icono propio de un acceso directo; `null` si no tiene.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,7 +105,8 @@ fun AppMenuSheet(
     target: SwipeTarget?,
     gesturesEnabled: Boolean,
     usage: AppUsage,
-    slot: SlotActions,
+    slot: SlotActions?,
+    zones: ZoneMove?,
     shortcutIcon: suspend (ShortcutEntry) -> Bitmap?,
     onOpenShortcut: (ShortcutEntry) -> Unit,
     onSetTarget: (SwipeTarget?) -> Unit,
@@ -157,14 +172,35 @@ fun AppMenuSheet(
                     SectionLabel(stringResource(R.string.appmenu_swipe))
                     TargetRow(target, onClick = { picking = true })
                 }
-                SectionLabel(stringResource(R.string.appmenu_slot))
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Chip(stringResource(R.string.appmenu_change_app), onClick = slot.onChangeApp)
-                    Chip(stringResource(R.string.slot_make_stack), onClick = slot.onMakeStack)
-                    Chip(stringResource(R.string.picker_clear), onClick = slot.onClear)
+                // Con una sola isla posible no hay nada que elegir.
+                if (zones != null && zones.choices.size > 1) {
+                    SectionLabel(stringResource(R.string.appmenu_zone))
+                    // La isla actual va marcada; tocar otra mueve la app y la marca pasa a ella.
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        zones.choices.forEach { choice ->
+                            val current = choice.id == zones.current
+                            Chip(
+                                label = choice.name,
+                                selected = current,
+                                modifier = Modifier.semantics { selected = current },
+                                onClick = { if (!current) zones.onMove(choice.id) }
+                            )
+                        }
+                    }
+                }
+                if (slot != null) {
+                    SectionLabel(stringResource(R.string.appmenu_slot))
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Chip(stringResource(R.string.appmenu_change_app), onClick = slot.onChangeApp)
+                        Chip(stringResource(R.string.slot_make_stack), onClick = slot.onMakeStack)
+                        Chip(stringResource(R.string.picker_clear), onClick = slot.onClear)
+                    }
                 }
             }
         }
@@ -220,7 +256,12 @@ private fun Header(app: AppEntry, usage: AppUsage, onAppInfo: () -> Unit) {
                 }
             }
         }
-        IconButton(R.drawable.ic_info, stringResource(R.string.appmenu_app_info), AlisioTokens.TextSecondary, onAppInfo)
+        RoundIconButton(
+            R.drawable.ic_info,
+            stringResource(R.string.appmenu_app_info),
+            AlisioTokens.TextSecondary,
+            onAppInfo
+        )
     }
 }
 
@@ -301,7 +342,7 @@ private fun TargetPicker(
 
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(R.drawable.ic_arrow_back, stringResource(R.string.appmenu_back), AlisioTokens.Text, onBack)
+            RoundIconButton(R.drawable.ic_arrow_back, stringResource(R.string.appmenu_back), AlisioTokens.Text, onBack)
             Text(
                 text = stringResource(R.string.appmenu_swipe_title),
                 style = MaterialTheme.typography.headlineLarge.copy(fontSize = 24.sp),
@@ -370,20 +411,5 @@ private fun LazyListScope.shortcutRows(
             highlighted = chosen,
             onClick = { onPick(SwipeTarget.Shortcut(shortcut)) }
         )
-    }
-}
-
-/** Botón redondo de 48 dp con solo un dibujo; [description] es lo que lee TalkBack. */
-@Composable
-private fun IconButton(@DrawableRes icon: Int, description: String, tint: Color, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(painter = painterResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
     }
 }

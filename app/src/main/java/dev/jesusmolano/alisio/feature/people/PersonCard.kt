@@ -20,6 +20,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +39,9 @@ import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.people.Channel
 import dev.jesusmolano.alisio.core.people.initials
+import dev.jesusmolano.alisio.data.contacts.ContactPhotos
+import dev.jesusmolano.alisio.data.contacts.Person
+import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 /** Nombre de cada canal: lo que lee TalkBack en su botón y lo que se escribe debajo en la tarjeta. */
@@ -48,9 +54,29 @@ fun channelLabel(channel: Channel): Int = when (channel) {
     Channel.SMS -> R.string.channel_sms
 }
 
-/** Avatar con las iniciales de la persona. Decorativo: el nombre va siempre al lado. */
+/**
+ * La foto de [person] para su avatar, o `null` mientras se lee, si no tiene o si [photos] es `null`
+ * (fotos apagadas en los ajustes): quien la pinta enseña entonces las iniciales. La lectura no
+ * bloquea; una foto ya leída sale desde el primer fotograma.
+ */
 @Composable
-fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
+fun rememberContactPhoto(person: Person, photos: ContactPhotos?): Bitmap? {
+    // El estado se rehace con la persona: una fila que pasa a ser de otra no enseña la foto anterior.
+    val photo = remember(person, photos) { mutableStateOf(photos?.cached(person)) }
+    LaunchedEffect(person, photos) { if (photo.value == null) photo.value = photos?.load(person) }
+    return photo.value
+}
+
+/**
+ * Avatar de la persona: su [photo], que llega ya recortada en círculo, o sus iniciales.
+ * Decorativo: el nombre va siempre al lado.
+ */
+@Composable
+fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier, photo: Bitmap? = null) {
+    if (photo != null) {
+        AppIcon(photo, size, modifier)
+        return
+    }
     Box(
         modifier.size(size).background(AlisioTokens.AccentSoft, CircleShape).clearAndSetSemantics {},
         contentAlignment = Alignment.Center
@@ -70,6 +96,7 @@ fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
  * @param channels en orden de uso; el primero es el principal y va marcado con el acento.
  * @param learned el canal principal sale del historial: la tarjeta lo dice.
  * @param onOpenContact abre su ficha en la app de Contactos.
+ * @param photo su foto para el avatar; sin ella van las iniciales.
  */
 @Composable
 fun PersonCard(
@@ -79,7 +106,8 @@ fun PersonCard(
     whatsappIcon: Bitmap?,
     onContact: (Channel) -> Unit,
     onOpenContact: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photo: Bitmap? = null
 ) {
     val shape = AlisioTokens.CardShape
     Column(
@@ -90,7 +118,7 @@ fun PersonCard(
             .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, 56.dp)
+            Avatar(name, 56.dp, photo = photo)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(

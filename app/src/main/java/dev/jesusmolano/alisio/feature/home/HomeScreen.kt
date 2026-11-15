@@ -91,6 +91,7 @@ import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.search.filterByName
 import dev.jesusmolano.alisio.core.search.moved
 import dev.jesusmolano.alisio.core.text.takeGraphemes
+import dev.jesusmolano.alisio.core.zones.Pinch
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.toSections
 import dev.jesusmolano.alisio.data.home.StackIcon
@@ -101,12 +102,15 @@ import dev.jesusmolano.alisio.feature.appmenu.AppUsage
 import dev.jesusmolano.alisio.feature.appmenu.SlotActions
 import dev.jesusmolano.alisio.feature.search.appLabel
 import dev.jesusmolano.alisio.feature.search.searchHint
+import dev.jesusmolano.alisio.feature.zones.ZonesViewModel
+import dev.jesusmolano.alisio.feature.zones.zoneMove
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.UnreadDot
 import dev.jesusmolano.alisio.ui.components.formatClock
+import dev.jesusmolano.alisio.ui.components.onPinch
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import java.time.format.DateTimeFormatter
@@ -122,6 +126,7 @@ private val ScreenMargin = 24.dp
 // Alto de dock + píldora con sus separaciones: lo que el índice de Trazo deja libre por abajo.
 private val BottomAreaHeight = 176.dp
 private val OpenSearchDrag = 48.dp
+private val ShowNotificationsDrag = 48.dp
 
 // Recorrido hacia arriba sobre un icono del dock que abre su destino secundario.
 private val SwipeOpenDrag = 40.dp
@@ -142,8 +147,13 @@ private const val TAG = "HomeScreen"
  * Inicio de §6: reloj y fecha arriba; abajo, el dock y la píldora de la barra. Cada hueco del dock
  * es una app o una pila con nombre; mantenerlo pulsado lo configura. Deslizar hacia arriba en una
  * zona vacía o tocar la píldora abre la barra; mantener pulsada una zona vacía abre los ajustes de
- * Alisio. Trazo va en el borde derecho.
+ * Alisio; pellizcar abre Zonas. Trazo va en el borde derecho. Con el servicio de accesibilidad
+ * activado, dos toques en una zona vacía bloquean la pantalla y deslizar hacia abajo baja las
+ * notificaciones.
  *
+ * @param onLockScreen bloquea la pantalla; `null` si el gesto está apagado o no hay servicio.
+ * @param onShowNotifications baja las notificaciones; `null` en los mismos casos.
+ * @param zones de dónde sale en qué isla está cada app, para «Mover a otra zona» del Interior de app.
  * @param homePresses sube cada vez que se pulsa «inicio» estando ya en Alisio; cierra las hojas abiertas.
  * @param searchOpen con la barra encima, Trazo se retira: su índice seguiría recibiendo toques y
  *   quitándole al sistema el gesto atrás del borde derecho.
@@ -151,17 +161,22 @@ private const val TAG = "HomeScreen"
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
+    zones: ZonesViewModel,
+    onOpenZones: () -> Unit,
     homePresses: Int,
     searchOpen: Boolean,
     prefs: Prefs,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onGrantUsage: () -> Unit,
+    onLockScreen: (() -> Unit)?,
+    onShowNotifications: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val shortcuts by viewModel.shortcuts.collectAsStateWithLifecycle()
     val swipeTargets by viewModel.swipeTargets.collectAsStateWithLifecycle()
     val usageGranted by viewModel.usageGranted.collectAsStateWithLifecycle()
+    val zonesState by zones.state.collectAsStateWithLifecycle()
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val loadedDock by viewModel.dock.collectAsStateWithLifecycle()
     val dock = loadedDock.orEmpty()
@@ -189,6 +204,11 @@ fun HomeScreen(
         openStack = null
         appMenu = null
     }
+
+    // Los detectores de gestos viven lo que vive la pantalla: leen siempre la orden de ahora.
+    val lockScreen by rememberUpdatedState(onLockScreen)
+    val showNotifications by rememberUpdatedState(onShowNotifications)
+    val canLock = onLockScreen != null
 
     fun launchFailed(label: String) {
         Toast.makeText(context, resources.getString(R.string.app_launch_failed, label), Toast.LENGTH_SHORT).show()
@@ -223,15 +243,41 @@ fun HomeScreen(
                     )
                 )
             }
+            // Pellizcar hacia dentro abre Zonas (§5.7). Va antes que los demás gestos: con dos dedos
+            // en la pantalla ni se abre la barra ni saltan los ajustes.
+            .onPinch(enabled = prefs.zonesPinch && !searchOpen) { if (it == Pinch.IN) onOpenZones() }
             .pointerInput(onOpenSearch) {
                 var dragged = 0f
+                var pulledDown = false
                 detectVerticalDragGestures(
-                    onDragStart = { dragged = 0f },
-                    onVerticalDrag = { _, amount -> dragged += amount },
-                    onDragEnd = { if (dragged < -OpenSearchDrag.toPx()) onOpenSearch() }
+                    onDragStart = {
+                        dragged = 0f
+                        pulledDown = false
+                    },
+                    onVerticalDrag = { _, amount ->
+                        dragged += amount
+                        // Hacia abajo se actúa al pasar el umbral, sin esperar a soltar, como al tirar
+                        // de la barra de estado. Una vez por gesto.
+                        if (!pulledDown && dragged > ShowNotificationsDrag.toPx()) {
+                            showNotifications?.let {
+                                pulledDown = true
+                                it()
+                            }
+                        }
+                    },
+                    // Un gesto que ya ha bajado las notificaciones no abre además la barra.
+                    onDragEnd = { if (!pulledDown && dragged < -OpenSearchDrag.toPx()) onOpenSearch() }
                 )
             }
-            .pointerInput(onOpenSettings) { detectTapGestures(onLongPress = { onOpenSettings() }) }
+            // El detector de dos toques solo existe con el gesto disponible: sin él queda el de
+            // siempre, que no espera a un segundo toque. Aquí no hay acción de un solo toque, así que
+            // esa espera no retrasa nada; los iconos y el reloj se quedan sus toques antes.
+            .pointerInput(onOpenSettings, canLock) {
+                detectTapGestures(
+                    onLongPress = { onOpenSettings() },
+                    onDoubleTap = if (canLock) ({ lockScreen?.invoke() }) else null
+                )
+            }
     ) {
         ClockAndDate(
             Modifier
@@ -384,6 +430,7 @@ fun HomeScreen(
                             appMenu = null
                         }
                     ),
+                zones = zoneMove(zonesState, app) { zones.move(app, it) },
                 shortcutIcon = viewModel::shortcutIcon,
                 onOpenShortcut = { shortcut ->
                     appMenu = null

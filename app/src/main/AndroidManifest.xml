@@ -12,6 +12,12 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <!--
+        «alarma 7:30» y «temporizador 10» en la barra (docs/PLAN.md §5.8). Permiso normal: se concede
+        al instalar y solo deja pedirle al reloj que ponga una alarma.
+    -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!--
         Acceso a uso, para el uso de hoy en el Interior de app (docs/PLAN.md §5.6). No se concede al
         instalar ni con un diálogo: el usuario lo da en los ajustes del sistema, y declararlo es lo
         que hace que Alisio salga en esa lista.
@@ -86,7 +92,8 @@
 
         <!--
             Lo enlaza el sistema cuando el usuario concede el acceso a notificaciones: reproductor y
-            puntos de no leído (docs/PLAN.md §5.5). Es el único servicio de Alisio.
+            puntos de no leído (docs/PLAN.md §5.5). Alisio no arranca ningún servicio: este y el de
+            accesibilidad los enlaza el sistema, y solo si el usuario los activa.
         -->
         <service
             android:name=".data.media.AlisioNotificationListener"
@@ -96,6 +103,24 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <!--
+            Opcional y apagado hasta que el usuario lo activa en los ajustes de accesibilidad del
+            sistema (docs/PLAN.md §5.8). Solo sirve para bloquear la pantalla y bajar las
+            notificaciones; su configuración no pide eventos ni el contenido de las ventanas.
+        -->
+        <service
+            android:name=".data.accessibility.AlisioAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
         </service>
     </application>
 </manifest>

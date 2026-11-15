@@ -26,8 +26,15 @@ import kotlinx.coroutines.withContext
  * @param lookupKey clave estable del contacto (`LOOKUP_KEY`); con ella se lleva su historial.
  * @param phone su teléfono principal, o el primero que tenga.
  * @param whatsappRows fila de `ContactsContract.Data` que WhatsApp añade para cada canal suyo.
+ * @param photoUri dirección de su foto pequeña, si tiene; la lee [ContactPhotos] cuando hace falta.
  */
-class Person(val lookupKey: String, val name: String, val phone: String?, val whatsappRows: Map<Channel, Long>) {
+class Person(
+    val lookupKey: String,
+    val name: String,
+    val phone: String?,
+    val whatsappRows: Map<Channel, Long>,
+    val photoUri: String? = null
+) {
     /**
      * Canales disponibles: los de WhatsApp que tengan fila en este contacto, más llamada y SMS si
      * tiene teléfono (§5.4).
@@ -55,6 +62,8 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
 
     private val _granted = MutableStateFlow(hasPermission())
     val granted: StateFlow<Boolean> = _granted.asStateFlow()
+
+    val photos = ContactPhotos(context)
 
     private var reloadJob: Job? = null
     private var observing = false
@@ -92,12 +101,15 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
         reloadJob =
             scope.launch {
                 if (debounce) delay(RELOAD_DEBOUNCE_MILLIS)
-                _people.value = withContext(Dispatchers.IO) { load() }
+                val people = withContext(Dispatchers.IO) { load() }
+                // Antes de publicar: quien pinte a las personas nuevas vuelve a pedir su foto.
+                photos.clear()
+                _people.value = people
             }
     }
 
     private fun load(): List<Person> {
-        class Draft(val name: String) {
+        class Draft(val name: String, val photoUri: String?) {
             var phone: String? = null
             var primaryPhone = false
             val whatsapp = HashMap<Channel, Long>()
@@ -123,7 +135,8 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
             while (it.moveToNext()) {
                 val lookupKey = it.getString(COLUMN_LOOKUP) ?: continue
                 val name = it.getString(COLUMN_NAME)?.takeIf(String::isNotBlank) ?: continue
-                val draft = drafts.getOrPut(lookupKey) { Draft(name) }
+                // La foto es del contacto, no de la fila: viene igual en todas las suyas.
+                val draft = drafts.getOrPut(lookupKey) { Draft(name, it.getString(COLUMN_PHOTO)) }
                 val mimeType = it.getString(COLUMN_MIME)
                 val channel = WHATSAPP_MIME_TYPES[mimeType]
                 if (channel != null) {
@@ -140,7 +153,9 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
         }
         val people =
             drafts
-                .map { (lookupKey, draft) -> Person(lookupKey, draft.name, draft.phone, draft.whatsapp) }
+                .map { (lookupKey, draft) ->
+                    Person(lookupKey, draft.name, draft.phone, draft.whatsapp, draft.photoUri)
+                }
                 .filter { it.phone != null || it.whatsappRows.isNotEmpty() }
         // Solo recuentos: sirve para saber si WhatsApp sigue dejando sus filas (riesgo de §9).
         Log.i(
@@ -163,7 +178,8 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
                 ContactsContract.Data.DISPLAY_NAME_PRIMARY,
                 ContactsContract.Data.MIMETYPE,
                 ContactsContract.Data.DATA1,
-                ContactsContract.Data.IS_SUPER_PRIMARY
+                ContactsContract.Data.IS_SUPER_PRIMARY,
+                ContactsContract.Data.PHOTO_THUMBNAIL_URI
             )
         const val COLUMN_ID = 0
         const val COLUMN_LOOKUP = 1
@@ -171,6 +187,7 @@ class ContactsRepository(context: Context, private val scope: CoroutineScope) {
         const val COLUMN_MIME = 3
         const val COLUMN_DATA = 4
         const val COLUMN_PRIMARY = 5
+        const val COLUMN_PHOTO = 6
     }
 }
 

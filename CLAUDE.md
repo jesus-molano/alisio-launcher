@@ -2,7 +2,7 @@
 
 Launcher Android personal para un Galaxy S26 Ultra. **Lee `docs/PLAN.md` antes de tocar nada**: es la fuente de verdad (alcance por fases, arquitectura, diseño y reglas de §10). Lo que se descubra al implementar va a su §11.
 
-Estado: fase 2 (Personas), con la fase 1 en uso y todavía afinándose. No adelantar trabajo de fases posteriores.
+Estado: fases 0 a 5 implementadas y sin probar del todo a mano; en curso la fase 6 (revisión de experiencia y estética, §8 del plan).
 
 ## Requisitos
 

@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.jesusmolano.alisio.core.icons.IconStyle
+import dev.jesusmolano.alisio.core.pause.DEFAULT_PAUSE_SECONDS
+import dev.jesusmolano.alisio.core.pause.normalizePauseSeconds
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +35,19 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param unreadDots si el dock marca con un punto las apps con notificaciones sin leer.
  * @param unreadMuted paquetes cuyo punto está apagado.
  * @param dockGestures si deslizar hacia arriba sobre un icono del dock abre su destino secundario.
+ * @param zonesPinch si pellizcar el Inicio abre Zonas; apagado, se llega desde la barra.
+ * @param zonesLabels si Zonas enseña el nombre debajo de cada icono.
+ * @param expenseTemplate dirección que apunta un gasto escrito en la barra, con las marcas `{importe}`
+ *   y `{concepto}`; vacía, el gasto rápido está apagado.
+ * @param clipboardActions si la barra mira el portapapeles al abrirse para ofrecer su acción.
+ * @param lockDoubleTap si dos toques en una zona vacía del Inicio bloquean la pantalla. Solo tiene
+ *   efecto con el servicio de accesibilidad activado.
+ * @param notificationsSwipe si deslizar hacia abajo en una zona vacía del Inicio baja las
+ *   notificaciones. Solo tiene efecto con el servicio de accesibilidad activado.
+ * @param pausedApps paquetes que Alisio abre tras una pausa; vacío, la pausa está apagada.
+ * @param pauseSeconds cuánto dura esa pausa.
+ * @param contactPhotos si el avatar de una persona es su foto de la agenda; apagado, o si no tiene
+ *   foto, son sus iniciales.
  */
 data class Prefs(
     val iconStyle: IconStyle = IconStyle.Color,
@@ -45,8 +60,20 @@ data class Prefs(
     val playerEnabled: Boolean = true,
     val unreadDots: Boolean = true,
     val unreadMuted: Set<String> = DEFAULT_UNREAD_MUTED,
-    val dockGestures: Boolean = true
+    val dockGestures: Boolean = true,
+    val zonesPinch: Boolean = true,
+    val zonesLabels: Boolean = true,
+    val expenseTemplate: String = "",
+    val clipboardActions: Boolean = true,
+    val lockDoubleTap: Boolean = true,
+    val notificationsSwipe: Boolean = true,
+    val pausedApps: Set<String> = DEFAULT_PAUSED_APPS,
+    val pauseSeconds: Int = DEFAULT_PAUSE_SECONDS,
+    val contactPhotos: Boolean = true
 )
+
+/** X y YouTube llevan pausa de entrada (§3 «Opcional»); si no están instaladas, no pintan nada. */
+val DEFAULT_PAUSED_APPS: Set<String> = setOf("com.twitter.android", "com.google.android.youtube")
 
 /** X viene con el punto apagado (§5.5): lo suyo rara vez es algo pendiente de leer. */
 val DEFAULT_UNREAD_MUTED: Set<String> = setOf("com.twitter.android")
@@ -85,7 +112,16 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
                     playerEnabled = stored[PLAYER_ENABLED] ?: true,
                     unreadDots = stored[UNREAD_DOTS] ?: true,
                     unreadMuted = stored[UNREAD_MUTED] ?: DEFAULT_UNREAD_MUTED,
-                    dockGestures = stored[DOCK_GESTURES] ?: true
+                    dockGestures = stored[DOCK_GESTURES] ?: true,
+                    zonesPinch = stored[ZONES_PINCH] ?: true,
+                    zonesLabels = stored[ZONES_LABELS] ?: true,
+                    expenseTemplate = stored[EXPENSE_TEMPLATE].orEmpty(),
+                    clipboardActions = stored[CLIPBOARD_ACTIONS] ?: true,
+                    lockDoubleTap = stored[LOCK_DOUBLE_TAP] ?: true,
+                    notificationsSwipe = stored[NOTIFICATIONS_SWIPE] ?: true,
+                    pausedApps = stored[PAUSED_APPS] ?: DEFAULT_PAUSED_APPS,
+                    pauseSeconds = normalizePauseSeconds(stored[PAUSE_SECONDS_KEY]),
+                    contactPhotos = stored[CONTACT_PHOTOS] ?: true
                 )
             }
             .stateIn(scope, SharingStarted.Eagerly, null)
@@ -107,6 +143,17 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
 
     fun toggleDockGestures() = write { it[DOCK_GESTURES] = !(it[DOCK_GESTURES] ?: true) }
 
+    fun toggleZonesPinch() = write { it[ZONES_PINCH] = !(it[ZONES_PINCH] ?: true) }
+
+    fun toggleZonesLabels() = write { it[ZONES_LABELS] = !(it[ZONES_LABELS] ?: true) }
+
+    fun toggleClipboardActions() = write { it[CLIPBOARD_ACTIONS] = !(it[CLIPBOARD_ACTIONS] ?: true) }
+
+    /** Vacía apaga el gasto rápido. Se guarda tal cual se escribe; quien la usa decide si vale. */
+    fun setExpenseTemplate(template: String) = write {
+        if (template.isBlank()) it.remove(EXPENSE_TEMPLATE) else it[EXPENSE_TEMPLATE] = template
+    }
+
     fun setWallpaperDim(dim: WallpaperDim) = write { it[WALLPAPER_DIM] = dim.ordinal }
 
     fun toggleNow() = write { it[NOW_ENABLED] = !(it[NOW_ENABLED] ?: true) }
@@ -120,6 +167,20 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val muted = it[UNREAD_MUTED] ?: DEFAULT_UNREAD_MUTED
         it[UNREAD_MUTED] = if (packageName in muted) muted - packageName else muted + packageName
     }
+
+    fun toggleLockDoubleTap() = write { it[LOCK_DOUBLE_TAP] = !(it[LOCK_DOUBLE_TAP] ?: true) }
+
+    fun toggleNotificationsSwipe() = write { it[NOTIFICATIONS_SWIPE] = !(it[NOTIFICATIONS_SWIPE] ?: true) }
+
+    /** Pone o quita la pausa de una app. Mientras no se toque ninguna valen las de por defecto. */
+    fun togglePauseFor(packageName: String) = write {
+        val paused = it[PAUSED_APPS] ?: DEFAULT_PAUSED_APPS
+        it[PAUSED_APPS] = if (packageName in paused) paused - packageName else paused + packageName
+    }
+
+    fun setPauseSeconds(seconds: Int) = write { it[PAUSE_SECONDS_KEY] = seconds }
+
+    fun toggleContactPhotos() = write { it[CONTACT_PHOTOS] = !(it[CONTACT_PHOTOS] ?: true) }
 
     fun setAssistant(packageName: String) = write { it[ASSISTANT] = packageName }
 
@@ -151,5 +212,14 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val UNREAD_DOTS = booleanPreferencesKey("unread_dots")
         val UNREAD_MUTED = stringSetPreferencesKey("unread_muted")
         val DOCK_GESTURES = booleanPreferencesKey("dock_gestures")
+        val ZONES_PINCH = booleanPreferencesKey("zones_pinch")
+        val ZONES_LABELS = booleanPreferencesKey("zones_labels")
+        val EXPENSE_TEMPLATE = stringPreferencesKey("expense_template")
+        val CLIPBOARD_ACTIONS = booleanPreferencesKey("clipboard_actions")
+        val LOCK_DOUBLE_TAP = booleanPreferencesKey("lock_double_tap")
+        val NOTIFICATIONS_SWIPE = booleanPreferencesKey("notifications_swipe")
+        val PAUSED_APPS = stringSetPreferencesKey("paused_apps")
+        val PAUSE_SECONDS_KEY = intPreferencesKey("pause_seconds")
+        val CONTACT_PHOTOS = booleanPreferencesKey("contact_photos")
     }
 }

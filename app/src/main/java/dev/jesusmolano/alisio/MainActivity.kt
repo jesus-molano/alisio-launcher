@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -17,28 +18,40 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.jesusmolano.alisio.core.zones.ZoneId
+import dev.jesusmolano.alisio.data.pause.PendingLaunch
 import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.feature.home.HomeScreen
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
 import dev.jesusmolano.alisio.feature.home.dockApps
 import dev.jesusmolano.alisio.feature.onboarding.OnboardingScreen
+import dev.jesusmolano.alisio.feature.pause.PauseScreen
 import dev.jesusmolano.alisio.feature.search.SearchScreen
 import dev.jesusmolano.alisio.feature.search.SearchViewModel
+import dev.jesusmolano.alisio.feature.settings.AccessibilityNotice
 import dev.jesusmolano.alisio.feature.settings.SettingsScreen
+import dev.jesusmolano.alisio.feature.settings.ZoneSettings
+import dev.jesusmolano.alisio.feature.zones.ZonesScreen
+import dev.jesusmolano.alisio.feature.zones.ZonesViewModel
 import dev.jesusmolano.alisio.ui.theme.AlisioTheme
 
 // Menos que lo que tarda nadie en responder a un diálogo de permisos.
@@ -50,6 +63,9 @@ class MainActivity : ComponentActivity() {
     }
     private val searchViewModel: SearchViewModel by viewModels {
         SearchViewModel.factory((application as AlisioApp).container, applicationContext)
+    }
+    private val zonesViewModel: ZonesViewModel by viewModels {
+        ZonesViewModel.factory((application as AlisioApp).container)
     }
 
     private var isDefaultHome by mutableStateOf(false)
@@ -65,9 +81,11 @@ class MainActivity : ComponentActivity() {
     private var bluetoothAskedAt = 0L
     private var bluetoothRequestPending = false
     private var settingsOpen by mutableStateOf(false)
+    private var zonesOpen by mutableStateOf(false)
+    private var accessibilityNoticeOpen by mutableStateOf(false)
 
-    // Se sale a una pantalla del sistema a conceder algo: al volver, los ajustes deben seguir abiertos
-    // para ver el resultado en la fila que se tocó.
+    // Se sale a una pantalla del sistema a conceder algo: al volver, los ajustes (o Zonas, si se salió
+    // desde el Interior de una app) deben seguir abiertos para ver el resultado donde se tocó.
     private var leavingForSystemSettings = false
 
     // El resultado no importa: onResume vuelve a comprobar el rol.
@@ -99,6 +117,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = transparent, navigationBarStyle = transparent)
         super.onCreate(savedInstanceState)
         isDefaultHome = holdsHomeRole()
+        StartupTrace.mark("actividad creada")
 
         setContent {
             val settings = (application as AlisioApp).container.settings
@@ -106,26 +125,72 @@ class MainActivity : ComponentActivity() {
             // Hasta leer las preferencias no se pinta nada: si no, saldrían un instante el acento y el
             // velo por defecto antes que los elegidos.
             val prefs = loadedPrefs ?: return@setContent
+            // Primer fotograma con contenido: los anteriores van vacíos a la espera de las preferencias.
+            LaunchedEffect(Unit) {
+                withFrameNanos {}
+                StartupTrace.mark("primer fotograma")
+                reportFullyDrawn()
+            }
             AlisioTheme(accent = prefs.accent) {
                 // Atrás cierra lo que haya encima del Inicio; en el Inicio no hace nada.
+                val container = (application as AlisioApp).container
+                val pendingPause by container.launchPause.pending.collectAsStateWithLifecycle()
+                val accessibilityEnabled by container.globalActions.enabled.collectAsStateWithLifecycle()
                 BackHandler {
-                    if (settingsOpen) settingsOpen = false else searchOpen = false
+                    // De arriba abajo: la pausa, el aviso de accesibilidad, los ajustes, la barra y,
+                    // debajo de todos, Zonas.
+                    when {
+                        pendingPause != null -> container.launchPause.cancel()
+                        accessibilityNoticeOpen -> accessibilityNoticeOpen = false
+                        settingsOpen -> settingsOpen = false
+                        searchOpen -> searchOpen = false
+                        else -> zonesOpen = false
+                    }
                 }
                 if (isDefaultHome || onboardingSkipped) {
                     Box(Modifier.fillMaxSize()) {
                         HomeScreen(
                             viewModel = homeViewModel,
+                            zones = zonesViewModel,
+                            onOpenZones = { zonesOpen = true },
                             homePresses = homePresses,
                             // Con algo encima, Trazo se retira.
-                            searchOpen = searchOpen || settingsOpen,
+                            searchOpen = searchOpen || settingsOpen || zonesOpen || pendingPause != null,
                             prefs = prefs,
                             onOpenSettings = { settingsOpen = true },
                             onGrantUsage = ::openUsageAccess,
+                            // Sin el servicio activado no hay orden que dar: el gesto ni se escucha.
+                            onLockScreen =
+                                if (accessibilityEnabled && prefs.lockDoubleTap) {
+                                    { if (!container.globalActions.lockScreen()) onGestureIgnored() }
+                                } else {
+                                    null
+                                },
+                            onShowNotifications =
+                                if (accessibilityEnabled && prefs.notificationsSwipe) {
+                                    { if (!container.globalActions.showNotifications()) onGestureIgnored() }
+                                } else {
+                                    null
+                                },
                             onOpenSearch = {
                                 searchSession++
                                 searchOpen = true
                             }
                         )
+                        // Zonas entra encogiéndose hacia su sitio, como el pellizco que la abre, y va
+                        // debajo de la barra y de los ajustes, que pueden abrirse el uno al otro.
+                        AnimatedVisibility(
+                            visible = zonesOpen,
+                            enter = fadeIn() + scaleIn(initialScale = 1.08f),
+                            exit = fadeOut() + scaleOut(targetScale = 1.08f)
+                        ) {
+                            ZonesScreen(
+                                viewModel = zonesViewModel,
+                                prefs = prefs,
+                                onClose = { zonesOpen = false },
+                                onGrantUsage = ::openUsageAccess
+                            )
+                        }
                         // One UI no anima el gesto atrás en apps de terceros (§9): la barra trae su animación.
                         AnimatedVisibility(
                             visible = searchOpen,
@@ -141,6 +206,10 @@ class MainActivity : ComponentActivity() {
                                     onOpenSettings = {
                                         searchOpen = false
                                         settingsOpen = true
+                                    },
+                                    onOpenZones = {
+                                        searchOpen = false
+                                        zonesOpen = true
                                     }
                                 )
                             }
@@ -160,7 +229,19 @@ class MainActivity : ComponentActivity() {
                             val notificationsGranted by notificationAccess.granted.collectAsStateWithLifecycle()
                             val dock by homeViewModel.dock.collectAsStateWithLifecycle()
                             val usageGranted by homeViewModel.usageGranted.collectAsStateWithLifecycle()
+                            val zonesState by zonesViewModel.state.collectAsStateWithLifecycle()
                             SettingsScreen(
+                                zones =
+                                    ZoneSettings(
+                                        islands = zonesState?.zones.orEmpty().filter { it.id is ZoneId.Custom },
+                                        onOpen = {
+                                            settingsOpen = false
+                                            zonesOpen = true
+                                        },
+                                        onCreate = zonesViewModel::createZone,
+                                        onRename = zonesViewModel::renameZone,
+                                        onDelete = zonesViewModel::deleteZone
+                                    ),
                                 prefs = prefs,
                                 settings = settings,
                                 apps = apps.orEmpty(),
@@ -173,8 +254,46 @@ class MainActivity : ComponentActivity() {
                                 onNotificationsClick = ::openNotificationAccess,
                                 dockApps = dock.orEmpty().dockApps(),
                                 usageGranted = usageGranted,
-                                onUsageClick = ::openUsageAccess
+                                onUsageClick = ::openUsageAccess,
+                                accessibilityEnabled = accessibilityEnabled,
+                                // Activado, el aviso ya se leyó: se va directo a donde se desactiva.
+                                onAccessibilityClick = {
+                                    if (accessibilityEnabled) {
+                                        openAccessibilitySettings()
+                                    } else {
+                                        accessibilityNoticeOpen = true
+                                    }
+                                },
+                                onPreviewPause = { container.launchPause.preview(it, prefs.pauseSeconds) }
                             )
+                        }
+                        AnimatedVisibility(
+                            visible = accessibilityNoticeOpen,
+                            enter = fadeIn() + slideInVertically { it / 8 },
+                            exit = fadeOut() + slideOutVertically { it / 8 }
+                        ) {
+                            AccessibilityNotice(
+                                onContinue = ::openAccessibilitySettings,
+                                onDismiss = { accessibilityNoticeOpen = false }
+                            )
+                        }
+                        // La pausa va encima de todo: una app se abre desde el Inicio, la barra o Zonas.
+                        // Se guarda la última para que su salida animada siga teniendo qué pintar.
+                        var shownPause by remember { mutableStateOf<PendingLaunch?>(null) }
+                        LaunchedEffect(pendingPause) { pendingPause?.let { shownPause = it } }
+                        AnimatedVisibility(visible = pendingPause != null, enter = fadeIn(), exit = fadeOut()) {
+                            (pendingPause ?: shownPause)?.let { pause ->
+                                PauseScreen(
+                                    launch = pause,
+                                    onOpen = {
+                                        if (!container.launchPause.confirm()) {
+                                            val message = getString(R.string.app_launch_failed, pause.label)
+                                            Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onCancel = container.launchPause::cancel
+                                )
+                            }
                         }
                     }
                 } else {
@@ -201,6 +320,8 @@ class MainActivity : ComponentActivity() {
         (application as AlisioApp).container.mediaSessions.refresh()
         // Lo mismo con el acceso a uso.
         (application as AlisioApp).container.usageAccess.refresh()
+        // Y con el servicio de accesibilidad, que se activa y se desactiva en los ajustes del sistema.
+        (application as AlisioApp).container.globalActions.refresh()
         val holdsRole = holdsHomeRole()
         if (holdsRole && !isDefaultHome) homeViewModel.onHomeRoleGranted()
         isDefaultHome = holdsRole
@@ -208,9 +329,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Al volver de otra app el Inicio aparece limpio, sin la barra ni los ajustes a medias.
+        // Al volver de otra app el Inicio aparece limpio, sin la barra, Zonas ni los ajustes a medias.
         searchOpen = false
-        if (!leavingForSystemSettings) settingsOpen = false
+        accessibilityNoticeOpen = false
+        // Una pausa a medias no espera a la vuelta: abrir la app más tarde sería una sorpresa.
+        (application as AlisioApp).container.launchPause.cancel()
+        if (!leavingForSystemSettings) {
+            settingsOpen = false
+            zonesOpen = false
+        }
         // Vale para una sola salida: si después se va a otra app, el Inicio vuelve limpio.
         leavingForSystemSettings = false
     }
@@ -221,6 +348,9 @@ class MainActivity : ComponentActivity() {
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             searchOpen = false
             settingsOpen = false
+            zonesOpen = false
+            accessibilityNoticeOpen = false
+            (application as AlisioApp).container.launchPause.cancel()
             homePresses++
         }
     }
@@ -286,6 +416,28 @@ class MainActivity : ComponentActivity() {
                 openAppDetails()
             }
         }
+    }
+
+    /**
+     * El servicio de accesibilidad solo se activa en los ajustes del sistema, y siempre después del
+     * aviso propio ([AccessibilityNotice]). No hay pantalla de una app concreta: se abre la lista.
+     */
+    private fun openAccessibilitySettings() {
+        leavingForSystemSettings = true
+        try {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        } catch (_: ActivityNotFoundException) {
+            openAppDetails()
+        }
+    }
+
+    /**
+     * El servicio puede constar como activado sin que el sistema lo tenga enlazado (justo al recrear
+     * el proceso, por ejemplo): `GlobalActions` devuelve entonces `false`, y un gesto que no hace nada
+     * sin decir por qué parecería roto.
+     */
+    private fun onGestureIgnored() {
+        Toast.makeText(this, R.string.gesture_service_silent, Toast.LENGTH_SHORT).show()
     }
 
     private fun holdsHomeRole(): Boolean = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    El servicio solo da órdenes globales (bloquear y bajar las notificaciones). No pide tipos de
+    evento (accessibilityEventTypes ausente) ni el contenido de las ventanas, así que el sistema no
+    le entrega nada de lo que hay en pantalla. No es una herramienta de accesibilidad.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_service_description"
+    android:isAccessibilityTool="false"
+    android:summary="@string/accessibility_service_summary" />

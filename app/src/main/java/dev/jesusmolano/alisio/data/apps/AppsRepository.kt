@@ -14,6 +14,7 @@ import android.os.UserManager
 import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
+import dev.jesusmolano.alisio.StartupTrace
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +102,7 @@ class AppsRepository(
                         val apps = loadApps()
                         apps to loadShortcuts(apps)
                     }
+                if (_apps.value == null) StartupTrace.mark("apps e iconos listos (${apps.size})")
                 _apps.value = apps
                 _shortcuts.value = shortcuts
             }
@@ -173,6 +175,9 @@ class AppsRepository(
         return loadApps(style, pack)
     }
 
+    // De uno en uno a propósito: repartir los iconos entre 2, 4 u 8 hilos tardó lo mismo en el S26
+    // (docs/PLAN.md §11, fase 5). Casi todo el tiempo se va la primera vez que el proceso lee cada
+    // app: una segunda lectura completa tarda la quinta parte.
     private fun loadApps(style: IconStyle, pack: IconPack?): List<AppEntry> = launcherApps.profiles
         .flatMap { user ->
             val serial = userManager.getSerialNumberForUser(user)

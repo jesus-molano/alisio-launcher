@@ -65,6 +65,14 @@ data class IconGesture(
     @ColumnInfo(name = "shortcut_user") val shortcutUser: Long? = null
 )
 
+/** Isla de Zonas creada por el usuario. Las demás (Diario, las pilas, Dev, Sistema y Resto) se calculan. */
+@Entity(tableName = "zone")
+data class ZoneRow(@PrimaryKey(autoGenerate = true) val id: Long = 0, val name: String, val position: Int)
+
+/** Isla elegida a mano para la app [appKey]. [zone] es un `ZoneId` codificado (`dev`, `custom:3`…). */
+@Entity(tableName = "zone_assignment")
+data class ZoneAssignment(@PrimaryKey @ColumnInfo(name = "app_key") val appKey: String, val zone: String)
+
 class KeyAt(val key: String, val at: Long)
 
 class DeviceKeyAt(@ColumnInfo(name = "bluetooth_device") val device: String, val key: String, val at: Long)
@@ -101,6 +109,50 @@ val MIGRATION_4_5 =
             )
         }
     }
+
+/** De la 5 a la 6: las islas propias de Zonas y la isla elegida a mano para cada app. */
+val MIGRATION_5_6 =
+    object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `zone` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`position` INTEGER NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `zone_assignment` (" +
+                    "`app_key` TEXT NOT NULL, `zone` TEXT NOT NULL, PRIMARY KEY(`app_key`))"
+            )
+        }
+    }
+
+@Dao
+interface ZoneDao {
+    @Query("SELECT * FROM zone ORDER BY position, id")
+    fun zones(): Flow<List<ZoneRow>>
+
+    /** La isla nueva va al final: su posición se decide en la misma sentencia que la crea. */
+    @Query("INSERT INTO zone(name, position) VALUES(:name, (SELECT COALESCE(MAX(position), -1) + 1 FROM zone))")
+    suspend fun create(name: String)
+
+    @Query("UPDATE zone SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
+    @Query("DELETE FROM zone WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM zone_assignment")
+    fun assignments(): Flow<List<ZoneAssignment>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun assign(assignment: ZoneAssignment)
+
+    @Query("DELETE FROM zone_assignment WHERE app_key = :appKey")
+    suspend fun clear(appKey: String)
+
+    @Query("DELETE FROM zone_assignment WHERE zone = :zone")
+    suspend fun clearZone(zone: String)
+}
 
 @Dao
 interface IconGestureDao {
@@ -197,9 +249,11 @@ interface HomeConfigDao {
         DockSlot::class,
         StackItem::class,
         SuggestionFeedback::class,
-        IconGesture::class
+        IconGesture::class,
+        ZoneRow::class,
+        ZoneAssignment::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AlisioDatabase : RoomDatabase() {
@@ -210,4 +264,6 @@ abstract class AlisioDatabase : RoomDatabase() {
     abstract fun suggestionFeedback(): SuggestionFeedbackDao
 
     abstract fun iconGestures(): IconGestureDao
+
+    abstract fun zones(): ZoneDao
 }

@@ -121,6 +121,8 @@
     <string name="settings_change">Change</string>
     <string name="settings_contacts">Contacts</string>
     <string name="settings_contacts_on">People show up in search</string>
+    <string name="settings_contact_photos">Contact photos</string>
+    <string name="settings_contact_photos_hint">Each person shows their photo; without one, their initials</string>
     <string name="settings_allow">Allow</string>
     <string name="settings_icons">ICONS</string>
     <string name="settings_selected">Selected</string>
@@ -148,6 +150,32 @@
     <string name="search_section_shortcuts">APP ACTIONS</string>
     <string name="search_section_settings">SETTINGS</string>
     <string name="search_section_calc">CALCULATION</string>
+    <string name="search_section_expense">QUICK EXPENSE</string>
+    <string name="search_expense_title">Log %1$s € · %2$s</string>
+    <string name="search_expense_app">the expense page</string>
+    <string name="search_section_clock">CLOCK</string>
+    <string name="search_alarm_title">Set an alarm for %1$s</string>
+    <string name="search_timer_title">Start a %1$s timer</string>
+    <string name="search_alarm_set">Alarm set for %1$s</string>
+    <string name="search_timer_set">%1$s timer started</string>
+    <string name="search_clock_app">the clock</string>
+    <string name="duration_hours" translatable="false">%1$d h</string>
+    <string name="duration_minutes" translatable="false">%1$d min</string>
+    <string name="duration_seconds" translatable="false">%1$d s</string>
+    <string name="search_section_clipboard">CLIPBOARD</string>
+    <string name="search_clip_url">Open link</string>
+    <string name="search_clip_phone">Call</string>
+    <string name="search_clip_address">See on the map</string>
+    <string name="settings_clipboard">Clipboard actions</string>
+    <string name="settings_clipboard_hint">Offers to open a copied link, phone number or address</string>
+    <string name="settings_clipboard_on">Android tells you each time Alisio reads it</string>
+    <string name="settings_expense">QUICK EXPENSE</string>
+    <string name="settings_expense_hint">Type an amount and what it was for in search, like “%1$s”, and Alisio opens this address with {importe} and {concepto} filled in.</string>
+    <string name="settings_expense_placeholder" translatable="false">https://…/nuevo?importe={importe}&amp;concepto={concepto}</string>
+    <string name="settings_expense_sample">12 coffee</string>
+    <string name="settings_expense_preview">“%1$s” opens:</string>
+    <string name="settings_expense_off">No address yet: quick expense is off.</string>
+    <string name="settings_expense_invalid">Not usable yet: it has to be a full address (like https://…) and include {importe} or {concepto}.</string>
 
     <string name="setting_all">Settings</string>
     <string name="setting_wifi" translatable="false">Wi-Fi</string>
@@ -172,4 +200,78 @@
     <string name="setting_vpn" translatable="false">VPN</string>
     <string name="setting_developer">Developer options</string>
     <string name="setting_about">About phone</string>
+
+    <string name="zones_title">Zones</string>
+    <string name="zones_hint_back">Pinch out to go back</string>
+    <string name="zones_footer">Hold an app and drag it to move it to another island</string>
+    <string name="zones_search_subtitle">All your apps, by island</string>
+    <string name="zone_daily">Daily</string>
+    <string name="zone_dev" translatable="false">Dev</string>
+    <string name="zone_system">System</string>
+    <string name="zone_rest">Everything else</string>
+    <string name="zone_empty">Drop apps here</string>
+    <string name="zone_new">New island</string>
+    <string name="zone_edit_title">Your island</string>
+    <string name="zone_edit">Rename or delete %1$s</string>
+    <string name="zone_name_hint">Island name</string>
+    <string name="zone_create">Create</string>
+    <string name="zone_save">Save</string>
+    <string name="zone_delete">Delete island</string>
+    <string name="zone_delete_confirm">Delete? Its apps go back where they were</string>
+    <plurals name="zone_apps">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="appmenu_zone">ZONE</string>
+    <string name="appmenu_move">Move to another zone</string>
+    <string name="settings_zones">ZONES</string>
+    <string name="settings_zones_open">See Zones</string>
+    <string name="settings_zones_pinch">Pinch the home screen</string>
+    <string name="settings_zones_pinch_hint">Bring two fingers together to open Zones</string>
+    <string name="settings_zones_labels">App names in Zones</string>
+    <string name="settings_zones_labels_hint">Show the name under each icon</string>
+    <string name="settings_zones_new_hint">A group of apps with the name you give it</string>
+
+    <string name="accessibility_service_summary">Lock the screen and pull down the notifications from the home screen</string>
+    <string name="accessibility_service_description">Alisio uses this service for two things only: locking the screen when you double tap its home screen, and pulling down the notifications when you swipe down on it. It does not read what is on the screen, it receives no events and it sends nothing anywhere.</string>
+    <string name="accessibility_notice_title">Before you turn it on</string>
+    <string name="accessibility_notice_does_label">WHAT IT DOES</string>
+    <string name="accessibility_notice_does">Two things, and only when you ask for them: it locks the screen when you double tap an empty area of the home screen, and it pulls down the notifications when you swipe down.</string>
+    <string name="accessibility_notice_does_not_label">WHAT IT DOESN\'T DO</string>
+    <string name="accessibility_notice_does_not">It doesn\'t read the screen or what you type, it doesn\'t watch other apps and it doesn\'t tap anything for you. It asks Android for no events and no window content, and Alisio has no Internet permission.</string>
+    <string name="accessibility_notice_why_label">WHY IT\'S NEEDED</string>
+    <string name="accessibility_notice_why">Android only lets an accessibility service lock the screen or open the notifications. Without it those two gestures do nothing, and the rest of Alisio works the same. Some apps, such as banking apps, check for active accessibility services and may warn you.</string>
+    <string name="accessibility_notice_how_label">HOW TO TURN IT ON</string>
+    <string name="accessibility_notice_how">On the next screen, find Alisio (on Samsung, under Installed apps) and turn it on. Android shows its own generic warning about full control: it is the same for every service. You can turn it off there at any time.</string>
+    <string name="accessibility_notice_continue">Open accessibility settings</string>
+    <string name="accessibility_notice_dismiss">Not now</string>
+    <string name="settings_gestures">HOME GESTURES</string>
+    <string name="settings_accessibility">Accessibility service</string>
+    <string name="settings_accessibility_hint">Needed to lock the screen and pull down the notifications</string>
+    <string name="settings_accessibility_on">It only locks and opens the notifications; it never reads the screen</string>
+    <string name="settings_lock_double_tap">Double tap to lock</string>
+    <string name="settings_lock_double_tap_hint">Tap an empty area of the home screen twice</string>
+    <string name="settings_notifications_swipe">Swipe down for notifications</string>
+    <string name="settings_notifications_swipe_hint">Swipe down on an empty area of the home screen</string>
+    <string name="settings_gesture_needs_service">Turn on the accessibility service first</string>
+    <string name="gesture_service_silent">The accessibility service didn\'t respond</string>
+
+    <string name="pause_title">A pause before %1$s</string>
+    <string name="pause_open">Open anyway</string>
+    <string name="pause_cancel">Don\'t open</string>
+    <plurals name="pause_seconds_left">
+        <item quantity="one">%1$d second left</item>
+        <item quantity="other">%1$d seconds left</item>
+    </plurals>
+    <string name="pause_seconds_short" translatable="false">%1$d s</string>
+    <string name="settings_pause">PAUSE</string>
+    <string name="settings_pause_hint">Alisio waits a few seconds before opening these apps and asks whether you still want to. Only when you open them from Alisio.</string>
+    <string name="settings_pause_none">No app has a pause.</string>
+    <string name="settings_pause_remove">Remove the pause from %1$s</string>
+    <string name="settings_pause_apps">Apps with a pause</string>
+    <string name="settings_pause_apps_hint">Choose which apps open after a pause</string>
+    <string name="settings_pause_on">With pause</string>
+    <string name="settings_pause_duration">How long the pause lasts</string>
+    <string name="settings_pause_preview">See the pause</string>
+    <string name="settings_pause_preview_hint">As it will look when you open %1$s</string>
 </resources>

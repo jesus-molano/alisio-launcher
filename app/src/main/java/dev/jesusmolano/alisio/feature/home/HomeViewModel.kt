@@ -28,6 +28,7 @@ import dev.jesusmolano.alisio.data.media.MediaSessions
 import dev.jesusmolano.alisio.data.media.NotificationAccess
 import dev.jesusmolano.alisio.data.media.NowPlaying
 import dev.jesusmolano.alisio.data.now.NowFeedbackRepository
+import dev.jesusmolano.alisio.data.pause.LaunchPause
 import dev.jesusmolano.alisio.data.usage.UsageAccess
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,7 @@ class HomeViewModel(
     notificationAccess: NotificationAccess,
     private val mediaSessions: MediaSessions,
     private val usageAccess: UsageAccess,
+    private val pause: LaunchPause,
     private val clock: Clock
 ) : ViewModel() {
     val shortcuts: StateFlow<List<ShortcutEntry>> = appsRepository.shortcuts
@@ -175,18 +177,21 @@ class HomeViewModel(
 
     fun dismissNow(suggestion: NowSuggestion) = nowFeedback.dismiss(suggestion.rule, suggestion.appKey)
 
-    /** Abre la app y lo apunta en el historial. Devuelve `false` si no se ha podido abrir. */
-    fun launch(app: AppEntry): Boolean {
+    /**
+     * Abre la app y lo apunta en el historial. Devuelve `false` si no se ha podido abrir. Si la app
+     * lleva pausa ([LaunchPause.open]), abrir y apuntar esperan a que la pausa se confirme.
+     */
+    fun launch(app: AppEntry): Boolean = pause.open(app) {
         val launched = appsRepository.launch(app)
         if (launched) history.record(LaunchHistory.TYPE_APP, app.key.toString())
-        return launched
+        launched
     }
 
     /** Abre el acceso directo y lo apunta en el historial, igual que desde la barra. */
-    fun launch(shortcut: ShortcutEntry): Boolean {
+    fun launch(shortcut: ShortcutEntry): Boolean = pause.open(shortcut) {
         val launched = appsRepository.launch(shortcut)
         if (launched) history.record(LaunchHistory.TYPE_SHORTCUT, shortcut.key)
-        return launched
+        launched
     }
 
     fun launch(target: SwipeTarget): Boolean = when (target) {
@@ -224,7 +229,10 @@ class HomeViewModel(
     fun skipToNext() = mediaSessions.skipToNext()
 
     /** Para una app que suena pero no tiene icono de inicio en la lista. */
-    fun openPlayerApp(): Boolean = mediaSessions.openApp()
+    fun openPlayerApp(): Boolean {
+        val playing = mediaSessions.playing.value ?: return false
+        return pause.open(playing.packageName, playing.appLabel, icon = null) { mediaSessions.openApp() }
+    }
 
     fun setDockApp(position: Int, app: AppEntry) = homeConfig.setApp(position, app.key.toString())
 
@@ -257,6 +265,7 @@ class HomeViewModel(
                     container.notificationAccess,
                     container.mediaSessions,
                     container.usageAccess,
+                    container.launchPause,
                     container.clock
                 )
             }
