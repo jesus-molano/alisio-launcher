@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Fondo del icono de la app. -->
     <color name="background">#0B0C0E</color>
 
+    <!-- El Inicio deja ver el fondo de pantalla del sistema; el velo lo pone HomeScreen (docs/PLAN.md §6). -->
     <style name="Theme.Alisio" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/background</item>
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_body">Para probarlo como pantalla de inicio, hazlo tu launcher predeterminado. Puedes volver a tu inicio anterior cuando quieras desde Ajustes.</string>
+    <string name="onboarding_set_default">Hacer predeterminado</string>
+    <string name="onboarding_skip">Ahora no</string>
+    <string name="trace_rail_description">Índice alfabético: toca una letra, desliza a la izquierda y suelta sobre una app para abrirla</string>
+    <string name="trace_hint_slide">Desliza a la izquierda y suelta sobre una app</string>
+    <string name="trace_hint_cancel">Suelta para cancelar</string>
+    <string name="app_launch_failed">No se ha podido abrir %1$s</string>
+
+    <string name="dock_empty">Añadir</string>
+    <string name="dock_empty_description">Hueco vacío del dock: toca para elegir una app</string>
+    <string name="stack_default_name">Pila</string>
+    <string name="stack_name_hint">Nombre de la pila</string>
+    <string name="stack_edit">Editar esta pila</string>
+    <string name="slot_title">Hueco del dock</string>
+    <string name="slot_make_stack">Convertir en pila</string>
+    <string name="slot_make_stack_hint">Un grupo de apps con nombre que se abre desde el dock</string>
+    <string name="slot_remove_stack">Quitar esta pila</string>
+    <string name="picker_search">Buscar apps</string>
+    <string name="picker_clear">Dejar vacío</string>
+    <string name="picker_checked">En la pila</string>
+
+    <string name="settings_title">Ajustes de Alisio</string>
+    <string name="settings_icons">ICONOS</string>
+    <string name="settings_selected">Elegido</string>
+    <string name="icons_color">A color</string>
+    <string name="icons_color_hint">El icono de cada app, todos con la misma forma</string>
+    <string name="icons_mono">Monocromo</string>
+    <string name="icons_mono_hint">El icono temático si la app lo trae; si no, en grises</string>
+    <string name="icons_system">Del sistema</string>
+    <string name="icons_system_hint">Como los dibuja One UI</string>
+    <string name="icons_pack_hint">Paquete de iconos</string>
+
+    <string name="search_hint">Busca o pregunta a Claude</string>
+    <string name="search_clear">Borrar</string>
+    <string name="search_copied">Resultado copiado</string>
+    <string name="search_calc_hint">Toca para copiar</string>
+    <string name="search_ask_claude">Preguntar a Claude: «%1$s»</string>
+    <string name="search_ask_web">Buscar en la web: «%1$s»</string>
+    <string name="search_setting_subtitle">Ajustes</string>
+    <string name="search_section_recents">RECIENTES</string>
+    <string name="search_section_shortcuts">ACCIONES DE APPS</string>
+    <string name="search_section_settings">AJUSTES</string>
+    <string name="search_section_calc">CÁLCULO</string>
+
+    <string name="setting_all">Ajustes</string>
+    <string name="setting_display">Pantalla</string>
+    <string name="setting_sound">Sonido y vibración</string>
+    <string name="setting_battery">Batería</string>
+    <string name="setting_storage">Almacenamiento</string>
+    <string name="setting_apps">Aplicaciones</string>
+    <string name="setting_default_apps">Aplicaciones predeterminadas</string>
+    <string name="setting_location">Ubicación</string>
+    <string name="setting_security">Seguridad</string>
+    <string name="setting_privacy">Privacidad</string>
+    <string name="setting_date">Fecha y hora</string>
+    <string name="setting_language">Idioma</string>
+    <string name="setting_keyboard">Teclado</string>
+    <string name="setting_accessibility">Accesibilidad</string>
+    <string name="setting_mobile_data">Datos móviles</string>
+    <string name="setting_data_usage">Uso de datos</string>
+    <string name="setting_airplane">Modo avión</string>
+    <string name="setting_nfc">NFC y pagos sin contacto</string>
+    <string name="setting_developer">Opciones de desarrollador</string>
+    <string name="setting_about">Acerca del teléfono</string>
+</resources>

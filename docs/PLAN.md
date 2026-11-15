@@ -23,13 +23,13 @@ Es para uso personal: se instala por adb y no se publica en Play Store por ahora
 | Ocasional | Dos apps propias para un gimnasio, en desarrollo | Barra, *Ahora* tras instalar una versión nueva y zona Dev |
 | Instalar | Play Store | Barra: «Buscar en Play Store» |
 
-Hábitos que hay que respetar: minimalismo y abrir apps «dentro de otras» con gestos sobre un icono.
+Hábitos que hay que respetar: una interfaz limpia y abrir apps «dentro de otras» con gestos sobre un icono. «Limpia» no es minimalismo estricto: nada de iconos 3D ni fondos animados, pero sí bonita y actual, con el fondo de pantalla que yo elija.
 
 ## 3. Decisiones
 
 **Entra**, repartido en fases:
 
-- Dock fijo de 5 apps más la pila Dinero.
+- Dock fijo de 6 huecos. Cada hueco es una app o una pila: un grupo de apps con el nombre que yo le ponga (Dinero es un ejemplo, no algo fijo).
 - Barra universal con ranking por frecencia y tolerancia a erratas.
 - Salidas de la barra: Preguntar a Claude, Buscar en la web y Buscar en Play Store. Enter sin resultados pregunta a Claude.
 - Persona → canal, con el canal aprendido por contacto.
@@ -38,6 +38,7 @@ Hábitos que hay que respetar: minimalismo y abrir apps «dentro de otras» con 
 - Gestos sobre los iconos del dock: deslizar ↑ abre una segunda app o acción; mantener abre el menú de la app.
 - Zonas: vista de islas que sustituye al cajón de apps.
 - Gasto rápido («12 café»), alarma y temporizador, y portapapeles al abrir la barra.
+- **Trazo:** índice de letras en el borde derecho del Inicio; tocar una letra, deslizar a la izquierda sobre sus apps y soltar encima de una la abre en un solo gesto (§5.5).
 
 **Opcional:** doble toque para bloquear y deslizar ↓ para notificaciones (necesitan el servicio de accesibilidad), pausa antes de abrir X y YouTube, y una página «Hoy».
 
@@ -105,10 +106,10 @@ Alisio no trabaja en segundo plano. La única excepción es el `NotificationList
 - Lista: `LauncherApps.getActivityList(null, user)` para cada perfil de `LauncherApps.profiles`.
 - Cambios: `LauncherApps.Callback` para apps añadidas, quitadas o cambiadas. Guardar la hora de cada instalación o actualización para *Ahora* y, al arrancar, compararla con `PackageInfo.lastUpdateTime` por si el proceso estaba parado.
 - Clave estable de cada app: `paquete/actividad#serie-de-usuario`.
-- Abrir: `LauncherApps.startMainActivity` con `ActivityOptions.makeClipRevealAnimation` desde los límites del icono.
+- Abrir: `LauncherApps.startMainActivity`. La animación es la de apertura por defecto del sistema: One UI 9 descarta las de `ActivityOptions` (§11), así que no se pide ninguna.
 - Accesos directos: `LauncherApps.getShortcuts` con `FLAG_MATCH_DYNAMIC | FLAG_MATCH_MANIFEST | FLAG_MATCH_PINNED`, y abrirlos con `startShortcut`. Solo funciona siendo el launcher activo (`hasShortcutHostPermission()`).
 - Información de la app: `LauncherApps.startAppDetailsActivity`.
-- Iconos: el monocromo del `AdaptiveIconDrawable` (Android 13+) teñido con el color de texto; si la app no lo trae, su icono normal.
+- Iconos: el icono a color de cada app, todos con la misma forma (cuadrado redondeado). Los adaptativos se recortan a esa forma; los antiguos se encajan sobre la superficie elevada. Mezclar monocromos y de color quedaba desigual (§11).
 - Visibilidad de paquetes: `<queries>` con la intención `MAIN`/`LAUNCHER` y los paquetes o intents concretos que se usen (WhatsApp, Claude, `market://`, `tel:`, `smsto:` y búsqueda web). `QUERY_ALL_PACKAGES` solo si algo no aparece.
 
 ### 5.3 Barra y ranking
@@ -141,8 +142,9 @@ Alisio no trabaja en segundo plano. La única excepción es el `NotificationList
 
 ### 5.5 Inicio, Ahora, reproductor y puntos (fases 1 y 3)
 
-- Dock: 5 huecos configurables y la pila Dinero, que abre una hoja con sus apps.
+- Dock: 6 huecos configurables. Tocar un hueco vacío o mantener pulsado cualquiera abre su hoja: elegir app (con buscador), convertirlo en pila o vaciarlo. Una pila tiene nombre editable, su icono enseña sus cuatro primeras apps y un toque abre una hoja con todas.
 - Gestos de la fase 1: deslizar ↑ en una zona vacía o tocar la píldora abre la barra con el teclado.
+- Trazo en el borde derecho del Inicio: la rejilla de la letra sale a la altura del dedo, vibra al cambiar de letra y de app, y soltar lejos de la rejilla o sobre la letra cancela. El índice se excluye del gesto atrás del sistema. A partir de la fase 4 vive también en la isla Resto de Zonas.
 - Reglas de *Ahora* (fase 3), de mayor a menor prioridad:
   1. App instalada o actualizada hace menos de 24 h, solo si tiene icono de inicio. Motivo: «Versión nueva instalada hace 2 h».
   2. Dispositivo de audio Bluetooth conectado: la app que más se abre en los 5 minutos siguientes a conectar ese dispositivo, con un mínimo de 3 casos. Motivo: «Coche conectado».
@@ -185,7 +187,7 @@ Maquetas de referencia, solo para ti (Claude Code no puede abrirlas): https://cl
 
 | Token | Valor |
 | --- | --- |
-| Fondo | `#0B0C0E` |
+| Fondo | El fondo de pantalla del sistema, oscurecido con un velo de `#0B0C0E` (más denso abajo) para que el texto se lea. `#0B0C0E` opaco en la barra; las hojas van sobre «Superficie» |
 | Superficie | `#15171A` |
 | Superficie elevada | `#1B1E22` |
 | Borde | `#23272C` en tarjetas · `#2A2E34` en controles |
@@ -216,7 +218,7 @@ Maquetas de referencia, solo para ti (Claude Code no puede abrirlas): https://cl
 - **Zonas:** título «Zonas» y la pista «Pellizca para volver». Islas como tarjetas en 2 columnas: Diario a todo el ancho, Dinero y Dev en media columna, Sistema a todo el ancho y Resto A–Z con índice lateral. Al pie: «Mantén una app y arrástrala para cambiarla de isla».
 - **Interior de app:** inicio atenuado, el icono mantenido con borde de acento y una hoja flotante encima con: cabecera (icono, nombre y uso de hoy), «Accesos directos», «Deslizar ↑ sobre el icono» con su destino y «Cambiar», «Mover a otra zona» e «Información de la app».
 
-Los textos de la interfaz van en español, en `strings.xml`.
+Los textos de la interfaz siguen el idioma del sistema: inglés por defecto (`values/strings.xml`) y español (`values-es/strings.xml`).
 
 ## 7. Permisos
 
@@ -245,17 +247,21 @@ Una fase cada vez. Al terminar cada una: compila, pasan los tests y se entrega u
 - [x] Lista A–Z de apps con icono y nombre; abrir con animación desde el icono.
 - [x] Reacciona a instalaciones y desinstalaciones sin reiniciar.
 - [x] `CLAUDE.md` del proyecto con los comandos de build, test, instalación y cómo fijarlo como inicio por adb.
+- **Superada el 15 de noviembre de 2026** (detalle en §11).
 - **Pruebas en el S26:** volver al inicio con el gesto desde varias apps; recientes; atrás; animación al abrir y al cerrar; tras reiniciar sigue siendo el inicio; sin tirones visibles.
 - **Puerta:** si volver al inicio no es aceptable, el proyecto se para aquí.
 
 ### Fase 1 · Inicio y barra (≈ 2–3 semanas)
 
+Implementado el 15 de noviembre de 2026; las casillas se marcan al probarlo en el S26.
+
 - [ ] Tema y tokens de §6, con las fuentes empaquetadas.
-- [ ] Inicio: reloj, fecha, dock configurable de 5 apps, pila Dinero y píldora.
+- [ ] Inicio: reloj, fecha, dock configurable de 6 huecos (apps o pilas), píldora y Trazo.
 - [ ] Barra de §5.3 con apps, accesos directos, ajustes y cálculo.
 - [ ] Salidas a Claude, web y Play Store, y el comportamiento de Enter.
-- [ ] Room con `LaunchEvent` y ranking por frecencia.
-- [ ] Tests de matcher, ranking, decaimiento, normalización y calculadora, y una prueba de rendimiento del índice con datos sintéticos.
+- [x] Room con `LaunchEvent` y ranking por frecencia.
+- [x] Tests de matcher, ranking, decaimiento, normalización y calculadora, y una prueba de rendimiento del índice con datos sintéticos.
+- **Pruebas en el S26:** el fondo de pantalla se ve y el texto se lee; reloj y fecha abren Reloj y Calendario; configurar huecos del dock como app y como pila, renombrar una pila y buscar en su hoja; Trazo desde el Inicio; abrir la barra con la píldora y deslizando ↑; buscar apps con erratas, accesos directos, ajustes y una operación; Enter abre el primero y, sin resultados, pregunta a Claude; chips de Claude, Web y Play Store; atrás e «inicio» cierran la barra y las hojas; el orden mejora con el uso.
 - **Puerta:** una semana usándolo sin volver a One UI Home.
 
 ### Fase 2 · Personas (≈ 1–2 semanas)
@@ -332,8 +338,34 @@ Dispositivo: SM-S948B con **Android 17 (API 37) y One UI 9.0**, parche de octubr
 - Pruebas manuales superadas: volver al inicio con el gesto (limpio), recientes, atrás en el inicio (no hace nada), «inicio» estando en Alisio (la lista vuelve arriba), desplazamiento sin tirones y sigue siendo el inicio tras reiniciar. Arranque en frío por intent HOME: unos 70 ms. Sin errores de Alisio en logcat.
 - **Al deslizar una app hacia arriba para ir al inicio se ve el fondo de pantalla** detrás de la app que se encoge, y se desvanece hasta el fondo `#0B0C0E`. Lo dibuja el gesto de inicio y recientes de One UI (`com.sec.android.app.launcher`, que sigue encargándose de ese gesto aunque no sea el inicio); Alisio no dibuja el fondo de pantalla. **Por decidir:** dejarlo así o enseñar el fondo de pantalla en el Inicio (`windowShowWallpaper`), lo que cambiaría el fondo fijo de §6.
 - **La animación de apertura no sale del icono: no cuadra con §5.2.** One UI 9 descarta las animaciones de `ActivityOptions` al abrir una tarea nueva y usa la apertura por defecto (entra desde la derecha). Comprobado en el registro de transiciones (`WM_SHELL_TRANSITIONS`): el cambio llega sin opciones y carga `animAttr=0x8`. Probado con `makeClipRevealAnimation`, `makeScaleUpAnimation`, `makeThumbnailScaleUpAnimation` y `makeCustomAnimation`, por `LauncherApps.startMainActivity` y por `startActivity`: mismo resultado en las cinco. El código sigue con `makeClipRevealAnimation`, que no molesta. **Por decidir:** aceptar la apertura por defecto o animar dentro de Alisio (crecer desde el icono) antes de lanzar.
-- Trazo: se activa al tocar, vibra (muy sutil), la rejilla sale a la altura del dedo, soltar abre la app correcta y las letras con más apps caben. El índice chocaba con el gesto atrás del borde derecho; arreglado con `Modifier.systemGestureExclusion()` sobre el índice. El tope de 200 dp por borde no se aplica a la app de inicio: `dumpsys window` muestra excluida la franja entera (unos 1423 px de alto). **Pendiente de confirmar a mano** que el gesto atrás ya no se cuela.
+- Trazo: se activa al tocar, vibra (muy sutil), la rejilla sale a la altura del dedo, soltar abre la app correcta y las letras con más apps caben. El índice chocaba con el gesto atrás del borde derecho; arreglado con `Modifier.systemGestureExclusion()` sobre el índice. El tope de 200 dp por borde no se aplica a la app de inicio: `dumpsys window` muestra excluida la franja entera (unos 1423 px de alto). Confirmado a mano después: el gesto atrás ya no se cuela.
 - Registro de transiciones para depurar animaciones: `adb shell cmd protolog_configuration logcat enable WM_SHELL_TRANSITIONS` y filtrar logcat por `WindowManagerShell`.
+
+### Fase 1 (noviembre de 2026)
+
+**Decidido al cerrar la fase 0:** se acepta la apertura por defecto de One UI (§5.2); el Inicio deja ver el fondo de pantalla con un velo (§6); Trazo se queda en el borde derecho del Inicio (§3, §5.5); la interfaz sigue el idioma del sistema, inglés por defecto y español; cualquier hueco del dock puede ser una pila con nombre propio; los iconos van a color con una sola forma.
+
+**Versiones añadidas:** Room 2.8.5 con KSP 2.3.14. Justificación: el historial de aperturas y la configuración del dock (§4, §5.9). Ninguna añade permisos. Existe Room 3 (`androidx.room3`, 3.0.3 estable), pero cambia de paquete y de API; se queda la línea 2.8, que sigue mantenida. DataStore no entra todavía: nada lo usa.
+
+- La lista A–Z de la fase 0 desaparece como pantalla: a cualquier app se llega por la barra o por Trazo. Soltar sobre la letra ya no desplaza nada; cancela, igual que soltar lejos de la rejilla.
+- Fuentes: Inter y Space Grotesk como fuentes variables en `res/font` (un archivo por familia; cada peso se pide por el eje `wght`). Licencias OFL en `docs/licenses`.
+- Base de datos: versión 2, sin migraciones. Si cambia el esquema se borra y se empieza de cero (`fallbackToDestructiveMigration`); mientras sea de uso personal y en desarrollo, perder el historial y el dock es aceptable. Cambiarlo antes de depender del historial.
+- Esquema: `DockSlot` guarda una app o el nombre de una pila, y `StackItem` las apps de cada pila por hueco. `IconGesture` y `ZoneAssignment` llegan con sus fases.
+- Barra: los accesos directos y los ajustes puntúan un poco menos que las apps (×0,9 y ×0,85) para que, a igual coincidencia, gane la app. Límite por sección: 6 apps, 4 accesos directos y 3 ajustes. Las secciones se ordenan por su mejor resultado, de modo que el mejor de todos queda pegado a la barra.
+- Los accesos directos se muestran con el icono de su app, no con el suyo: cargar el de cada uno al indexar era caro. Revisar si se echa de menos.
+- Cálculo: si lo escrito es una operación, Enter copia el resultado al portapapeles.
+- Sin resultados, Enter pregunta a Claude; si Claude no está instalado, busca en la web.
+- Con la barra vacía se enseñan las 4 apps abiertas hace menos desde Alisio. Las personas llegan en la fase 2 y los accesos a Zonas en la 4.
+- Los ajustes llevan sinónimos en español y en inglés para encontrarlos con el sistema en cualquiera de los dos idiomas.
+- La frecencia se calcula al abrir la barra, no en cada tecla.
+- Estilo de iconos elegible en los ajustes de Alisio (mantener pulsada una zona vacía del Inicio): a color con forma única (por defecto), monocromo (la capa temática de la app o, si no la trae, su icono en grises), del sistema (como los dibuja One UI) o un paquete de iconos instalado. Los paquetes son los de formato ADW/Nova (`appfilter.xml`); las apps que el paquete no cubre usan el estilo a color. La preferencia va en DataStore 1.3.0, la dependencia que §4 reservaba para preferencias simples. **Pendiente:** cambiar el icono de una app concreta.
+- El reloj abre la app de Reloj por su icono de inicio. Lanzar `ACTION_SHOW_ALARMS` exige el permiso `SET_ALARM` (en One UI da `SecurityException`), así que ese intent solo se usa para averiguar qué app es el reloj.
+- El texto de la barra vive en la pantalla y la búsqueda se hace en el momento, en cada tecla. Pasarlo por un flujo asíncrono hacía que el campo perdiera letras y el cursor, y que Enter abriera el resultado de la tecla anterior.
+- Con la barra abierta se retira Trazo, y la barra se queda todos los toques: antes llegaban al Inicio de debajo. Deslizar hacia abajo cierra la barra.
+- Un cambio de accesos directos solo relee los accesos directos. Releer las apps volvía a dibujar todos los iconos y cortaba un Trazo en curso con cada mensaje de una app de chat.
+- Las hojas (dock, pila y ajustes) van sobre «Superficie» (`#15171A`); la barra, sobre `#0B0C0E` opaco.
+- **Conocido, sin arreglar:** tras cambiar el idioma del sistema, los nombres de las apps y de los ajustes siguen en el idioma anterior hasta que se reinicia Alisio.
+- **Sin probar a fondo en el dispositivo:** compila, pasan tests y lint y arranca sin errores en el S26, pero la barra y las hojas del dock no se han probado a mano todavía.
 
 ## 12. Referencias
 

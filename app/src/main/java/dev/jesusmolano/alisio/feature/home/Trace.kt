@@ -1,22 +1,19 @@
 package dev.jesusmolano.alisio.feature.home
 
-import android.app.ActivityOptions
 import android.view.HapticFeedbackConstants
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,34 +23,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -64,15 +50,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppSection
-import dev.jesusmolano.alisio.data.apps.toSections
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
-private val RailWidth = 48.dp
+val TraceRailWidth = 48.dp
 private val RailLetterHeight = 22.dp
 private val CellWidth = 80.dp
 private val CellHeight = 92.dp
@@ -85,92 +68,35 @@ private val GridGap = 8.dp
 private data class TraceState(val section: Int, val grid: TraceGrid, val locked: Boolean, val selected: Int?)
 
 /**
- * Lista A–Z de la fase 0, con Trazo: tocar una letra del índice, deslizar a la izquierda sobre sus
- * apps y soltar encima de una la abre, todo en un gesto. Soltar sobre la letra lleva la lista a ella.
+ * Trazo: índice de letras en el borde derecho. Tocar una letra, deslizar a la izquierda sobre sus
+ * apps y soltar encima de una la abre, todo en un gesto. Soltar sobre la letra o lejos de la rejilla
+ * cancela. Ocupa todo el [BoxScope] para poder tapar el Inicio mientras dura el trazo.
  *
- * @param homePresses sube cada vez que se pulsa «inicio» estando ya en Alisio; devuelve la lista arriba.
+ * @param railPadding márgenes del índice dentro de la pantalla (barras del sistema, dock).
  */
 @Composable
-fun AppListScreen(viewModel: HomeViewModel, homePresses: Int, modifier: Modifier = Modifier) {
-    val apps by viewModel.apps.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+fun BoxScope.Trace(sections: List<AppSection<AppEntry>>, railPadding: PaddingValues, onLaunch: (AppEntry) -> Unit) {
+    if (sections.isEmpty()) return
     val view = LocalView.current
-    val context = LocalContext.current
-    val resources = LocalResources.current
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(homePresses) {
-        if (homePresses > 0) listState.animateScrollToItem(0)
-    }
-
-    val list = apps ?: return
-    if (list.isEmpty()) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.apps_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        return
-    }
-
-    val sections = remember(list) { list.toSections { it.label } }
-    var trace by remember { mutableStateOf<TraceState?>(null) }
+    val insets = WindowInsets.systemBars
+    // Si la lista de apps cambia a mitad de un trazo, el trazo se descarta: sus índices ya no valen.
+    var trace by remember(sections) { mutableStateOf<TraceState?>(null) }
     var boxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var railCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val insets = WindowInsets.systemBars
-    val bars = insets.asPaddingValues()
 
-    // La animación nace en el icono: límites relativos a la vista para el recorte y en pantalla
-    // para sourceBounds.
-    fun launch(app: AppEntry, iconBounds: Rect) {
-        val options =
-            ActivityOptions.makeClipRevealAnimation(
-                view,
-                iconBounds.left.toInt(),
-                iconBounds.top.toInt(),
-                iconBounds.width.toInt(),
-                iconBounds.height.toInt()
-            )
-        val origin = IntArray(2).also(view::getLocationOnScreen)
-        val sourceBounds =
-            android.graphics.Rect(
-                origin[0] + iconBounds.left.toInt(),
-                origin[1] + iconBounds.top.toInt(),
-                origin[0] + iconBounds.right.toInt(),
-                origin[1] + iconBounds.bottom.toInt()
-            )
-        if (!viewModel.launch(app, sourceBounds, options.toBundle())) {
-            val message = resources.getString(R.string.app_launch_failed, app.label)
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    Box(modifier.fillMaxSize().onGloballyPositioned { boxCoords = it }) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding =
-                PaddingValues(
-                    top = bars.calculateTopPadding(),
-                    bottom = bars.calculateBottomPadding(),
-                    end = RailWidth
-                )
-        ) {
-            items(list, key = { it.key.toString() }) { app ->
-                AppRow(app = app, onClick = { iconBounds -> launch(app, iconBounds) })
-            }
-        }
-
-        trace?.let { TraceOverlay(it, sections[it.section]) }
+    Box(Modifier.matchParentSize().onGloballyPositioned { boxCoords = it }) {
+        trace?.let { current -> sections.getOrNull(current.section)?.let { TraceOverlay(current, it) } }
 
         val railDescription = stringResource(R.string.trace_rail_description)
         Column(
             modifier =
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    .windowInsetsPadding(insets)
-                    .padding(vertical = 16.dp)
-                    .width(RailWidth)
-                    .height(RailLetterHeight * sections.size)
+                    .align(Alignment.CenterEnd)
+                    .padding(railPadding)
+                    .width(TraceRailWidth)
+                    .heightIn(max = RailLetterHeight * sections.size)
+                    .fillMaxHeight()
                     .onGloballyPositioned { railCoords = it }
                     // El índice pisa la franja del gesto atrás del borde derecho: sin esto, One UI
                     // se queda el trazo. El tope de 200 dp por borde no se aplica a la app de inicio.
@@ -243,20 +169,9 @@ fun AppListScreen(viewModel: HomeViewModel, homePresses: Int, modifier: Modifier
                                     update(change.position)
                                 }
                                 val end = current
-                                val box = boxCoords
-                                if (end != null && box != null) {
-                                    val section = sections[end.section]
-                                    if (!end.locked) {
-                                        scope.launch { listState.scrollToItem(section.firstIndex) }
-                                    } else if (end.selected != null) {
-                                        val iconSize = IconSize.toPx()
-                                        val inset = (end.grid.cellWidth - iconSize) / 2
-                                        val iconLeft = end.grid.cellLeft(end.selected) + inset
-                                        val iconTop = end.grid.cellTop(end.selected) + CellIconTop.toPx()
-                                        val topLeft = box.localToWindow(Offset(iconLeft, iconTop))
-                                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                        launch(section.items[end.selected], Rect(topLeft, Size(iconSize, iconSize)))
-                                    }
+                                if (end != null && end.locked && end.selected != null) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    onLaunch(sections[end.section].items[end.selected])
                                 }
                             } finally {
                                 // También si el sistema cancela el gesto a medias.
@@ -276,7 +191,7 @@ fun AppListScreen(viewModel: HomeViewModel, homePresses: Int, modifier: Modifier
                             if (active) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
                             }
                     )
                 }
@@ -285,13 +200,13 @@ fun AppListScreen(viewModel: HomeViewModel, homePresses: Int, modifier: Modifier
     }
 }
 
-/** Lo que se ve durante un trazo: la lista atenuada, la letra en grande y la rejilla de sus apps. */
+/** Lo que se ve durante un trazo: el Inicio tapado, la letra en grande y la rejilla de sus apps. */
 @Composable
 private fun TraceOverlay(trace: TraceState, section: AppSection<AppEntry>) {
     val grid = trace.grid
     val density = LocalDensity.current
     val colors = MaterialTheme.colorScheme
-    val selectedApp = trace.selected?.let { section.items[it] }
+    val selectedApp = trace.selected?.let(section.items::getOrNull)
     Box(Modifier.fillMaxSize().background(colors.background.copy(alpha = 0.94f))) {
         Column(
             modifier =
@@ -299,7 +214,7 @@ private fun TraceOverlay(trace: TraceState, section: AppSection<AppEntry>) {
                     .fillMaxWidth()
                     .offset { IntOffset(0, (grid.top - HeaderHeight.toPx()).roundToInt()) }
                     .height(HeaderHeight)
-                    .padding(start = 24.dp, end = RailWidth + GridGap + 8.dp, bottom = 8.dp),
+                    .padding(start = 24.dp, end = TraceRailWidth + GridGap + 8.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.Bottom
         ) {
@@ -355,38 +270,5 @@ private fun TraceOverlay(trace: TraceState, section: AppSection<AppEntry>) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun AppRow(app: AppEntry, onClick: (iconBounds: Rect) -> Unit) {
-    var iconBounds by remember { mutableStateOf(Rect.Zero) }
-    val icon = remember(app.icon) { app.icon.asImageBitmap() }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .clickable { onClick(iconBounds) }
-                .padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Decorativo: el nombre va justo al lado.
-        Image(
-            bitmap = icon,
-            contentDescription = null,
-            modifier =
-                Modifier
-                    .size(IconSize)
-                    .onGloballyPositioned { iconBounds = it.boundsInWindow() }
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            text = app.label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }

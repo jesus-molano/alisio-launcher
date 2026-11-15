@@ -2,7 +2,7 @@
 
 Launcher Android personal para un Galaxy S26 Ultra. **Lee `docs/PLAN.md` antes de tocar nada**: es la fuente de verdad (alcance por fases, arquitectura, diseño y reglas de §10). Lo que se descubra al implementar va a su §11.
 
-Estado: fase 0 (lista A–Z como HOME). No adelantar trabajo de fases posteriores.
+Estado: fase 1 (Inicio y barra). No adelantar trabajo de fases posteriores.
 
 ## Requisitos
 
@@ -60,7 +60,8 @@ También desde la app («Hacer predeterminado») o en Ajustes → Aplicaciones �
 
 - Un módulo `:app`; paquetes `core/` (lógica pura, sin Android, con tests), `data/`, `feature/`, `ui/` según §4 del plan.
 - DI manual: `AppContainer` en `AlisioApp`. Un `ViewModel` por pantalla con `StateFlow`.
+- Room con KSP: las entidades y los DAO están en `data/db/AlisioDatabase.kt`. Al cambiar el esquema, subir `version`; la base se borra y se recrea (sin migraciones por ahora).
 - Versiones solo en `gradle/libs.versions.toml`. Ninguna dependencia nueva sin justificarla, y ninguna que añada `INTERNET`.
-- Textos de interfaz en español en `res/values/strings.xml`; comentarios y mensajes de commit en español.
+- Textos de interfaz en el idioma del sistema: inglés en `res/values/strings.xml` y español en `res/values-es/strings.xml`, siempre los dos. Comentarios y mensajes de commit en español.
 - `contentDescription` en todo lo que sea solo icono y toque mínimo de 48 dp.
 - Antes de dar algo por terminado: `./gradlew spotlessCheck check assembleDebug`.
