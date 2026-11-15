@@ -56,6 +56,9 @@
     <string name="settings_web_search">Web search</string>
     <string name="settings_web_search_system">Let the system choose</string>
     <string name="settings_change">Change</string>
+    <string name="settings_contacts">Contacts</string>
+    <string name="settings_contacts_on">People show up in search</string>
+    <string name="settings_allow">Allow</string>
     <string name="settings_icons">ICONS</string>
     <string name="settings_selected">Selected</string>
     <string name="icons_color">Color</string>

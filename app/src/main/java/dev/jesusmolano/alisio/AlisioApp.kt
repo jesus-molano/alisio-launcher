@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.room.Room
 import dev.jesusmolano.alisio.core.time.Clock
 import dev.jesusmolano.alisio.data.apps.AppsRepository
+import dev.jesusmolano.alisio.data.contacts.ContactsRepository
 import dev.jesusmolano.alisio.data.db.AlisioDatabase
 import dev.jesusmolano.alisio.data.db.MIGRATION_2_3
 import dev.jesusmolano.alisio.data.history.LaunchHistory
@@ -39,4 +40,5 @@ class AppContainer(context: Context) {
     val appsRepository = AppsRepository(context, appScope, settings.iconStyle)
     val launchHistory = LaunchHistory(database.launchEvents(), clock, appScope)
     val homeConfig = HomeConfigRepository(database.homeConfig(), appScope)
+    val contacts = ContactsRepository(context, appScope)
 }

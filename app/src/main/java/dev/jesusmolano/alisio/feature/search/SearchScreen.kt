@@ -1,6 +1,8 @@
 package dev.jesusmolano.alisio.feature.search
 
+import android.os.SystemClock
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,7 +62,14 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.people.Channel
+import dev.jesusmolano.alisio.core.people.initials
+import dev.jesusmolano.alisio.core.people.personKey
+import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.feature.people.PersonCard
+import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
+import dev.jesusmolano.alisio.feature.people.contact
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
@@ -71,18 +81,22 @@ import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 private val ScreenMargin = 16.dp
 private val CloseDrag = 64.dp
 
+private const val ENTER_GUARD_MILLIS = 600L
+
 /**
  * Barra de §5.3: resultados apilados desde abajo, junto al teclado, con el mejor pegado a la barra.
  * Enter abre ese resultado; si no hay ninguno, pregunta a Claude (o busca en la web si no está).
  *
  * @param onClose se llama tras abrir algo; quien la muestra decide cómo cerrarla.
  * @param onOpenSettings abre los ajustes de Alisio, que también salen como resultado.
+ * @param onAskContacts pide los permisos de contactos y de llamada.
  */
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
     onClose: () -> Unit,
     onOpenSettings: () -> Unit,
+    onAskContacts: () -> Unit,
     prefs: Prefs,
     modifier: Modifier = Modifier
 ) {
@@ -91,6 +105,23 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     val state = remember(query, source) { viewModel.search(query, source) }
     val listState = rememberLazyListState()
+    // Persona elegida: su tarjeta sustituye a los resultados hasta que se contacta o se vuelve atrás.
+    // Se guarda su clave y no el objeto: si la agenda cambia con la tarjeta abierta, la tarjeta usa
+    // el teléfono y las filas de ahora, o se cierra si el contacto ya no existe.
+    var selectedKey by remember { mutableStateOf<String?>(null) }
+    var selectedAt by remember { mutableLongStateOf(0L) }
+    val selected =
+        remember(selectedKey, source) {
+            source.index.firstNotNullOfOrNull { item ->
+                (item.payload as? Target.Contact)?.person?.takeIf { item.key == selectedKey }
+            }
+        }
+    // Si el contacto elegido desaparece de la agenda, se olvida: no debe reaparecer su tarjeta sola
+    // si una lectura posterior lo trae de vuelta.
+    LaunchedEffect(selectedKey, selected) {
+        if (selectedKey != null && selected == null) selectedKey = null
+    }
+    val contactsGranted by viewModel.contactsGranted.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resources = LocalResources.current
     val focusRequester = remember { FocusRequester() }
@@ -98,6 +129,15 @@ fun SearchScreen(
     val assistant = remember(prefs.assistantPackage) { context.appLabel(prefs.assistantPackage) }
     val webLabel = stringResource(R.string.search_chip_web)
     val copiedMessage = stringResource(R.string.search_copied)
+    val whatsappInstalled = remember { context.appLabel(WHATSAPP_PACKAGE) != null }
+    val whatsappWithoutRows = remember(source) { whatsappInstalled && viewModel.noWhatsappRows() }
+    val card =
+        selected?.let { person ->
+            val channels = person.channels(whatsappWithoutRows)
+            viewModel.mainChannel(person, channels, source)?.let { Triple(person, channels, it) }
+        }
+
+    BackHandler(enabled = selected != null) { selectedKey = null }
 
     LaunchedEffect(Unit) {
         viewModel.onOpened()
@@ -131,6 +171,17 @@ fun SearchScreen(
             viewModel.record(target)
             onOpenSettings()
         }
+
+        is Target.Contact -> {
+            selectedKey = personKey(target.person.lookupKey)
+            selectedAt = SystemClock.uptimeMillis()
+        }
+    }
+
+    fun contact(person: Person, channel: Channel) {
+        val opened = context.contact(person, channel)
+        if (opened) viewModel.recordContact(person, channel)
+        finish(opened, person.name)
     }
 
     fun fallback(query: String) {
@@ -151,8 +202,16 @@ fun SearchScreen(
         val calculation = state.calculation
         val best = state.best
         when {
+            // Un segundo Enter pegado al que abrió la tarjeta no debe llamar a nadie por sorpresa.
+            card != null ->
+                if (SystemClock.uptimeMillis() - selectedAt > ENTER_GUARD_MILLIS) {
+                    contact(card.first, card.third.channel)
+                }
+
             calculation != null -> copyCalculation(calculation)
+
             best != null -> open(best.target)
+
             state.query.isNotBlank() -> fallback(state.query)
         }
     }
@@ -206,23 +265,41 @@ fun SearchScreen(
             color = AlisioTokens.TextTertiary.copy(alpha = 0.6f),
             modifier = Modifier.padding(start = 24.dp, top = 16.dp)
         )
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            state = listState,
-            reverseLayout = true,
-            contentPadding = PaddingValues(horizontal = ScreenMargin, vertical = 8.dp)
-        ) {
-            // Con reverseLayout el primer elemento es el más cercano a la barra.
-            when {
-                state.query.isBlank() -> recents(state, onOpen = ::open)
-
-                else -> results(
-                    state,
-                    assistant,
-                    onOpen = ::open,
-                    onCopy = ::copyCalculation,
-                    onFallback = ::fallback
+        if (card != null) {
+            Box(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = ScreenMargin, vertical = 8.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                PersonCard(
+                    name = card.first.name,
+                    channels = card.second,
+                    main = card.third,
+                    onContact = { contact(card.first, it) }
                 )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                state = listState,
+                reverseLayout = true,
+                contentPadding = PaddingValues(horizontal = ScreenMargin, vertical = 8.dp)
+            ) {
+                // Con reverseLayout el primer elemento es el más cercano a la barra.
+                if (state.query.isBlank()) {
+                    recents(state, onOpen = ::open)
+                    if (!contactsGranted) {
+                        item(key = "allow-contacts") {
+                            ItemRow(
+                                title = AnnotatedString(stringResource(R.string.people_allow)),
+                                leading = "☺",
+                                subtitle = stringResource(R.string.people_allow_hint),
+                                onClick = onAskContacts
+                            )
+                        }
+                    }
+                } else {
+                    results(state, assistant, onOpen = ::open, onCopy = ::copyCalculation, onFallback = ::fallback)
+                }
             }
         }
         Row(
@@ -243,7 +320,10 @@ fun SearchScreen(
         }
         PillTextField(
             value = state.query,
-            onValueChange = { query = it },
+            onValueChange = {
+                query = it
+                selectedKey = null
+            },
             placeholder = searchHint(assistant),
             onEnter = ::onEnter,
             modifier =
@@ -255,12 +335,20 @@ fun SearchScreen(
 }
 
 private fun LazyListScope.recents(state: SearchState, onOpen: (Target) -> Unit) {
-    if (state.recents.isEmpty()) return
     items(state.recents.size, key = { state.recents[it].key.toString() }) { index ->
         val app = state.recents[index]
         ItemRow(title = AnnotatedString(app.label), icon = app.icon, onClick = { onOpen(Target.App(app)) })
     }
-    item { SectionLabel(stringResource(R.string.search_section_recents)) }
+    if (state.recents.isNotEmpty()) item { SectionLabel(stringResource(R.string.search_section_recents)) }
+    items(state.recentPeople.size, key = { personKey(state.recentPeople[it].lookupKey) }) { index ->
+        val person = state.recentPeople[index]
+        ItemRow(
+            title = AnnotatedString(person.name),
+            leading = initials(person.name),
+            onClick = { onOpen(Target.Contact(person)) }
+        )
+    }
+    if (state.recentPeople.isNotEmpty()) item { SectionLabel(stringResource(R.string.search_section_people)) }
 }
 
 private fun LazyListScope.results(
@@ -309,13 +397,14 @@ private fun LazyListScope.results(
             ItemRow(
                 title = highlight(target.title, result.positions),
                 icon = target.icon,
-                leading = "⚙",
+                leading = if (target is Target.Contact) initials(target.person.name) else "⚙",
                 subtitle =
                     when (target) {
                         is Target.App -> null
                         is Target.Shortcut -> target.shortcut.app.label
                         is Target.Setting -> stringResource(R.string.search_setting_subtitle)
                         is Target.AlisioSettings -> null
+                        is Target.Contact -> null
                     },
                 trailing = if (best) stringResource(R.string.search_enter) else null,
                 highlighted = best,
@@ -326,6 +415,7 @@ private fun LazyListScope.results(
             SectionLabel(
                 stringResource(
                     when (section) {
+                        Section.PEOPLE -> R.string.search_section_people
                         Section.APPS -> R.string.search_section_apps
                         Section.SHORTCUTS -> R.string.search_section_shortcuts
                         Section.SETTINGS -> R.string.search_section_settings
@@ -343,6 +433,7 @@ private val Target.title: String
             is Target.Shortcut -> shortcut.label
             is Target.Setting -> label
             is Target.AlisioSettings -> label
+            is Target.Contact -> person.name
         }
 
 private val Target.icon
@@ -352,6 +443,7 @@ private val Target.icon
             is Target.Shortcut -> shortcut.app.icon
             is Target.Setting -> null
             is Target.AlisioSettings -> null
+            is Target.Contact -> null
         }
 
 /** Pinta en acento las letras del título que coinciden con lo escrito. */

@@ -73,9 +73,18 @@ private val KNOWN_ASSISTANTS =
 /**
  * Ajustes de Alisio: una pantalla por secciones que crece con cada fase. Cada opción se aplica al
  * tocarla, sin botón de guardar.
+ *
+ * @param onContactsClick pide el permiso de contactos o, si ya está concedido, abre la ficha de la app.
  */
 @Composable
-fun SettingsScreen(prefs: Prefs, settings: AlisioSettings, apps: List<AppEntry>, modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    prefs: Prefs,
+    settings: AlisioSettings,
+    apps: List<AppEntry>,
+    contactsGranted: Boolean,
+    onContactsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val packs = remember { installedIconPacks(context) }
     val webApps = remember { context.webSearchApps() }
@@ -233,6 +242,22 @@ fun SettingsScreen(prefs: Prefs, settings: AlisioSettings, apps: List<AppEntry>,
                     }
                 )
             }
+        }
+
+        item { SectionLabel(stringResource(R.string.search_section_people)) }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_contacts)),
+                leading = "☺",
+                subtitle =
+                    stringResource(
+                        if (contactsGranted) R.string.settings_contacts_on else R.string.people_allow_hint
+                    ),
+                trailing =
+                    stringResource(if (contactsGranted) R.string.settings_on else R.string.settings_allow),
+                highlighted = contactsGranted,
+                onClick = onContactsClick
+            )
         }
 
         item { SectionLabel(stringResource(R.string.settings_icons)) }

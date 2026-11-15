@@ -32,5 +32,6 @@ class LaunchHistory(private val dao: LaunchEventDao, private val clock: Clock, p
         const val TYPE_APP = "app"
         const val TYPE_SHORTCUT = "shortcut"
         const val TYPE_SETTING = "setting"
+        const val TYPE_CONTACT = "contact"
     }
 }

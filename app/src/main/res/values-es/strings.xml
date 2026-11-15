@@ -51,6 +51,9 @@
     <string name="settings_web_search">Búsqueda web</string>
     <string name="settings_web_search_system">Que elija el sistema</string>
     <string name="settings_change">Cambiar</string>
+    <string name="settings_contacts">Contactos</string>
+    <string name="settings_contacts_on">Las personas salen en la búsqueda</string>
+    <string name="settings_allow">Permitir</string>
     <string name="settings_icons">ICONOS</string>
     <string name="settings_selected">Elegido</string>
     <string name="icons_color">A color</string>

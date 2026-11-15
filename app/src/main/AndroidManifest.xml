@@ -4,6 +4,15 @@
 
     <!-- Sin INTERNET: lo vigila el task checkNoInternetPermission (docs/PLAN.md §7). -->
 
+    <!-- Personas en la barra (docs/PLAN.md §5.4). Sin CALL_PHONE, llamar abre el marcador. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
+    <!-- CALL_PHONE da por hecho que hay telefonía; Alisio funciona igual sin ella. -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -11,6 +20,8 @@
         </intent>
         <!-- Para saber si Claude está instalado y ofrecer «Preguntar a Claude» (docs/PLAN.md §5.3). -->
         <package android:name="com.anthropic.claude" />
+        <!-- Para ofrecer los canales de WhatsApp de cada persona. -->
+        <package android:name="com.whatsapp" />
         <!-- Apps entre las que se elige la búsqueda web en los ajustes: buscadores y navegadores. -->
         <intent>
             <action android:name="android.intent.action.WEB_SEARCH" />

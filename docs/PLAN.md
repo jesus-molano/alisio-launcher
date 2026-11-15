@@ -372,6 +372,24 @@ Dispositivo: SM-S948B con **Android 17 (API 37) y One UI 9.0**, parche de octubr
 - **Conocido, sin arreglar:** tras cambiar el idioma del sistema, los nombres de las apps y de los ajustes siguen en el idioma anterior hasta que se reinicia Alisio.
 - **Sin probar a fondo en el dispositivo:** compila, pasan tests y lint y arranca sin errores en el S26, pero la barra y las hojas del dock no se han probado a mano todavía.
 
+### Fase 2 (noviembre de 2026)
+
+Empezada el 15 de noviembre de 2026 con el visto bueno para seguir, sin esperar la semana de uso de la puerta de la fase 1; la fase 1 se sigue afinando en paralelo.
+
+- Permisos nuevos: `READ_CONTACTS` y `CALL_PHONE` (§7). Se piden juntos desde la barra vacía («Busca personas desde aquí») o desde los ajustes de Alisio. Sin el primero no hay personas; sin el segundo, llamar abre el marcador. `android.hardware.telephony` se declara como no obligatorio.
+- Índice de contactos en memoria: nombre, teléfono principal (o el primero) y las filas de WhatsApp de cada contacto. Se relee cuando cambia la agenda, con una espera de 0,8 s porque una sincronización avisa muchas veces seguidas.
+- **Sin confirmar en el S26:** que WhatsApp deja sus filas de chat, llamada y vídeo. Desde adb no se ven; el registro `ContactsRepository` escribe cuántas personas las tienen al leer la agenda. Si ningún contacto las tiene, el chat se ofrece a quien tenga teléfono y se abre con `wa.me`; llamada y vídeo de WhatsApp no se ofrecen. Si algún contacto las tiene, WhatsApp solo se ofrece a quien tenga la suya: no tenerla significa que esa persona no usa WhatsApp, y su canal por defecto es la llamada (§5.4).
+- `wa.me` solo admite cifras: un número guardado sin prefijo de país puede no encontrar el chat.
+- Una persona es un resultado más de la barra (sección Personas, hasta 3). Tocarla o pulsar Enter abre su tarjeta en lugar de los resultados; en la tarjeta, Enter usa el canal principal. Atrás o seguir escribiendo vuelve a los resultados.
+- Canal aprendido: cada contacto por un canal se apunta con la clave `person:<resumen del LOOKUP_KEY>|<canal>`. El botón principal es el canal con más frecencia; sin historial, chat de WhatsApp y, si no, llamada. La tarjeta solo dice «Sueles usar…» cuando el canal sale del historial.
+- Las personas se ordenan con la suma de la frecencia de sus canales. Con la barra vacía salen las 3 contactadas hace menos, encima de las apps recientes.
+- El avatar son las iniciales; la foto del contacto no se carga todavía.
+- En el historial no se guarda el `LOOKUP_KEY` del contacto, sino un resumen SHA-256 recortado: en contactos locales esa clave lleva el nombre codificado, y el historial está en disco. Los contactos siguen solo en memoria.
+- Enter no contacta hasta 0,6 s después de abrirse la tarjeta, para que un doble Enter no llame a nadie por sorpresa.
+- Si el permiso de contactos está denegado para siempre, pedirlo abre la ficha de Alisio en los ajustes del sistema.
+- Ajustes de Alisio: sección Personas con el estado del permiso de contactos.
+- **Sin probar a mano:** todo lo anterior. Compila, pasa tests y lint y está instalado, pero falta conceder el permiso en el teléfono y contactar a alguien por cada canal.
+
 ## 12. Referencias
 
 - [LauncherApps](https://developer.android.com/reference/android/content/pm/LauncherApps): quién puede leer los accesos directos de otras apps.
