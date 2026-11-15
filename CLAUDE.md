@@ -46,9 +46,11 @@ Depuración inalámbrica (móvil y ordenador en la misma Wi‑Fi):
 adb shell cmd package set-home-activity dev.jesusmolano.alisio/.MainActivity
 # comprobar:
 adb shell cmd role get-role-holders android.app.role.HOME
-# volver a One UI Home:
-adb shell cmd role add-role-holder android.app.role.HOME com.sec.android.app.launcher
+# volver al inicio anterior (Niagara; One UI Home es com.sec.android.app.launcher):
+adb shell cmd role add-role-holder android.app.role.HOME bitpit.launcher
 ```
+
+Verificado en el S26 con One UI 9.0 (Android 17). Si `adb devices` muestra `unauthorized`, falta aceptar en el teléfono «¿Permitir depuración por USB?»; si el diálogo no sale, revisar el Bloqueador automático de One UI.
 
 También desde la app («Hacer predeterminado») o en Ajustes → Aplicaciones → Elegir aplicaciones predeterminadas → Aplicación de inicio.
 

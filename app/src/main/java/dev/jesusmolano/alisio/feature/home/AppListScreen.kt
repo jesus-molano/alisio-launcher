@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -171,6 +172,9 @@ fun AppListScreen(viewModel: HomeViewModel, homePresses: Int, modifier: Modifier
                     .width(RailWidth)
                     .height(RailLetterHeight * sections.size)
                     .onGloballyPositioned { railCoords = it }
+                    // El índice pisa la franja del gesto atrás del borde derecho: sin esto, One UI
+                    // se queda el trazo. El tope de 200 dp por borde no se aplica a la app de inicio.
+                    .systemGestureExclusion()
                     .semantics { contentDescription = railDescription }
                     .pointerInput(sections) {
                         awaitEachGesture {
