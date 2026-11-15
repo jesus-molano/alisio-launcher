@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alisio</string>
+    <string name="onboarding_title">Alisio</string>
+    <string name="onboarding_body">Para probarlo como pantalla de inicio, hazlo tu launcher predeterminado. Puedes volver a One UI Home cuando quieras desde Ajustes.</string>
+    <string name="onboarding_set_default">Hacer predeterminado</string>
+    <string name="onboarding_skip">Ahora no</string>
+    <string name="apps_empty">No hay apps que mostrar</string>
+    <string name="app_launch_failed">No se ha podido abrir %1$s</string>
+</resources>
