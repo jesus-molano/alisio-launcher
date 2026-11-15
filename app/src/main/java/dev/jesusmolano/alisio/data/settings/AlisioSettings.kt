@@ -27,6 +27,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param accent índice del color de acento en la paleta del tema.
  * @param assistantPackage app de IA a la que la barra manda las preguntas.
  * @param webSearchPackage app que hace la búsqueda web; `null` es la que elija el sistema.
+ * @param nowEnabled si el Inicio enseña la sugerencia de Ahora.
  */
 data class Prefs(
     val iconStyle: IconStyle = IconStyle.Color,
@@ -34,7 +35,8 @@ data class Prefs(
     val dockLabels: Boolean = true,
     val wallpaperDim: WallpaperDim = WallpaperDim.MEDIUM,
     val assistantPackage: String = DEFAULT_ASSISTANT,
-    val webSearchPackage: String? = null
+    val webSearchPackage: String? = null,
+    val nowEnabled: Boolean = true
 )
 
 /** Claude, el asistente por defecto (§5.3). */
@@ -66,7 +68,8 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
                             WallpaperDim.MEDIUM
                         },
                     assistantPackage = stored[ASSISTANT] ?: DEFAULT_ASSISTANT,
-                    webSearchPackage = stored[WEB_SEARCH]
+                    webSearchPackage = stored[WEB_SEARCH],
+                    nowEnabled = stored[NOW_ENABLED] ?: true
                 )
             }
             .stateIn(scope, SharingStarted.Eagerly, null)
@@ -83,6 +86,8 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     fun toggleDockLabels() = write { it[DOCK_LABELS] = !(it[DOCK_LABELS] ?: true) }
 
     fun setWallpaperDim(dim: WallpaperDim) = write { it[WALLPAPER_DIM] = dim.ordinal }
+
+    fun toggleNow() = write { it[NOW_ENABLED] = !(it[NOW_ENABLED] ?: true) }
 
     fun setAssistant(packageName: String) = write { it[ASSISTANT] = packageName }
 
@@ -109,5 +114,6 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val WALLPAPER_DIM = intPreferencesKey("wallpaper_dim")
         val ASSISTANT = stringPreferencesKey("assistant")
         val WEB_SEARCH = stringPreferencesKey("web_search")
+        val NOW_ENABLED = booleanPreferencesKey("now_enabled")
     }
 }

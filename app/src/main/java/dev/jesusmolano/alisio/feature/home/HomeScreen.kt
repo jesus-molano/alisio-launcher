@@ -77,6 +77,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.now.NowRule
+import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.search.filterByName
 import dev.jesusmolano.alisio.core.search.moved
 import dev.jesusmolano.alisio.core.text.takeGraphemes
@@ -105,6 +107,9 @@ private val ScreenMargin = 24.dp
 // Alto de dock + píldora con sus separaciones: lo que el índice de Trazo deja libre por abajo.
 private val BottomAreaHeight = 176.dp
 private val OpenSearchDrag = 48.dp
+
+// Alto de la tarjeta de Ahora con su separación: el índice de Trazo se acorta ese tanto cuando sale.
+private val NowCardSpace = 96.dp
 private const val STACK_ICON_APPS = 4
 private const val STACK_GLYPH_LENGTH = 2
 private const val TAG = "HomeScreen"
@@ -132,6 +137,8 @@ fun HomeScreen(
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val loadedDock by viewModel.dock.collectAsStateWithLifecycle()
     val dock = loadedDock.orEmpty()
+    val nowSuggestion by viewModel.now.collectAsStateWithLifecycle()
+    val now = nowSuggestion?.takeIf { prefs.nowEnabled }
     val context = LocalContext.current
     val resources = LocalResources.current
     val bars = WindowInsets.systemBars.asPaddingValues()
@@ -194,6 +201,15 @@ fun HomeScreen(
                 .align(Alignment.BottomCenter)
                 .padding(start = ScreenMargin, end = ScreenMargin, bottom = bars.calculateBottomPadding() + 16.dp)
         ) {
+            now?.let { (suggestion, app) ->
+                NowCard(
+                    suggestion = suggestion,
+                    app = app,
+                    onOpen = { launch(app) },
+                    onDismiss = { viewModel.dismissNow(suggestion) }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
             // Mientras carga, el dock guarda su sitio para que la píldora no salte.
             Row(Modifier.fillMaxWidth().heightIn(min = DockHeight)) {
                 dock.forEachIndexed { position, slot ->
@@ -245,7 +261,9 @@ fun HomeScreen(
                 railPadding =
                     PaddingValues(
                         top = bars.calculateTopPadding() + 16.dp,
-                        bottom = bars.calculateBottomPadding() + BottomAreaHeight
+                        bottom =
+                            bars.calculateBottomPadding() + BottomAreaHeight +
+                                if (now != null) NowCardSpace else 0.dp
                     ),
                 onLaunch = ::launch
             )
@@ -771,6 +789,81 @@ private fun StackOrder(apps: List<AppEntry>, onReorder: (List<AppEntry>) -> Unit
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Tarjeta de Ahora (§6): una sola sugerencia con su motivo. Tocarla abre la app; la «✕» la descarta
+ * seis horas, y al tercer descarte no vuelve a salir.
+ */
+@Composable
+private fun NowCard(suggestion: NowSuggestion, app: AppEntry, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val shape = AlisioTokens.CardShape
+    val reason =
+        when (suggestion.rule) {
+            NowRule.NEW_VERSION -> {
+                // La hora compartida avanza cada minuto: el «hace cuánto» no se queda parado.
+                val nowMillis = rememberNow().toInstant().toEpochMilli()
+                val minutes = ((nowMillis - suggestion.since) / 60_000L).coerceAtLeast(0)
+                if (minutes < 60) {
+                    stringResource(R.string.now_reason_new_version_minutes, minutes.toInt())
+                } else {
+                    stringResource(R.string.now_reason_new_version_hours, (minutes / 60).toInt())
+                }
+            }
+
+            NowRule.BLUETOOTH -> stringResource(R.string.now_reason_bluetooth, suggestion.device.orEmpty())
+
+            NowRule.HABIT -> stringResource(R.string.now_reason_habit)
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(AlisioTokens.Surface.copy(alpha = 0.88f), shape)
+                .border(1.dp, AlisioTokens.CardBorder, shape)
+                .clickable(onClick = onOpen)
+                .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(52.dp).background(AlisioTokens.AccentSoft, AlisioTokens.DockIconShape),
+            contentAlignment = Alignment.Center
+        ) { AppIcon(app.icon, 40.dp) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.now_label),
+                style = AlisioTokens.SectionLabel,
+                color = AlisioTokens.Accent
+            )
+            Text(
+                text = app.label,
+                style = MaterialTheme.typography.titleMedium,
+                color = AlisioTokens.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AlisioTokens.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        val dismiss = stringResource(R.string.now_dismiss)
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(AlisioTokens.PillShape)
+                .clickable(role = Role.Button, onClick = onDismiss)
+                .semantics { contentDescription = dismiss },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("✕", style = MaterialTheme.typography.titleMedium, color = AlisioTokens.TextSecondary)
         }
     }
 }

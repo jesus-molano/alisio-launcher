@@ -43,6 +43,15 @@ data class DockSlot(
 @Entity(tableName = "stack_item", primaryKeys = ["slot", "app_key"])
 data class StackItem(val slot: Int, @ColumnInfo(name = "app_key") val appKey: String, val position: Int)
 
+/** Cuántas veces se ha descartado una sugerencia de Ahora (regla y app) y cuándo fue la última. */
+@Entity(tableName = "suggestion_feedback", primaryKeys = ["rule", "key"])
+data class SuggestionFeedback(
+    val rule: String,
+    val key: String,
+    val dismissals: Int,
+    @ColumnInfo(name = "last_dismissed_at") val lastDismissedAt: Long
+)
+
 class KeyAt(val key: String, val at: Long)
 
 /** De la 2 a la 3: el icono de las pilas. Con migración, para no borrar el dock ya configurado. */
@@ -53,6 +62,34 @@ val MIGRATION_2_3 =
             db.execSQL("ALTER TABLE dock_slot ADD COLUMN stack_glyph TEXT")
         }
     }
+
+/** De la 3 a la 4: los descartes de Ahora. */
+val MIGRATION_3_4 =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `suggestion_feedback` (" +
+                    "`rule` TEXT NOT NULL, `key` TEXT NOT NULL, `dismissals` INTEGER NOT NULL, " +
+                    "`last_dismissed_at` INTEGER NOT NULL, PRIMARY KEY(`rule`, `key`))"
+            )
+        }
+    }
+
+@Dao
+interface SuggestionFeedbackDao {
+    @Query("SELECT * FROM suggestion_feedback")
+    fun all(): Flow<List<SuggestionFeedback>>
+
+    /**
+     * Suma un descarte en una sola sentencia: dos toques seguidos cuentan los dos, y no hace falta
+     * haber leído antes el contador.
+     */
+    @Query(
+        "INSERT INTO suggestion_feedback(rule, `key`, dismissals, last_dismissed_at) VALUES(:rule, :key, 1, :at) " +
+            "ON CONFLICT(rule, `key`) DO UPDATE SET dismissals = dismissals + 1, last_dismissed_at = :at"
+    )
+    suspend fun addDismissal(rule: String, key: String, at: Long)
+}
 
 @Dao
 interface LaunchEventDao {
@@ -108,9 +145,15 @@ interface HomeConfigDao {
     suspend fun nextStackPosition(slot: Int): Int
 }
 
-@Database(entities = [LaunchEvent::class, DockSlot::class, StackItem::class], version = 3, exportSchema = false)
+@Database(
+    entities = [LaunchEvent::class, DockSlot::class, StackItem::class, SuggestionFeedback::class],
+    version = 4,
+    exportSchema = false
+)
 abstract class AlisioDatabase : RoomDatabase() {
     abstract fun launchEvents(): LaunchEventDao
 
     abstract fun homeConfig(): HomeConfigDao
+
+    abstract fun suggestionFeedback(): SuggestionFeedbackDao
 }

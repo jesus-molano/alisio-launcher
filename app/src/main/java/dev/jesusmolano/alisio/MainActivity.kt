@@ -159,6 +159,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        homeViewModel.refreshNow()
         // El permiso de contactos también se puede cambiar desde los ajustes del sistema.
         (application as AlisioApp).container.contacts.onPermissionChanged()
         val holdsRole = holdsHomeRole()

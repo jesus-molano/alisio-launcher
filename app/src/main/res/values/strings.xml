@@ -43,6 +43,15 @@
     <string name="people_allow">Find people from here</string>
     <string name="people_allow_hint">Allow contacts to call or message anyone by name</string>
 
+    <string name="now_label">NOW</string>
+    <string name="now_reason_new_version_minutes">New version installed %1$d min ago</string>
+    <string name="now_reason_new_version_hours">New version installed %1$d h ago</string>
+    <string name="now_reason_bluetooth">%1$s connected</string>
+    <string name="now_reason_habit">You usually open it around now</string>
+    <string name="now_dismiss">Dismiss this suggestion</string>
+    <string name="settings_now">Suggestion on the home screen</string>
+    <string name="settings_now_hint">One app at a time, always with the reason</string>
+
     <string name="settings_title">Alisio settings</string>
     <string name="settings_appearance">APPEARANCE</string>
     <string name="settings_accent">Accent color</string>

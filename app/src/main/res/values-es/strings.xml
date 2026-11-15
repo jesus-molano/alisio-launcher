@@ -39,6 +39,15 @@
     <string name="people_allow">Busca personas desde aquí</string>
     <string name="people_allow_hint">Permite los contactos para llamar o escribir a quien quieras por su nombre</string>
 
+    <string name="now_label">AHORA</string>
+    <string name="now_reason_new_version_minutes">Versión nueva instalada hace %1$d min</string>
+    <string name="now_reason_new_version_hours">Versión nueva instalada hace %1$d h</string>
+    <string name="now_reason_bluetooth">%1$s conectado</string>
+    <string name="now_reason_habit">Sueles abrirla a esta hora</string>
+    <string name="now_dismiss">Descartar esta sugerencia</string>
+    <string name="settings_now">Sugerencia en el Inicio</string>
+    <string name="settings_now_hint">Una sola app cada vez, siempre con su motivo</string>
+
     <string name="settings_title">Ajustes de Alisio</string>
     <string name="settings_appearance">APARIENCIA</string>
     <string name="settings_accent">Color de acento</string>

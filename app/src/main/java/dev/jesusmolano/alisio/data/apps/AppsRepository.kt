@@ -3,6 +3,7 @@ package dev.jesusmolano.alisio.data.apps
 import android.content.Context
 import android.content.pm.LauncherApps
 import android.content.pm.LauncherApps.ShortcutQuery
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -149,12 +150,21 @@ class AppsRepository(
                     label = info.label.toString(),
                     component = info.componentName,
                     user = user,
-                    icon = safeIcon(info.getIcon(0), pack?.iconFor(info.componentName), style)
+                    icon = safeIcon(info.getIcon(0), pack?.iconFor(info.componentName), style),
+                    updatedAt = updatedAt(info.componentName.packageName)
                 )
             }
         }
         .filterNot { it.component.packageName == appContext.packageName }
         .sortedAlphabetically(label = { it.label }, key = { it.key })
+
+    /** Hora de la última instalación o actualización: la regla «versión nueva» de Ahora sale de aquí. */
+    private fun updatedAt(packageName: String): Long = try {
+        appContext.packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+    } catch (_: PackageManager.NameNotFoundException) {
+        // Desinstalada mientras se leía la lista, o de un perfil que este usuario no ve.
+        0L
+    }
 
     /**
      * Un dibujo defectuoso de un paquete de iconos (enorme, o que falla al pintarse) no puede tumbar

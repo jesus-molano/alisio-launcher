@@ -282,6 +282,18 @@ fun SettingsScreen(
             )
         }
 
+        item { SectionLabel(stringResource(R.string.now_label)) }
+        item {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_now)),
+                leading = "✦",
+                subtitle = stringResource(R.string.settings_now_hint),
+                trailing = stringResource(if (prefs.nowEnabled) R.string.settings_on else R.string.settings_off),
+                highlighted = prefs.nowEnabled,
+                onClick = { settings.toggleNow() }
+            )
+        }
+
         item { SectionLabel(stringResource(R.string.settings_dock)) }
         item {
             ItemRow(

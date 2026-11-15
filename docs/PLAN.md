@@ -394,6 +394,19 @@ Empezada el 15 de noviembre de 2026 con el visto bueno para seguir, sin esperar 
 - Ajustes de Alisio: sección Personas con el estado del permiso de contactos.
 - **Sin probar a mano:** todo lo anterior. Compila, pasa tests y lint y está instalado, pero falta conceder el permiso en el teléfono y contactar a alguien por cada canal.
 
+### Fase 3 (noviembre de 2026)
+
+Empezada el 15 de noviembre de 2026. Se entrega por partes: primero Ahora; después el reproductor y los puntos de no leído; después los gestos sobre los iconos del dock y el Interior de app.
+
+- **Ahora, primera parte.** El motor (`core/now`) tiene las tres reglas de §5.5 y los descartes, con tests y reloj inyectable. En el Inicio funcionan dos: versión nueva y costumbre. La de Bluetooth está en el motor pero aún no recibe datos: falta saber qué dispositivo de audio hay conectado y apuntar las aperturas que siguen a cada conexión, con el permiso `BLUETOOTH_CONNECT`.
+- La hora de instalación o actualización sale de `PackageInfo.lastUpdateTime` al leer las apps. No hace falta la tabla `PackageEvent` de §5.9: ese dato sobrevive aunque el proceso estuviera parado.
+- Una versión nueva deja de sugerirse en cuanto se abre la app desde Alisio. Las actualizaciones automáticas de Play también cuentan como versión nueva; tres descartes silencian esa app.
+- La regla de costumbre usa el historial de aperturas hechas desde Alisio, no el acceso a uso del sistema: no pide permiso, pero no ve lo que se abre desde recientes o desde una notificación.
+- La sugerencia se recalcula cada vez que el Inicio vuelve a verse. Descartes en la tabla `suggestion_feedback` (base de datos en la versión 4, con migración).
+- Ajustes de Alisio: sección Ahora, con un interruptor para enseñar o no la sugerencia.
+- Límites conocidos de la regla «versión nueva»: una app abierta desde Play Store tras instalarla sigue saliendo hasta abrirla desde Alisio; las apps actualizadas solas por la noche salen por la mañana y pasan por delante de la costumbre; y en apps que solo están en el perfil de trabajo no se sabe la hora de actualización. **Por decidir:** limitar la regla a las apps que yo marque.
+- **Sin probar a mano.**
+
 ## 12. Referencias
 
 - [LauncherApps](https://developer.android.com/reference/android/content/pm/LauncherApps): quién puede leer los accesos directos de otras apps.
