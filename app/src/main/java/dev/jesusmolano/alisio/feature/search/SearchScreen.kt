@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.SectionLabel
@@ -74,9 +76,16 @@ private val CloseDrag = 64.dp
  * Enter abre ese resultado; si no hay ninguno, pregunta a Claude (o busca en la web si no está).
  *
  * @param onClose se llama tras abrir algo; quien la muestra decide cómo cerrarla.
+ * @param onOpenSettings abre los ajustes de Alisio, que también salen como resultado.
  */
 @Composable
-fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun SearchScreen(
+    viewModel: SearchViewModel,
+    onClose: () -> Unit,
+    onOpenSettings: () -> Unit,
+    prefs: Prefs,
+    modifier: Modifier = Modifier
+) {
     val source by viewModel.source.collectAsStateWithLifecycle()
     // El texto vive aquí, no en un flujo: si volviera con retraso, el campo perdería letras y el cursor.
     var query by remember { mutableStateOf("") }
@@ -85,7 +94,9 @@ fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modi
     val context = LocalContext.current
     val resources = LocalResources.current
     val focusRequester = remember { FocusRequester() }
-    val claudeInstalled = remember { context.isClaudeInstalled() }
+    // Nombre del asistente de IA elegido; `null` si no está instalado, y entonces se busca en la web.
+    val assistant = remember(prefs.assistantPackage) { context.appLabel(prefs.assistantPackage) }
+    val webLabel = stringResource(R.string.search_chip_web)
     val copiedMessage = stringResource(R.string.search_copied)
 
     LaunchedEffect(Unit) {
@@ -115,11 +126,19 @@ fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modi
             if (opened) viewModel.record(target)
             finish(opened, target.label)
         }
+
+        is Target.AlisioSettings -> {
+            viewModel.record(target)
+            onOpenSettings()
+        }
     }
 
     fun fallback(query: String) {
-        val label = resources.getString(if (claudeInstalled) R.string.search_chip_claude else R.string.search_chip_web)
-        finish(if (claudeInstalled) context.askClaude(query) else context.searchWeb(query), label)
+        if (assistant != null) {
+            finish(context.askAssistant(prefs.assistantPackage, query), assistant)
+        } else {
+            finish(context.searchWeb(prefs.webSearchPackage, query), webLabel)
+        }
     }
 
     fun copyCalculation(result: String) {
@@ -199,7 +218,7 @@ fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modi
 
                 else -> results(
                     state,
-                    claudeInstalled,
+                    assistant,
                     onOpen = ::open,
                     onCopy = ::copyCalculation,
                     onFallback = ::fallback
@@ -210,13 +229,13 @@ fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modi
             Modifier.padding(horizontal = ScreenMargin, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (claudeInstalled) {
-                Chip(stringResource(R.string.search_chip_claude)) {
-                    finish(context.askClaude(state.query), resources.getString(R.string.search_chip_claude))
+            if (assistant != null) {
+                Chip(assistant) {
+                    finish(context.askAssistant(prefs.assistantPackage, state.query), assistant)
                 }
             }
             Chip(stringResource(R.string.search_chip_web)) {
-                finish(context.searchWeb(state.query), resources.getString(R.string.search_chip_web))
+                finish(context.searchWeb(prefs.webSearchPackage, state.query), webLabel)
             }
             Chip(stringResource(R.string.search_chip_play)) {
                 finish(context.searchPlayStore(state.query), resources.getString(R.string.search_chip_play))
@@ -225,7 +244,7 @@ fun SearchScreen(viewModel: SearchViewModel, onClose: () -> Unit, modifier: Modi
         PillTextField(
             value = state.query,
             onValueChange = { query = it },
-            placeholder = stringResource(R.string.search_hint),
+            placeholder = searchHint(assistant),
             onEnter = ::onEnter,
             modifier =
                 Modifier
@@ -246,7 +265,7 @@ private fun LazyListScope.recents(state: SearchState, onOpen: (Target) -> Unit) 
 
 private fun LazyListScope.results(
     state: SearchState,
-    claudeInstalled: Boolean,
+    assistant: String?,
     onOpen: (Target) -> Unit,
     onCopy: (String) -> Unit,
     onFallback: (String) -> Unit
@@ -266,11 +285,13 @@ private fun LazyListScope.results(
     }
     if (state.calculation == null && state.sections.isEmpty()) {
         item(key = "fallback") {
+            val query = state.query.trim()
             val title =
-                stringResource(
-                    if (claudeInstalled) R.string.search_ask_claude else R.string.search_ask_web,
-                    state.query.trim()
-                )
+                if (assistant != null) {
+                    stringResource(R.string.search_ask_assistant, assistant, query)
+                } else {
+                    stringResource(R.string.search_ask_web, query)
+                }
             ItemRow(
                 title = AnnotatedString(title),
                 leading = "?",
@@ -294,6 +315,7 @@ private fun LazyListScope.results(
                         is Target.App -> null
                         is Target.Shortcut -> target.shortcut.app.label
                         is Target.Setting -> stringResource(R.string.search_setting_subtitle)
+                        is Target.AlisioSettings -> null
                     },
                 trailing = if (best) stringResource(R.string.search_enter) else null,
                 highlighted = best,
@@ -320,6 +342,7 @@ private val Target.title: String
             is Target.App -> app.label
             is Target.Shortcut -> shortcut.label
             is Target.Setting -> label
+            is Target.AlisioSettings -> label
         }
 
 private val Target.icon
@@ -328,6 +351,7 @@ private val Target.icon
             is Target.App -> app.icon
             is Target.Shortcut -> shortcut.app.icon
             is Target.Setting -> null
+            is Target.AlisioSettings -> null
         }
 
 /** Pinta en acento las letras del título que coinciden con lo escrito. */
@@ -339,19 +363,10 @@ private fun highlight(title: String, positions: IntArray): AnnotatedString = bui
     }
 }
 
+/** Texto de ayuda de la barra: nombra al asistente elegido si está instalado. */
 @Composable
-private fun Chip(label: String, onClick: () -> Unit) {
-    val shape = AlisioTokens.PillShape
-    Box(
-        Modifier
-            .heightIn(min = 48.dp)
-            .clip(shape)
-            .background(AlisioTokens.Surface, shape)
-            .border(1.dp, AlisioTokens.ControlBorder, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = AlisioTokens.Text)
-    }
+internal fun searchHint(assistant: String?): String = if (assistant != null) {
+    stringResource(R.string.search_hint, assistant)
+} else {
+    stringResource(R.string.search_hint_plain)
 }

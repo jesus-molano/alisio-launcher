@@ -14,6 +14,10 @@
     <string name="dock_empty_description">Empty dock slot: tap to choose an app</string>
     <string name="stack_default_name">Stack</string>
     <string name="stack_name_hint">Stack name</string>
+    <string name="stack_icon_folder">Folder</string>
+    <string name="stack_icon_first">First app</string>
+    <string name="stack_icon_symbol">Symbol</string>
+    <string name="stack_symbol_hint">A symbol or an emoji</string>
     <string name="stack_edit">Edit this stack</string>
     <string name="slot_title">Dock slot</string>
     <string name="slot_make_stack">Turn into a stack</string>
@@ -23,7 +27,35 @@
     <string name="picker_clear">Leave empty</string>
     <string name="picker_checked">In the stack</string>
 
+    <string name="channel_whatsapp" translatable="false">WhatsApp</string>
+    <string name="channel_whatsapp_call">WhatsApp call</string>
+    <string name="channel_whatsapp_video">WhatsApp video</string>
+    <string name="channel_call">Call</string>
+    <string name="channel_sms" translatable="false">SMS</string>
+    <string name="person_reason">You usually use %1$s</string>
+    <string name="search_section_people">PEOPLE</string>
+    <string name="people_allow">Find people from here</string>
+    <string name="people_allow_hint">Allow contacts to call or message anyone by name</string>
+
     <string name="settings_title">Alisio settings</string>
+    <string name="settings_appearance">APPEARANCE</string>
+    <string name="settings_accent">Accent color</string>
+    <string name="settings_accent_option">Accent color %1$d</string>
+    <string name="settings_wallpaper_dim">Wallpaper dimming</string>
+    <string name="settings_dim_light">Light</string>
+    <string name="settings_dim_medium">Medium</string>
+    <string name="settings_dim_strong">Strong</string>
+    <string name="settings_dock" translatable="false">DOCK</string>
+    <string name="settings_dock_labels">App names</string>
+    <string name="settings_dock_labels_hint">Show the name under each dock icon</string>
+    <string name="settings_on">On</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_search">SEARCH</string>
+    <string name="settings_assistant">AI assistant</string>
+    <string name="settings_assistant_missing">Not installed: searches go to the web</string>
+    <string name="settings_web_search">Web search</string>
+    <string name="settings_web_search_system">Let the system choose</string>
+    <string name="settings_change">Change</string>
     <string name="settings_icons">ICONS</string>
     <string name="settings_selected">Selected</string>
     <string name="icons_color">Color</string>
@@ -34,14 +66,14 @@
     <string name="icons_system_hint">As One UI draws them</string>
     <string name="icons_pack_hint">Icon pack</string>
 
-    <string name="search_hint">Search or ask Claude</string>
+    <string name="search_hint">Search or ask %1$s</string>
+    <string name="search_hint_plain">Search</string>
     <string name="search_clear">Clear</string>
     <string name="search_enter" translatable="false">Enter</string>
     <string name="search_copied">Result copied</string>
     <string name="search_calc_hint">Tap to copy</string>
-    <string name="search_ask_claude">Ask Claude: “%1$s”</string>
+    <string name="search_ask_assistant">Ask %1$s: “%2$s”</string>
     <string name="search_ask_web">Search the web: “%1$s”</string>
-    <string name="search_chip_claude" translatable="false">Claude</string>
     <string name="search_chip_web" translatable="false">Web</string>
     <string name="search_chip_play" translatable="false">Play Store</string>
     <string name="search_setting_subtitle">Settings</string>

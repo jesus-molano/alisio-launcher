@@ -26,11 +26,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.feature.home.HomeScreen
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
 import dev.jesusmolano.alisio.feature.onboarding.OnboardingScreen
 import dev.jesusmolano.alisio.feature.search.SearchScreen
 import dev.jesusmolano.alisio.feature.search.SearchViewModel
+import dev.jesusmolano.alisio.feature.settings.SettingsScreen
 import dev.jesusmolano.alisio.ui.theme.AlisioTheme
 
 class MainActivity : ComponentActivity() {
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
     private var onboardingSkipped by mutableStateOf(false)
     private var searchOpen by mutableStateOf(false)
     private var homePresses by mutableIntStateOf(0)
+    private var settingsOpen by mutableStateOf(false)
 
     // El resultado no importa: onResume vuelve a comprobar el rol.
     private val requestHomeRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
@@ -56,15 +60,25 @@ class MainActivity : ComponentActivity() {
         isDefaultHome = holdsHomeRole()
 
         setContent {
-            AlisioTheme {
-                // Atrás cierra la barra; en el Inicio no hace nada.
-                BackHandler { searchOpen = false }
+            val settings = (application as AlisioApp).container.settings
+            val loadedPrefs by settings.prefs.collectAsStateWithLifecycle()
+            // Hasta leer las preferencias no se pinta nada: si no, saldrían un instante el acento y el
+            // velo por defecto antes que los elegidos.
+            val prefs = loadedPrefs ?: return@setContent
+            AlisioTheme(accent = prefs.accent) {
+                // Atrás cierra lo que haya encima del Inicio; en el Inicio no hace nada.
+                BackHandler {
+                    if (settingsOpen) settingsOpen = false else searchOpen = false
+                }
                 if (isDefaultHome || onboardingSkipped) {
                     Box(Modifier.fillMaxSize()) {
                         HomeScreen(
                             viewModel = homeViewModel,
                             homePresses = homePresses,
-                            searchOpen = searchOpen,
+                            // Con algo encima, Trazo se retira.
+                            searchOpen = searchOpen || settingsOpen,
+                            prefs = prefs,
+                            onOpenSettings = { settingsOpen = true },
                             onOpenSearch = { searchOpen = true }
                         )
                         // One UI no anima el gesto atrás en apps de terceros (§9): la barra trae su animación.
@@ -73,7 +87,23 @@ class MainActivity : ComponentActivity() {
                             enter = fadeIn() + slideInVertically { it / 8 },
                             exit = fadeOut() + slideOutVertically { it / 8 }
                         ) {
-                            SearchScreen(viewModel = searchViewModel, onClose = { searchOpen = false })
+                            SearchScreen(
+                                viewModel = searchViewModel,
+                                onClose = { searchOpen = false },
+                                prefs = prefs,
+                                onOpenSettings = {
+                                    searchOpen = false
+                                    settingsOpen = true
+                                }
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = settingsOpen,
+                            enter = fadeIn() + slideInVertically { it / 8 },
+                            exit = fadeOut() + slideOutVertically { it / 8 }
+                        ) {
+                            val apps by homeViewModel.apps.collectAsStateWithLifecycle()
+                            SettingsScreen(prefs = prefs, settings = settings, apps = apps.orEmpty())
                         }
                     }
                 } else {
@@ -98,8 +128,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Al volver de otra app el Inicio aparece limpio, sin la barra a medias.
+        // Al volver de otra app el Inicio aparece limpio, sin la barra ni los ajustes a medias.
         searchOpen = false
+        settingsOpen = false
     }
 
     /** Pulsar «inicio» estando ya en Alisio llega aquí: se cierran la barra y las hojas. */
@@ -107,6 +138,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             searchOpen = false
+            settingsOpen = false
             homePresses++
         }
     }

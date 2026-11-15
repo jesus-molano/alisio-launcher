@@ -10,6 +10,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** Una apertura desde Alisio. [key] es la clave del índice de búsqueda (app, acceso directo o ajuste). */
@@ -31,7 +33,10 @@ data class LaunchEvent(
 data class DockSlot(
     @PrimaryKey val position: Int,
     @ColumnInfo(name = "app_key") val appKey: String? = null,
-    @ColumnInfo(name = "stack_name") val stackName: String? = null
+    @ColumnInfo(name = "stack_name") val stackName: String? = null,
+    // Cómo se dibuja el icono de la pila (`StackIcon.id`) y su símbolo propio; `null` es el valor por defecto.
+    @ColumnInfo(name = "stack_icon") val stackIcon: String? = null,
+    @ColumnInfo(name = "stack_glyph") val stackGlyph: String? = null
 )
 
 /** App de la pila que ocupa el hueco [slot]. */
@@ -39,6 +44,15 @@ data class DockSlot(
 data class StackItem(val slot: Int, @ColumnInfo(name = "app_key") val appKey: String, val position: Int)
 
 class KeyAt(val key: String, val at: Long)
+
+/** De la 2 a la 3: el icono de las pilas. Con migración, para no borrar el dock ya configurado. */
+val MIGRATION_2_3 =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE dock_slot ADD COLUMN stack_icon TEXT")
+            db.execSQL("ALTER TABLE dock_slot ADD COLUMN stack_glyph TEXT")
+        }
+    }
 
 @Dao
 interface LaunchEventDao {
@@ -59,6 +73,15 @@ interface HomeConfigDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setSlot(slot: DockSlot)
+
+    @Query("UPDATE dock_slot SET stack_name = :name WHERE position = :position AND stack_name IS NOT NULL")
+    suspend fun renameStack(position: Int, name: String)
+
+    @Query(
+        "UPDATE dock_slot SET stack_icon = :icon, stack_glyph = :glyph " +
+            "WHERE position = :position AND stack_name IS NOT NULL"
+    )
+    suspend fun setStackIcon(position: Int, icon: String, glyph: String?)
 
     @Query("DELETE FROM dock_slot WHERE position = :position")
     suspend fun clearSlot(position: Int)
@@ -82,7 +105,7 @@ interface HomeConfigDao {
     suspend fun nextStackPosition(slot: Int): Int
 }
 
-@Database(entities = [LaunchEvent::class, DockSlot::class, StackItem::class], version = 2, exportSchema = false)
+@Database(entities = [LaunchEvent::class, DockSlot::class, StackItem::class], version = 3, exportSchema = false)
 abstract class AlisioDatabase : RoomDatabase() {
     abstract fun launchEvents(): LaunchEventDao
 

@@ -11,6 +11,15 @@
         </intent>
         <!-- Para saber si Claude está instalado y ofrecer «Preguntar a Claude» (docs/PLAN.md §5.3). -->
         <package android:name="com.anthropic.claude" />
+        <!-- Apps entre las que se elige la búsqueda web en los ajustes: buscadores y navegadores. -->
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
         <!-- Paquetes de iconos (formato de ADW y Nova), también los que no tienen icono de inicio. -->
         <intent>
             <action android:name="org.adw.launcher.THEMES" />

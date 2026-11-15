@@ -12,6 +12,10 @@
     <string name="dock_empty_description">Hueco vacío del dock: toca para elegir una app</string>
     <string name="stack_default_name">Pila</string>
     <string name="stack_name_hint">Nombre de la pila</string>
+    <string name="stack_icon_folder">Carpeta</string>
+    <string name="stack_icon_first">Primera app</string>
+    <string name="stack_icon_symbol">Símbolo</string>
+    <string name="stack_symbol_hint">Un símbolo o un emoji</string>
     <string name="stack_edit">Editar esta pila</string>
     <string name="slot_title">Hueco del dock</string>
     <string name="slot_make_stack">Convertir en pila</string>
@@ -21,7 +25,32 @@
     <string name="picker_clear">Dejar vacío</string>
     <string name="picker_checked">En la pila</string>
 
+    <string name="channel_whatsapp_call">Llamada de WhatsApp</string>
+    <string name="channel_whatsapp_video">Vídeo de WhatsApp</string>
+    <string name="channel_call">Llamar</string>
+    <string name="person_reason">Sueles usar %1$s</string>
+    <string name="search_section_people">PERSONAS</string>
+    <string name="people_allow">Busca personas desde aquí</string>
+    <string name="people_allow_hint">Permite los contactos para llamar o escribir a quien quieras por su nombre</string>
+
     <string name="settings_title">Ajustes de Alisio</string>
+    <string name="settings_appearance">APARIENCIA</string>
+    <string name="settings_accent">Color de acento</string>
+    <string name="settings_accent_option">Color de acento %1$d</string>
+    <string name="settings_wallpaper_dim">Oscurecer el fondo de pantalla</string>
+    <string name="settings_dim_light">Poco</string>
+    <string name="settings_dim_medium">Medio</string>
+    <string name="settings_dim_strong">Mucho</string>
+    <string name="settings_dock_labels">Nombres de las apps</string>
+    <string name="settings_dock_labels_hint">Enseñar el nombre debajo de cada icono del dock</string>
+    <string name="settings_on">Sí</string>
+    <string name="settings_off">No</string>
+    <string name="settings_search">BÚSQUEDA</string>
+    <string name="settings_assistant">Asistente de IA</string>
+    <string name="settings_assistant_missing">No está instalado: las búsquedas van a la web</string>
+    <string name="settings_web_search">Búsqueda web</string>
+    <string name="settings_web_search_system">Que elija el sistema</string>
+    <string name="settings_change">Cambiar</string>
     <string name="settings_icons">ICONOS</string>
     <string name="settings_selected">Elegido</string>
     <string name="icons_color">A color</string>
@@ -32,11 +61,12 @@
     <string name="icons_system_hint">Como los dibuja One UI</string>
     <string name="icons_pack_hint">Paquete de iconos</string>
 
-    <string name="search_hint">Busca o pregunta a Claude</string>
+    <string name="search_hint">Busca o pregunta a %1$s</string>
+    <string name="search_hint_plain">Busca</string>
     <string name="search_clear">Borrar</string>
     <string name="search_copied">Resultado copiado</string>
     <string name="search_calc_hint">Toca para copiar</string>
-    <string name="search_ask_claude">Preguntar a Claude: «%1$s»</string>
+    <string name="search_ask_assistant">Preguntar a %1$s: «%2$s»</string>
     <string name="search_ask_web">Buscar en la web: «%1$s»</string>
     <string name="search_setting_subtitle">Ajustes</string>
     <string name="search_section_recents">RECIENTES</string>

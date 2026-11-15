@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -56,7 +57,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -65,15 +68,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
-import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.core.search.filterByName
+import dev.jesusmolano.alisio.core.text.takeGraphemes
 import dev.jesusmolano.alisio.data.apps.AppEntry
-import dev.jesusmolano.alisio.data.apps.installedIconPacks
 import dev.jesusmolano.alisio.data.apps.toSections
+import dev.jesusmolano.alisio.data.home.StackIcon
+import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.feature.search.appLabel
+import dev.jesusmolano.alisio.feature.search.searchHint
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
-import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
@@ -89,6 +94,7 @@ private val ScreenMargin = 24.dp
 private val BottomAreaHeight = 176.dp
 private val OpenSearchDrag = 48.dp
 private const val STACK_ICON_APPS = 4
+private const val STACK_GLYPH_LENGTH = 2
 private const val TAG = "HomeScreen"
 
 /**
@@ -106,17 +112,18 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     homePresses: Int,
     searchOpen: Boolean,
+    prefs: Prefs,
     onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val loadedDock by viewModel.dock.collectAsStateWithLifecycle()
     val dock = loadedDock.orEmpty()
-    val iconStyle by viewModel.iconStyle.collectAsStateWithLifecycle()
-    var settingsOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val resources = LocalResources.current
     val bars = WindowInsets.systemBars.asPaddingValues()
+    val dim = prefs.wallpaperDim.factor
     // Posición del hueco que se está configurando y de la pila abierta.
     var editing by remember { mutableStateOf<Int?>(null) }
     var openStack by remember { mutableStateOf<Int?>(null) }
@@ -124,7 +131,6 @@ fun HomeScreen(
     LaunchedEffect(homePresses) {
         editing = null
         openStack = null
-        settingsOpen = false
     }
 
     fun launch(app: AppEntry) {
@@ -141,9 +147,10 @@ fun HomeScreen(
                 // Velo sobre el fondo de pantalla, más denso abajo, y brillo suave del acento al pie.
                 drawRect(
                     Brush.verticalGradient(
-                        0f to AlisioTokens.Background.copy(alpha = 0.38f),
-                        0.55f to AlisioTokens.Background.copy(alpha = 0.30f),
-                        1f to AlisioTokens.Background.copy(alpha = 0.82f)
+                        0f to AlisioTokens.Background.copy(alpha = (0.38f * dim).coerceAtMost(1f)),
+                        0.55f to AlisioTokens.Background.copy(alpha = (0.30f * dim).coerceAtMost(1f)),
+                        // Abajo nunca baja de lo que hace legibles el dock y la píldora.
+                        1f to AlisioTokens.Background.copy(alpha = (0.82f * dim).coerceIn(0.6f, 1f))
                     )
                 )
                 drawRect(
@@ -162,7 +169,7 @@ fun HomeScreen(
                     onDragEnd = { if (dragged < -OpenSearchDrag.toPx()) onOpenSearch() }
                 )
             }
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { settingsOpen = true }) }
+            .pointerInput(onOpenSettings) { detectTapGestures(onLongPress = { onOpenSettings() }) }
     ) {
         ClockAndDate(
             Modifier
@@ -179,6 +186,7 @@ fun HomeScreen(
             Row(Modifier.fillMaxWidth().heightIn(min = DockHeight)) {
                 dock.forEachIndexed { position, slot ->
                     val itemModifier = Modifier.weight(1f)
+                    val showLabel = prefs.dockLabels
                     when (slot) {
                         DockSlot.Empty ->
                             DockItem(
@@ -186,6 +194,7 @@ fun HomeScreen(
                                 description = stringResource(R.string.dock_empty_description),
                                 onClick = { editing = position },
                                 onLongClick = { editing = position },
+                                showLabel = showLabel,
                                 modifier = itemModifier
                             ) { Glyph("+", muted = true) }
 
@@ -195,6 +204,7 @@ fun HomeScreen(
                                 description = null,
                                 onClick = { launch(slot.app) },
                                 onLongClick = { editing = position },
+                                showLabel = showLabel,
                                 modifier = itemModifier
                             ) { AppIcon(slot.app.icon, DockIconSize) }
 
@@ -204,13 +214,16 @@ fun HomeScreen(
                                 description = null,
                                 onClick = { if (slot.apps.isEmpty()) editing = position else openStack = position },
                                 onLongClick = { editing = position },
+                                showLabel = showLabel,
                                 modifier = itemModifier
-                            ) { StackIcon(slot) }
+                            ) { StackSlotIcon(slot) }
                     }
                 }
             }
             Spacer(Modifier.height(20.dp))
-            SearchPill(onOpenSearch)
+            // También depende de las apps instaladas: instalar o quitar el asistente cambia el texto.
+            val assistant = remember(prefs.assistantPackage, apps) { context.appLabel(prefs.assistantPackage) }
+            SearchPill(searchHint(assistant), onOpenSearch)
         }
 
         val sections = remember(apps) { apps.orEmpty().toSections { it.label } }
@@ -225,14 +238,6 @@ fun HomeScreen(
                 onLaunch = ::launch
             )
         }
-    }
-
-    if (settingsOpen) {
-        SettingsSheet(
-            current = iconStyle ?: IconStyle.Color,
-            onPick = viewModel::setIconStyle,
-            onDismiss = { settingsOpen = false }
-        )
     }
 
     openStack?.let { position ->
@@ -265,8 +270,9 @@ fun HomeScreen(
                 editing = null
             },
             onToggleInStack = { viewModel.toggleInStack(position, it) },
-            onMakeStack = { viewModel.setDockStack(position, defaultStackName) },
-            onRenameStack = { viewModel.setDockStack(position, it) },
+            onMakeStack = { viewModel.makeDockStack(position, defaultStackName) },
+            onRenameStack = { viewModel.renameDockStack(position, it) },
+            onSetStackIcon = { icon, glyph -> viewModel.setStackIcon(position, icon, glyph) },
             onClear = {
                 viewModel.clearDockSlot(position)
                 editing = null
@@ -343,6 +349,7 @@ private fun DockItem(
     description: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    showLabel: Boolean,
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit
 ) {
@@ -355,22 +362,30 @@ private fun DockItem(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier)
+                // Sin etiqueta visible, el nombre sigue llegando a TalkBack.
+                .semantics { contentDescription = description ?: label }
                 .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(Modifier.size(DockIconSize), contentAlignment = Alignment.Center) { icon() }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = label,
-            style = AlisioTokens.DockLabel,
-            color = AlisioTokens.Text.copy(alpha = 0.9f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
+        if (showLabel) {
+            Spacer(Modifier.height(6.dp))
+            DockLabel(label)
+        }
     }
+}
+
+@Composable
+private fun DockLabel(label: String) {
+    Text(
+        text = label,
+        style = AlisioTokens.DockLabel,
+        color = AlisioTokens.Text.copy(alpha = 0.9f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(horizontal = 2.dp)
+    )
 }
 
 /** Icono de dock hecho con un carácter: el hueco vacío («+») y la pila que aún no tiene apps. */
@@ -392,32 +407,42 @@ private fun Glyph(text: String, muted: Boolean) {
     }
 }
 
-/** Icono de pila: sus cuatro primeras apps en miniatura; vacía, la inicial de su nombre. */
+/**
+ * Icono de pila según su modo: carpeta con sus cuatro primeras apps, el icono de la primera o un
+ * símbolo propio. Sin apps (o sin símbolo escrito) cae en la inicial de su nombre.
+ */
 @Composable
-private fun StackIcon(stack: DockSlot.Stack) {
-    if (stack.apps.isEmpty()) {
-        Glyph(stack.name.trim().take(1).uppercase().ifEmpty { "+" }, muted = false)
-        return
-    }
-    val shape = AlisioTokens.DockIconShape
-    Column(
-        Modifier
-            .size(DockIconSize)
-            .background(AlisioTokens.SurfaceElevated.copy(alpha = 0.9f), shape)
-            .border(1.dp, AlisioTokens.ControlBorder, shape)
-            .padding(5.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        stack.apps.take(STACK_ICON_APPS).chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                row.forEach { AppIcon(it.icon, StackMiniIconSize) }
+private fun StackSlotIcon(stack: DockSlot.Stack) {
+    val initial = stack.name.trim().takeGraphemes(1).uppercase().ifEmpty { "+" }
+    when {
+        stack.icon == StackIcon.SYMBOL -> Glyph(stack.glyph.ifBlank { initial }, muted = false)
+
+        stack.apps.isEmpty() -> Glyph(initial, muted = false)
+
+        stack.icon == StackIcon.FIRST_APP -> AppIcon(stack.apps.first().icon, DockIconSize)
+
+        else -> {
+            val shape = AlisioTokens.DockIconShape
+            Column(
+                Modifier
+                    .size(DockIconSize)
+                    .background(AlisioTokens.SurfaceElevated.copy(alpha = 0.9f), shape)
+                    .border(1.dp, AlisioTokens.ControlBorder, shape)
+                    .padding(5.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                stack.apps.take(STACK_ICON_APPS).chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        row.forEach { AppIcon(it.icon, StackMiniIconSize) }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SearchPill(onClick: () -> Unit) {
+private fun SearchPill(hint: String, onClick: () -> Unit) {
     val shape = AlisioTokens.PillShape
     Box(
         Modifier
@@ -430,7 +455,7 @@ private fun SearchPill(onClick: () -> Unit) {
         contentAlignment = Alignment.CenterStart
     ) {
         Text(
-            text = stringResource(R.string.search_hint),
+            text = hint,
             style = MaterialTheme.typography.bodyLarge,
             color = AlisioTokens.TextSecondary
         )
@@ -477,6 +502,7 @@ private fun SlotSheet(
     onToggleInStack: (AppEntry) -> Unit,
     onMakeStack: () -> Unit,
     onRenameStack: (String) -> Unit,
+    onSetStackIcon: (StackIcon, String) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -484,6 +510,7 @@ private fun SlotSheet(
     var query by remember { mutableStateOf("") }
     // El nombre se edita en local y se guarda en cada cambio: releerlo de la base movería el cursor.
     var name by remember(stack != null) { mutableStateOf(stack?.name.orEmpty()) }
+    var glyph by remember(stack != null) { mutableStateOf(stack?.glyph.orEmpty()) }
     val inStack = remember(stack?.apps) { stack?.apps.orEmpty().map { it.key }.toSet() }
     val filtered =
         remember(apps, query) { apps.filterByName(query) { it.label } }
@@ -512,6 +539,36 @@ private fun SlotSheet(
                     container = AlisioTokens.SurfaceElevated,
                     capitalization = KeyboardCapitalization.Sentences
                 )
+                // Cada opción se enseña dibujada con las apps de esta pila, no descrita con palabras.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    StackIcon.entries.forEach { mode ->
+                        StackIconOption(
+                            preview = DockSlot.Stack(stack.name, stack.apps, mode, glyph),
+                            label =
+                                stringResource(
+                                    when (mode) {
+                                        StackIcon.FOLDER -> R.string.stack_icon_folder
+                                        StackIcon.FIRST_APP -> R.string.stack_icon_first
+                                        StackIcon.SYMBOL -> R.string.stack_icon_symbol
+                                    }
+                                ),
+                            selected = stack.icon == mode,
+                            onClick = { onSetStackIcon(mode, glyph) }
+                        )
+                    }
+                }
+                if (stack.icon == StackIcon.SYMBOL) {
+                    PillTextField(
+                        value = glyph,
+                        onValueChange = {
+                            // Un símbolo o un emoji: no cabe más en el icono.
+                            glyph = it.takeGraphemes(STACK_GLYPH_LENGTH)
+                            onSetStackIcon(StackIcon.SYMBOL, glyph)
+                        },
+                        placeholder = stringResource(R.string.stack_symbol_hint),
+                        container = AlisioTokens.SurfaceElevated
+                    )
+                }
             }
             PillTextField(
                 value = query,
@@ -561,62 +618,32 @@ private fun SlotSheet(
     }
 }
 
-/** Ajustes de Alisio; por ahora, el estilo de los iconos: los tres propios y los paquetes instalados. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Una forma de dibujar el icono de la pila, con su vista previa; la elegida lleva el acento. */
 @Composable
-private fun SettingsSheet(current: IconStyle, onPick: (IconStyle) -> Unit, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val packs = remember { installedIconPacks(context) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AlisioTokens.Surface) {
-        LazyColumn(Modifier.padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            item {
-                Text(
-                    text = stringResource(R.string.settings_title),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = AlisioTokens.Text,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+private fun StackIconOption(preview: DockSlot.Stack, label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = AlisioTokens.RowShape
+    Column(
+        modifier =
+            Modifier
+                .clip(shape)
+                .then(
+                    if (selected) {
+                        Modifier.background(AlisioTokens.AccentSoft, shape).border(1.dp, AlisioTokens.Accent, shape)
+                    } else {
+                        Modifier
+                    }
                 )
-            }
-            item { SectionLabel(stringResource(R.string.settings_icons)) }
-            item {
-                StyleRow(R.string.icons_color, R.string.icons_color_hint, "◼", IconStyle.Color, current, onPick)
-            }
-            item {
-                StyleRow(R.string.icons_mono, R.string.icons_mono_hint, "◻", IconStyle.Monochrome, current, onPick)
-            }
-            item {
-                StyleRow(R.string.icons_system, R.string.icons_system_hint, "◯", IconStyle.System, current, onPick)
-            }
-            items(packs, key = { it.packageName }) { pack ->
-                val style = IconStyle.Pack(pack.packageName)
-                ItemRow(
-                    title = AnnotatedString(pack.label),
-                    leading = "▣",
-                    subtitle = stringResource(R.string.icons_pack_hint),
-                    trailing = if (style == current) stringResource(R.string.settings_selected) else null,
-                    highlighted = style == current,
-                    onClick = { onPick(style) }
-                )
-            }
-        }
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .semantics { this.selected = selected }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        StackSlotIcon(preview)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = AlisioTokens.DockLabel,
+            color = if (selected) AlisioTokens.Accent else AlisioTokens.TextSecondary
+        )
     }
-}
-
-@Composable
-private fun StyleRow(
-    title: Int,
-    hint: Int,
-    glyph: String,
-    style: IconStyle,
-    current: IconStyle,
-    onPick: (IconStyle) -> Unit
-) {
-    ItemRow(
-        title = AnnotatedString(stringResource(title)),
-        leading = glyph,
-        subtitle = stringResource(hint),
-        trailing = if (style == current) stringResource(R.string.settings_selected) else null,
-        highlighted = style == current,
-        onClick = { onPick(style) }
-    )
 }

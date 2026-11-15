@@ -6,6 +6,7 @@ import androidx.room.Room
 import dev.jesusmolano.alisio.core.time.Clock
 import dev.jesusmolano.alisio.data.apps.AppsRepository
 import dev.jesusmolano.alisio.data.db.AlisioDatabase
+import dev.jesusmolano.alisio.data.db.MIGRATION_2_3
 import dev.jesusmolano.alisio.data.history.LaunchHistory
 import dev.jesusmolano.alisio.data.home.HomeConfigRepository
 import dev.jesusmolano.alisio.data.settings.AlisioSettings
@@ -28,7 +29,8 @@ class AppContainer(context: Context) {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val database =
         Room.databaseBuilder(context, AlisioDatabase::class.java, "alisio.db")
-            // Uso personal y en desarrollo: si cambia el esquema se empieza de cero en vez de migrar.
+            .addMigrations(MIGRATION_2_3)
+            // Si falta una migración se empieza de cero: es de uso personal y aún en desarrollo.
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 

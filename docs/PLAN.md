@@ -123,8 +123,8 @@ Alisio no trabaja en segundo plano. La única excepción es el `NotificationList
 - Lista anclada abajo (`reverseLayout`), junto al teclado. El mejor resultado queda pegado a la barra y muestra «Enter».
 - Tipos de resultado: apps, personas (fase 2), accesos directos, ajustes del sistema (lista fija de intents de `Settings` con nombres y sinónimos en español), cálculo y comandos (fase 5).
 - Siempre visibles justo encima de la barra: «Preguntar a Claude», «Web» y «Play Store».
-  - Claude: `ACTION_SEND` de tipo `text/plain` al paquete `com.anthropic.claude`; se oculta si no está instalado.
-  - Web: `ACTION_WEB_SEARCH` con `SearchManager.QUERY`.
+  - Asistente de IA: `ACTION_SEND` de tipo `text/plain` al paquete elegido en los ajustes (por defecto `com.anthropic.claude`); se oculta si no está instalado.
+  - Web: `ACTION_WEB_SEARCH` con `SearchManager.QUERY`, a la app elegida en los ajustes o a la del sistema.
   - Play Store: `market://search?q=…&c=apps` y, si falla, la URL web de Play.
 - Enter abre el primer resultado; si no hay ninguno, pregunta a Claude.
 - Con la barra vacía: 3 personas y 4 apps recientes, y accesos a Zonas.
@@ -142,7 +142,7 @@ Alisio no trabaja en segundo plano. La única excepción es el `NotificationList
 
 ### 5.5 Inicio, Ahora, reproductor y puntos (fases 1 y 3)
 
-- Dock: 6 huecos configurables. Tocar un hueco vacío o mantener pulsado cualquiera abre su hoja: elegir app (con buscador), convertirlo en pila o vaciarlo. Una pila tiene nombre editable, su icono enseña sus cuatro primeras apps y un toque abre una hoja con todas.
+- Dock: 6 huecos configurables. Tocar un hueco vacío o mantener pulsado cualquiera abre su hoja: elegir app (con buscador), convertirlo en pila o vaciarlo. Una pila tiene nombre editable y un toque abre una hoja con todas sus apps. Su icono se elige: carpeta (sus cuatro primeras apps en miniatura), el icono de la primera app o un símbolo o emoji propio.
 - Gestos de la fase 1: deslizar ↑ en una zona vacía o tocar la píldora abre la barra con el teclado.
 - Trazo en el borde derecho del Inicio: la rejilla de la letra sale a la altura del dedo, vibra al cambiar de letra y de app, y soltar lejos de la rejilla o sobre la letra cancela. El índice se excluye del gesto atrás del sistema. A partir de la fase 4 vive también en la isla Resto de Zonas.
 - Reglas de *Ahora* (fase 3), de mayor a menor prioridad:
@@ -349,7 +349,12 @@ Dispositivo: SM-S948B con **Android 17 (API 37) y One UI 9.0**, parche de octubr
 
 - La lista A–Z de la fase 0 desaparece como pantalla: a cualquier app se llega por la barra o por Trazo. Soltar sobre la letra ya no desplaza nada; cancela, igual que soltar lejos de la rejilla.
 - Fuentes: Inter y Space Grotesk como fuentes variables en `res/font` (un archivo por familia; cada peso se pide por el eje `wght`). Licencias OFL en `docs/licenses`.
-- Base de datos: versión 2, sin migraciones. Si cambia el esquema se borra y se empieza de cero (`fallbackToDestructiveMigration`); mientras sea de uso personal y en desarrollo, perder el historial y el dock es aceptable. Cambiarlo antes de depender del historial.
+- Base de datos: versión 3. Desde la 2 los cambios de esquema llevan migración (`MIGRATION_2_3` añade el icono de las pilas), para no borrar el dock ya configurado. Si faltara una migración, la base se borra y se empieza de cero (`fallbackToDestructiveMigration`).
+- **Ajustes de Alisio.** Son una pantalla propia por secciones y crecen con cada fase: toda función nueva añade ahí lo que tenga de elegible. Se abren manteniendo pulsada una zona vacía del Inicio o buscándolos en la barra. Hoy tienen: Apariencia (color de acento entre los cuatro de §6 y cuánto se oscurece el fondo de pantalla), Búsqueda (asistente de IA y app de búsqueda web), Iconos (estilo o paquete) y Dock (enseñar o no los nombres). Las preferencias van en DataStore (`Prefs`).
+- **Criterio de interfaz, pedido expresamente:** las opciones se eligen viendo el resultado, no leyendo una descripción. El icono de una pila se escoge entre tres vistas previas dibujadas con sus propias apps. Lo mismo vale para lo que venga: intuitivo y personalizable, sin quedarse en lo básico.
+- **Asistente de IA elegible.** La barra ya no depende de Claude: pregunta a la app elegida en los ajustes (Claude por defecto) con `ACTION_SEND` de texto y su paquete. Al elegir salen primero los asistentes conocidos que estén instalados y después cualquier otra app. Si la elegida no está instalada, Enter sin resultados busca en la web.
+- **Búsqueda web elegible.** Por defecto decide el sistema (`ACTION_WEB_SEARCH`). Se puede fijar una app que atienda ese intent o un navegador; a un navegador que no lo atiende se le manda la búsqueda como dirección de Google.
+- **Pendiente:** ordenar a mano las apps de una pila; icono de pila a partir de una imagen; elegir tipografías; cambiar el icono de una app concreta.
 - Esquema: `DockSlot` guarda una app o el nombre de una pila, y `StackItem` las apps de cada pila por hueco. `IconGesture` y `ZoneAssignment` llegan con sus fases.
 - Barra: los accesos directos y los ajustes puntúan un poco menos que las apps (×0,9 y ×0,85) para que, a igual coincidencia, gane la app. Límite por sección: 6 apps, 4 accesos directos y 3 ajustes. Las secciones se ordenan por su mejor resultado, de modo que el mejor de todos queda pegado a la barra.
 - Los accesos directos se muestran con el icono de su app, no con el suyo: cargar el de cada uno al indexar era caro. Revisar si se echa de menos.

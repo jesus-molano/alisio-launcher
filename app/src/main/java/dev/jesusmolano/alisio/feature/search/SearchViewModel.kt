@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.jesusmolano.alisio.AppContainer
+import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.calc.calculate
 import dev.jesusmolano.alisio.core.search.IndexItem
 import dev.jesusmolano.alisio.core.search.Usage
@@ -36,6 +37,9 @@ sealed interface Target {
     class Shortcut(val shortcut: ShortcutEntry) : Target
 
     class Setting(val setting: SystemSetting, val label: String) : Target
+
+    /** Los ajustes del propio Alisio. */
+    class AlisioSettings(val label: String) : Target
 }
 
 enum class Section(val limit: Int) {
@@ -70,14 +74,22 @@ class SearchViewModel(
     private val appsRepository: AppsRepository,
     private val history: LaunchHistory,
     private val clock: Clock,
-    settingLabels: Map<SystemSetting, String>
+    settingLabels: Map<SystemSetting, String>,
+    alisioSettingsLabel: String
 ) : ViewModel() {
     private val usage = MutableStateFlow(Usage.NONE)
 
     private val settingItems =
         settingLabels.map { (setting, label) ->
             IndexItem<Target>(setting.key, label, Target.Setting(setting, label), setting.synonyms, SETTING_WEIGHT)
-        }
+        } +
+            IndexItem<Target>(
+                key = ALISIO_SETTINGS_KEY,
+                label = alisioSettingsLabel,
+                payload = Target.AlisioSettings(alisioSettingsLabel),
+                synonyms = listOf("ajustes de alisio", "alisio settings", "launcher", "iconos", "icons", "dock"),
+                weight = SETTING_WEIGHT
+            )
 
     private val index =
         combine(appsRepository.apps, appsRepository.shortcuts) { apps, shortcuts ->
@@ -123,22 +135,27 @@ class SearchViewModel(
 
         // Los ajustes los abre la pantalla, que es quien tiene el contexto de la actividad.
         is Target.Setting -> false
+
+        is Target.AlisioSettings -> false
     }
 
     fun record(target: Target) = when (target) {
         is Target.App -> history.record(LaunchHistory.TYPE_APP, target.app.key.toString())
         is Target.Shortcut -> history.record(LaunchHistory.TYPE_SHORTCUT, target.shortcut.key)
         is Target.Setting -> history.record(LaunchHistory.TYPE_SETTING, target.setting.key)
+        is Target.AlisioSettings -> history.record(LaunchHistory.TYPE_SETTING, ALISIO_SETTINGS_KEY)
     }
 
     private fun sectionOf(target: Target) = when (target) {
         is Target.App -> Section.APPS
         is Target.Shortcut -> Section.SHORTCUTS
         is Target.Setting -> Section.SETTINGS
+        is Target.AlisioSettings -> Section.SETTINGS
     }
 
     companion object {
         private const val RECENT_APPS = 4
+        private const val ALISIO_SETTINGS_KEY = "setting:alisio"
 
         // Por debajo de 1 para que, a igual coincidencia, gane la app.
         private const val SHORTCUT_WEIGHT = 0.9
@@ -150,7 +167,8 @@ class SearchViewModel(
                     container.appsRepository,
                     container.launchHistory,
                     container.clock,
-                    SYSTEM_SETTINGS.associateWith { context.getString(it.label) }
+                    SYSTEM_SETTINGS.associateWith { context.getString(it.label) },
+                    context.getString(R.string.settings_title)
                 )
             }
         }

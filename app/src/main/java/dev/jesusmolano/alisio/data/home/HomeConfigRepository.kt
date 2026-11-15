@@ -20,7 +20,24 @@ sealed interface SlotConfig {
 
     data class App(val appKey: String) : SlotConfig
 
-    data class Stack(val name: String, val appKeys: List<String>) : SlotConfig
+    data class Stack(val name: String, val appKeys: List<String>, val icon: StackIcon, val glyph: String) :
+        SlotConfig
+}
+
+/** Cómo se dibuja el icono de una pila. [id] es lo que se guarda. */
+enum class StackIcon(val id: String) {
+    /** Como una carpeta: sus cuatro primeras apps en miniatura. */
+    FOLDER("folder"),
+
+    /** El icono de su primera app. */
+    FIRST_APP("first"),
+
+    /** Un símbolo o emoji que escribe el usuario. */
+    SYMBOL("symbol");
+
+    companion object {
+        fun parse(id: String?): StackIcon = entries.firstOrNull { it.id == id } ?: FOLDER
+    }
 }
 
 /** Configuración del dock: cada hueco está vacío, tiene una app o es una pila con nombre. */
@@ -38,7 +55,15 @@ class HomeConfigRepository(private val dao: HomeConfigDao, private val scope: Co
                 val slot = byPosition[position]
                 when {
                     slot?.appKey != null -> SlotConfig.App(slot.appKey)
-                    slot?.stackName != null -> SlotConfig.Stack(slot.stackName, stacks[position].orEmpty())
+
+                    slot?.stackName != null ->
+                        SlotConfig.Stack(
+                            name = slot.stackName,
+                            appKeys = stacks[position].orEmpty(),
+                            icon = StackIcon.parse(slot.stackIcon),
+                            glyph = slot.stackGlyph.orEmpty()
+                        )
+
                     else -> SlotConfig.Empty
                 }
             }
@@ -49,8 +74,17 @@ class HomeConfigRepository(private val dao: HomeConfigDao, private val scope: Co
         dao.setSlot(DockSlot(position, appKey = appKey))
     }
 
-    /** Convierte el hueco en pila o le cambia el nombre; las apps que ya tuviera la pila se quedan. */
-    fun setStack(position: Int, name: String) = write { dao.setSlot(DockSlot(position, stackName = name)) }
+    /** Convierte el hueco en una pila vacía. */
+    fun makeStack(position: Int, name: String) = write {
+        dao.clearStack(position)
+        dao.setSlot(DockSlot(position, stackName = name))
+    }
+
+    fun renameStack(position: Int, name: String) = write { dao.renameStack(position, name) }
+
+    fun setStackIcon(position: Int, icon: StackIcon, glyph: String) = write {
+        dao.setStackIcon(position, icon.id, glyph.ifBlank { null })
+    }
 
     fun clear(position: Int) = write {
         dao.clearStack(position)

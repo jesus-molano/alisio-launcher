@@ -6,13 +6,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.jesusmolano.alisio.AppContainer
-import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppsRepository
 import dev.jesusmolano.alisio.data.history.LaunchHistory
 import dev.jesusmolano.alisio.data.home.HomeConfigRepository
 import dev.jesusmolano.alisio.data.home.SlotConfig
-import dev.jesusmolano.alisio.data.settings.AlisioSettings
+import dev.jesusmolano.alisio.data.home.StackIcon
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -24,14 +23,13 @@ sealed interface DockSlot {
 
     class App(val app: AppEntry) : DockSlot
 
-    class Stack(val name: String, val apps: List<AppEntry>) : DockSlot
+    class Stack(val name: String, val apps: List<AppEntry>, val icon: StackIcon, val glyph: String) : DockSlot
 }
 
 class HomeViewModel(
     private val appsRepository: AppsRepository,
     private val homeConfig: HomeConfigRepository,
-    private val history: LaunchHistory,
-    private val settings: AlisioSettings
+    private val history: LaunchHistory
 ) : ViewModel() {
     /** `null` mientras se carga la primera vez. */
     val apps: StateFlow<List<AppEntry>?> = appsRepository.apps
@@ -47,8 +45,11 @@ class HomeViewModel(
             slots.map { slot ->
                 when (slot) {
                     SlotConfig.Empty -> DockSlot.Empty
+
                     is SlotConfig.App -> byKey[slot.appKey]?.let(DockSlot::App) ?: DockSlot.Empty
-                    is SlotConfig.Stack -> DockSlot.Stack(slot.name, slot.appKeys.mapNotNull(byKey::get))
+
+                    is SlotConfig.Stack ->
+                        DockSlot.Stack(slot.name, slot.appKeys.mapNotNull(byKey::get), slot.icon, slot.glyph)
                 }
             }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -62,16 +63,15 @@ class HomeViewModel(
 
     fun setDockApp(position: Int, app: AppEntry) = homeConfig.setApp(position, app.key.toString())
 
-    fun setDockStack(position: Int, name: String) = homeConfig.setStack(position, name)
+    fun makeDockStack(position: Int, name: String) = homeConfig.makeStack(position, name)
+
+    fun renameDockStack(position: Int, name: String) = homeConfig.renameStack(position, name)
+
+    fun setStackIcon(position: Int, icon: StackIcon, glyph: String) = homeConfig.setStackIcon(position, icon, glyph)
 
     fun clearDockSlot(position: Int) = homeConfig.clear(position)
 
     fun toggleInStack(position: Int, app: AppEntry) = homeConfig.toggleInStack(position, app.key.toString())
-
-    /** `null` hasta que se lee la preferencia guardada. */
-    val iconStyle: StateFlow<IconStyle?> = settings.iconStyle
-
-    fun setIconStyle(style: IconStyle) = settings.setIconStyle(style)
 
     /** El rol de inicio da acceso a los accesos directos: hay que volver a leerlos al obtenerlo. */
     fun onHomeRoleGranted() = appsRepository.reload()
@@ -79,12 +79,7 @@ class HomeViewModel(
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                HomeViewModel(
-                    container.appsRepository,
-                    container.homeConfig,
-                    container.launchHistory,
-                    container.settings
-                )
+                HomeViewModel(container.appsRepository, container.homeConfig, container.launchHistory)
             }
         }
     }

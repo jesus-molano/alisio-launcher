@@ -11,6 +11,7 @@ import android.os.Looper
 import android.os.UserHandle
 import android.os.UserManager
 import android.util.Log
+import androidx.core.graphics.createBitmap
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -148,14 +149,20 @@ class AppsRepository(
      * Un dibujo defectuoso de un paquete de iconos (enorme, o que falla al pintarse) no puede tumbar
      * la carga: el estilo está guardado y Alisio se cerraría en cada arranque. Esa app usa su icono a color.
      */
-    private fun safeIcon(drawable: Drawable, packIcon: Drawable?, style: IconStyle): Bitmap = try {
+    private fun safeIcon(drawable: Drawable, packIcon: Drawable?, style: IconStyle): Bitmap =
+        tryRender(drawable, packIcon, style)
+            ?: tryRender(drawable, null, IconStyle.Color)
+            // Ni el icono de la propia app se deja dibujar: se queda en blanco antes que cerrar Alisio.
+            ?: createBitmap(iconSizePx, iconSizePx)
+
+    private fun tryRender(drawable: Drawable, packIcon: Drawable?, style: IconStyle): Bitmap? = try {
         renderIcon(drawable, packIcon, style, iconSizePx, ICON_TINT, ICON_SURFACE)
     } catch (e: RuntimeException) {
         Log.w(TAG, "Icono imposible de dibujar con $style", e)
-        renderIcon(drawable, null, IconStyle.Color, iconSizePx, ICON_TINT, ICON_SURFACE)
+        null
     } catch (e: OutOfMemoryError) {
         Log.w(TAG, "Icono demasiado grande con $style", e)
-        renderIcon(drawable, null, IconStyle.Color, iconSizePx, ICON_TINT, ICON_SURFACE)
+        null
     }
 
     /** Solo el launcher activo puede leerlos (`hasShortcutHostPermission`); si no, lista vacía. */

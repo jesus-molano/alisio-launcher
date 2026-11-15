@@ -6,6 +6,11 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -27,8 +32,23 @@ object AlisioTokens {
     val Text = Color(0xFFF2F3F5)
     val TextSecondary = Color(0xFF9AA0A8)
     val TextTertiary = Color(0xFF8A9099)
-    val Accent = Color(0xFF6FD6C6)
-    val AccentSoft = Accent.copy(alpha = 0.14f)
+
+    /** Acentos de §6; el primero es el de por defecto. */
+    val Accents = listOf(Color(0xFF6FD6C6), Color(0xFF8FB4FF), Color(0xFFF2B872), Color(0xFFC9A7FF))
+
+    /**
+     * Acento elegido en los ajustes. Es estado observable: lo fija [AlisioTheme] y todo lo que lo
+     * lee al componerse o al dibujarse se repinta cuando cambia.
+     */
+    val Accent: Color get() = accentState.value
+
+    private val accentState = mutableStateOf(Accents.first())
+
+    internal fun useAccent(color: Color) {
+        accentState.value = color
+    }
+
+    val AccentSoft: Color get() = Accent.copy(alpha = 0.14f)
 
     val CardShape = RoundedCornerShape(22.dp)
     val PillShape = RoundedCornerShape(28.dp)
@@ -58,20 +78,19 @@ object AlisioTokens {
     val DockLabel = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp)
 }
 
-private val AlisioColors =
-    darkColorScheme(
-        primary = AlisioTokens.Accent,
-        onPrimary = AlisioTokens.Background,
-        background = AlisioTokens.Background,
-        onBackground = AlisioTokens.Text,
-        surface = AlisioTokens.Surface,
-        onSurface = AlisioTokens.Text,
-        surfaceContainerLow = AlisioTokens.Surface,
-        surfaceContainer = AlisioTokens.SurfaceElevated,
-        onSurfaceVariant = AlisioTokens.TextSecondary,
-        outline = AlisioTokens.ControlBorder,
-        outlineVariant = AlisioTokens.CardBorder
-    )
+private fun colorScheme(accent: Color) = darkColorScheme(
+    primary = accent,
+    onPrimary = AlisioTokens.Background,
+    background = AlisioTokens.Background,
+    onBackground = AlisioTokens.Text,
+    surface = AlisioTokens.Surface,
+    onSurface = AlisioTokens.Text,
+    surfaceContainerLow = AlisioTokens.Surface,
+    surfaceContainer = AlisioTokens.SurfaceElevated,
+    onSurfaceVariant = AlisioTokens.TextSecondary,
+    outline = AlisioTokens.ControlBorder,
+    outlineVariant = AlisioTokens.CardBorder
+)
 
 private val AlisioTypography =
     Typography().run {
@@ -102,7 +121,15 @@ private val AlisioShapes =
         extraLarge = AlisioTokens.PillShape
     )
 
+/** @param accent índice en [AlisioTokens.Accents]; uno fuera de rango usa el de por defecto. */
 @Composable
-fun AlisioTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = AlisioColors, typography = AlisioTypography, shapes = AlisioShapes, content = content)
+fun AlisioTheme(accent: Int = 0, content: @Composable () -> Unit) {
+    val color = AlisioTokens.Accents.getOrElse(accent) { AlisioTokens.Accents.first() }
+    SideEffect { AlisioTokens.useAccent(color) }
+    MaterialTheme(
+        colorScheme = remember(color) { colorScheme(color) },
+        typography = AlisioTypography,
+        shapes = AlisioShapes,
+        content = content
+    )
 }

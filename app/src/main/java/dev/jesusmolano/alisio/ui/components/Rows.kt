@@ -129,3 +129,21 @@ fun ItemRow(
         }
     }
 }
+
+/** Píldora pequeña para una acción o una opción. [selected] la marca con el acento. */
+@Composable
+fun Chip(label: String, modifier: Modifier = Modifier, selected: Boolean = false, onClick: () -> Unit) {
+    val shape = AlisioTokens.PillShape
+    Box(
+        modifier
+            .heightIn(min = 48.dp)
+            .clip(shape)
+            .background(if (selected) AlisioTokens.AccentSoft else AlisioTokens.Surface, shape)
+            .border(1.dp, if (selected) AlisioTokens.Accent else AlisioTokens.ControlBorder, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = AlisioTokens.Text)
+    }
+}
