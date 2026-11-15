@@ -6,5 +6,8 @@
     <string name="onboarding_set_default">Hacer predeterminado</string>
     <string name="onboarding_skip">Ahora no</string>
     <string name="apps_empty">No hay apps que mostrar</string>
+    <string name="trace_rail_description">Índice alfabético: toca una letra, desliza a la izquierda y suelta sobre una app para abrirla</string>
+    <string name="trace_hint_slide">Desliza a la izquierda y suelta sobre una app</string>
+    <string name="trace_hint_cancel">Suelta para cancelar</string>
     <string name="app_launch_failed">No se ha podido abrir %1$s</string>
 </resources>

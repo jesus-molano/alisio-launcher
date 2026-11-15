@@ -319,6 +319,7 @@ Aquí se apunta lo que se descubra al implementar: comportamientos de One UI, ve
 - Los iconos siguen ya §5.2 (monocromo teñido sobre superficie si la app lo trae; si no, su icono normal), así que la lista mezcla ambos estilos.
 - Al pulsar «inicio» estando en Alisio (`onNewIntent`), la lista vuelve arriba: es lo único que hay que «cerrar» en esta fase.
 - `android:enableOnBackInvokedCallback` no se declara: con `targetSdk` 36 o más ya está activo.
+- **Trazo (experimento, fuera del plan original, pedido expresamente).** Índice de letras en el borde derecho de la lista. Un solo gesto abre cualquier app sin teclado: tocar una letra, deslizar a la izquierda sobre la rejilla de apps de esa letra y soltar encima de una. Soltar sobre la letra solo lleva la lista hasta ella; soltar lejos de la rejilla cancela. Vibra al cambiar de letra y de app. La geometría (`TraceGrid`) y la agrupación por inicial (`toSections`) son lógica pura con tests. Si una letra tiene más apps de las que caben en pantalla, la rejilla enseña las primeras y el resto queda en la lista. **Por decidir tras probarlo:** si se queda, dónde vive a partir de la fase 1 (propuesta: borde derecho del Inicio, y la isla Resto de Zonas en vez del índice lateral simple de §5.7) y, en ese caso, pasarlo a §3 y §5.
 - **Sin probar en dispositivo ni emulador**: el entorno donde se generó no tiene ninguno. Compila, pasan tests y lint, pero el comportamiento real en One UI (gesto de inicio, animaciones, rol HOME) solo lo dirán las pruebas manuales de la fase 0.
 
 ## 12. Referencias
