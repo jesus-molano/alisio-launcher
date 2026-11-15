@@ -69,6 +69,19 @@ fun mainChannel(lookupKey: String, available: Set<Channel>, frecencyByKey: Map<S
     return fallback?.let { MainChannel(it, learned = false) }
 }
 
+/**
+ * Canales de una persona en el orden en que se enseñan: primero el principal ([mainChannel]), después
+ * los que más se usan con ella y, a igualdad, en el orden de [Channel].
+ */
+fun orderedChannels(lookupKey: String, available: Set<Channel>, frecencyByKey: Map<String, Double>): List<Channel> {
+    val main = mainChannel(lookupKey, available, frecencyByKey)?.channel ?: return emptyList()
+    val rest =
+        Channel.entries
+            .filter { it in available && it != main }
+            .sortedByDescending { frecencyByKey[channelKey(lookupKey, it)] ?: 0.0 }
+    return listOf(main) + rest
+}
+
 /** @param learned `true` si el canal sale del historial y no de la regla por defecto. */
 data class MainChannel(val channel: Channel, val learned: Boolean)
 

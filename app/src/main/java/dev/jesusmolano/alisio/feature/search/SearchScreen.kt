@@ -1,6 +1,6 @@
 package dev.jesusmolano.alisio.feature.search
 
-import android.os.SystemClock
+import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +67,7 @@ import dev.jesusmolano.alisio.core.people.initials
 import dev.jesusmolano.alisio.core.people.personKey
 import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.feature.people.ChannelButton
 import dev.jesusmolano.alisio.feature.people.PersonCard
 import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
 import dev.jesusmolano.alisio.feature.people.contact
@@ -81,7 +82,7 @@ import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 private val ScreenMargin = 16.dp
 private val CloseDrag = 64.dp
 
-private const val ENTER_GUARD_MILLIS = 600L
+private const val ROW_CHANNELS = 3
 
 /**
  * Barra de §5.3: resultados apilados desde abajo, junto al teclado, con el mejor pegado a la barra.
@@ -109,7 +110,6 @@ fun SearchScreen(
     // Se guarda su clave y no el objeto: si la agenda cambia con la tarjeta abierta, la tarjeta usa
     // el teléfono y las filas de ahora, o se cierra si el contacto ya no existe.
     var selectedKey by remember { mutableStateOf<String?>(null) }
-    var selectedAt by remember { mutableLongStateOf(0L) }
     val selected =
         remember(selectedKey, source) {
             source.index.firstNotNullOfOrNull { item ->
@@ -131,11 +131,18 @@ fun SearchScreen(
     val copiedMessage = stringResource(R.string.search_copied)
     val whatsappInstalled = remember { context.appLabel(WHATSAPP_PACKAGE) != null }
     val whatsappWithoutRows = remember(source) { whatsappInstalled && viewModel.noWhatsappRows() }
-    val card =
-        selected?.let { person ->
-            val channels = person.channels(whatsappWithoutRows)
-            viewModel.mainChannel(person, channels, source)?.let { Triple(person, channels, it) }
+    val whatsappIcon =
+        remember(source) {
+            source.index.firstNotNullOfOrNull { item ->
+                (item.payload as? Target.App)?.app?.takeIf { it.component.packageName == WHATSAPP_PACKAGE }?.icon
+            }
         }
+
+    fun channelsOf(person: Person): List<Channel> =
+        viewModel.orderedChannels(person, person.channels(whatsappWithoutRows), source)
+
+    val cardChannels = selected?.let(::channelsOf).orEmpty()
+    val card = selected?.takeIf { cardChannels.isNotEmpty() }
 
     BackHandler(enabled = selected != null) { selectedKey = null }
 
@@ -174,12 +181,12 @@ fun SearchScreen(
 
         is Target.Contact -> {
             selectedKey = personKey(target.person.lookupKey)
-            selectedAt = SystemClock.uptimeMillis()
         }
     }
 
-    fun contact(person: Person, channel: Channel) {
-        val opened = context.contact(person, channel)
+    /** @param direct `false` cuando no se ha tocado el botón del canal: una llamada pasa por el marcador. */
+    fun contact(person: Person, channel: Channel, direct: Boolean = true) {
+        val opened = context.contact(person, channel, direct)
         if (opened) viewModel.recordContact(person, channel)
         finish(opened, person.name)
     }
@@ -202,13 +209,16 @@ fun SearchScreen(
         val calculation = state.calculation
         val best = state.best
         when {
-            // Un segundo Enter pegado al que abrió la tarjeta no debe llamar a nadie por sorpresa.
-            card != null ->
-                if (SystemClock.uptimeMillis() - selectedAt > ENTER_GUARD_MILLIS) {
-                    contact(card.first, card.third.channel)
-                }
+            // Enter usa el canal principal, pero nunca marca solo: una llamada se queda en el marcador.
+            card != null -> contact(card, cardChannels.first(), direct = false)
 
             calculation != null -> copyCalculation(calculation)
+
+            best != null && best.target is Target.Contact -> {
+                val person = best.target.person
+                val main = channelsOf(person).firstOrNull()
+                if (main != null) contact(person, main, direct = false) else open(best.target)
+            }
 
             best != null -> open(best.target)
 
@@ -271,10 +281,11 @@ fun SearchScreen(
                 contentAlignment = Alignment.BottomCenter
             ) {
                 PersonCard(
-                    name = card.first.name,
-                    channels = card.second,
-                    main = card.third,
-                    onContact = { contact(card.first, it) }
+                    name = card.name,
+                    channels = cardChannels,
+                    learned = viewModel.mainChannel(card, cardChannels.toSet(), source)?.learned == true,
+                    whatsappIcon = whatsappIcon,
+                    onContact = { contact(card, it) }
                 )
             }
         } else {
@@ -286,7 +297,9 @@ fun SearchScreen(
             ) {
                 // Con reverseLayout el primer elemento es el más cercano a la barra.
                 if (state.query.isBlank()) {
-                    recents(state, onOpen = ::open)
+                    recents(state, onOpen = ::open) { person ->
+                        PersonActions(person, ::channelsOf, whatsappIcon, ::contact)
+                    }
                     if (!contactsGranted) {
                         item(key = "allow-contacts") {
                             ItemRow(
@@ -298,7 +311,13 @@ fun SearchScreen(
                         }
                     }
                 } else {
-                    results(state, assistant, onOpen = ::open, onCopy = ::copyCalculation, onFallback = ::fallback)
+                    results(
+                        state,
+                        assistant,
+                        onOpen = ::open,
+                        onCopy = ::copyCalculation,
+                        onFallback = ::fallback
+                    ) { person -> PersonActions(person, ::channelsOf, whatsappIcon, ::contact) }
                 }
             }
         }
@@ -334,7 +353,11 @@ fun SearchScreen(
     }
 }
 
-private fun LazyListScope.recents(state: SearchState, onOpen: (Target) -> Unit) {
+private fun LazyListScope.recents(
+    state: SearchState,
+    onOpen: (Target) -> Unit,
+    personActions: @Composable RowScope.(Person) -> Unit
+) {
     items(state.recents.size, key = { state.recents[it].key.toString() }) { index ->
         val app = state.recents[index]
         ItemRow(title = AnnotatedString(app.label), icon = app.icon, onClick = { onOpen(Target.App(app)) })
@@ -345,6 +368,7 @@ private fun LazyListScope.recents(state: SearchState, onOpen: (Target) -> Unit) 
         ItemRow(
             title = AnnotatedString(person.name),
             leading = initials(person.name),
+            actions = { personActions(person) },
             onClick = { onOpen(Target.Contact(person)) }
         )
     }
@@ -356,7 +380,8 @@ private fun LazyListScope.results(
     assistant: String?,
     onOpen: (Target) -> Unit,
     onCopy: (String) -> Unit,
-    onFallback: (String) -> Unit
+    onFallback: (String) -> Unit,
+    personActions: @Composable RowScope.(Person) -> Unit
 ) {
     state.calculation?.let { result ->
         item(key = "calc") {
@@ -406,8 +431,10 @@ private fun LazyListScope.results(
                         is Target.AlisioSettings -> null
                         is Target.Contact -> null
                     },
-                trailing = if (best) stringResource(R.string.search_enter) else null,
+                // En una persona, lo que hace Enter lo dice el canal marcado, no la palabra «Enter».
+                trailing = if (best && target !is Target.Contact) stringResource(R.string.search_enter) else null,
                 highlighted = best,
+                actions = (target as? Target.Contact)?.let { contact -> { personActions(contact.person) } },
                 onClick = { onOpen(target) }
             )
         }
@@ -461,4 +488,25 @@ internal fun searchHint(assistant: String?): String = if (assistant != null) {
     stringResource(R.string.search_hint, assistant)
 } else {
     stringResource(R.string.search_hint_plain)
+}
+
+/**
+ * Los primeros canales de una persona como botones dentro de su fila: se contacta con un toque, sin
+ * abrir la tarjeta. El primero es el principal; el resto de canales está en la tarjeta.
+ */
+@Composable
+private fun PersonActions(
+    person: Person,
+    channelsOf: (Person) -> List<Channel>,
+    whatsappIcon: Bitmap?,
+    onContact: (Person, Channel, Boolean) -> Unit
+) {
+    channelsOf(person).take(ROW_CHANNELS).forEachIndexed { index, channel ->
+        ChannelButton(
+            channel = channel,
+            onClick = { onContact(person, channel, true) },
+            whatsappIcon = whatsappIcon,
+            main = index == 0
+        )
+    }
 }

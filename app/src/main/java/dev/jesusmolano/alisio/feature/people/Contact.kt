@@ -18,15 +18,17 @@ const val WHATSAPP_PACKAGE = "com.whatsapp"
 /**
  * Contacta con la persona por ese canal (§5.4). Devuelve `false` si no hay quien atienda el intent.
  *
- * - Llamada: marca directamente con el permiso `CALL_PHONE`; sin él abre el marcador.
+ * - Llamada: marca directamente con el permiso `CALL_PHONE`; sin él, o si [direct] es `false`,
+ *   abre el marcador con el número puesto.
  * - WhatsApp: abre la fila que WhatsApp dejó en el contacto. Si no hay fila de chat, usa `wa.me`.
  */
-internal fun Context.contact(person: Person, channel: Channel): Boolean {
+internal fun Context.contact(person: Person, channel: Channel, direct: Boolean = true): Boolean {
     val phone = person.phone
     return when (channel) {
         Channel.CALL -> {
             if (phone == null) return false
-            val canCall = checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+            val canCall =
+                direct && checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
             start(Intent(if (canCall) Intent.ACTION_CALL else Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)))
         }
 

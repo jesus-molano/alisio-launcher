@@ -1,10 +1,9 @@
 package dev.jesusmolano.alisio.feature.people
 
+import android.graphics.Bitmap
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,28 +14,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.people.Channel
-import dev.jesusmolano.alisio.core.people.MainChannel
 import dev.jesusmolano.alisio.core.people.initials
-import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
-/** Nombre de cada canal tal como se enseña en botones y chips. */
+/** Nombre de cada canal: lo que lee TalkBack en su botón y lo que se escribe debajo en la tarjeta. */
 @StringRes
 fun channelLabel(channel: Channel): Int = when (channel) {
     Channel.WHATSAPP_CHAT -> R.string.channel_whatsapp
@@ -62,16 +57,18 @@ fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
 }
 
 /**
- * Tarjeta de persona de §6: quién es, por qué se propone ese canal y un botón principal con el
- * canal aprendido. Los demás canales van debajo, como chips.
+ * Tarjeta de persona: todos sus canales, cada uno con su icono y su nombre debajo. La fila de
+ * resultados solo enseña los primeros; aquí caben todos.
  *
- * @param main canal del botón principal; si sale del historial, la tarjeta lo dice.
+ * @param channels en orden de uso; el primero es el principal y va marcado con el acento.
+ * @param learned el canal principal sale del historial: la tarjeta lo dice.
  */
 @Composable
 fun PersonCard(
     name: String,
-    channels: Set<Channel>,
-    main: MainChannel,
+    channels: List<Channel>,
+    learned: Boolean,
+    whatsappIcon: Bitmap?,
     onContact: (Channel) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -94,9 +91,10 @@ fun PersonCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (main.learned) {
+                val main = channels.firstOrNull()
+                if (learned && main != null) {
                     Text(
-                        text = stringResource(R.string.person_reason, stringResource(channelLabel(main.channel))),
+                        text = stringResource(R.string.person_reason, stringResource(channelLabel(main))),
                         style = MaterialTheme.typography.bodyMedium,
                         color = AlisioTokens.TextSecondary
                     )
@@ -104,30 +102,26 @@ fun PersonCard(
             }
         }
         Spacer(Modifier.height(18.dp))
-        val pill = AlisioTokens.PillShape
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .clip(pill)
-                .background(AlisioTokens.Accent, pill)
-                .clickable(role = Role.Button) { onContact(main.channel) },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(channelLabel(main.channel)),
-                style = MaterialTheme.typography.titleMedium,
-                color = AlisioTokens.Background
-            )
-        }
-        val others = Channel.entries.filter { it in channels && it != main.channel }
-        if (others.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                others.forEach { channel -> Chip(stringResource(channelLabel(channel))) { onContact(channel) } }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            channels.forEachIndexed { index, channel ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ChannelButton(
+                        channel = channel,
+                        onClick = { onContact(channel) },
+                        whatsappIcon = whatsappIcon,
+                        main = index == 0
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // El botón ya lleva este nombre para TalkBack.
+                    Text(
+                        text = stringResource(channelLabel(channel)),
+                        style = AlisioTokens.DockLabel,
+                        color = if (index == 0) AlisioTokens.Accent else AlisioTokens.TextSecondary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.clearAndSetSemantics {}
+                    )
+                }
             }
         }
     }

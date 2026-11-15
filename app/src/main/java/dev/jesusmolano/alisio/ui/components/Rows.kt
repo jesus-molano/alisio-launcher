@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -54,6 +55,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
  *
  * @param highlighted la marca como mejor resultado: borde y fondo de acento.
  * @param leading lo que va en lugar del icono cuando no hay uno (ajustes, cálculo).
+ * @param actions botones propios de la fila, al final: tocar uno no dispara [onClick].
  */
 @Composable
 fun ItemRow(
@@ -64,7 +66,8 @@ fun ItemRow(
     leading: String? = null,
     subtitle: String? = null,
     trailing: String? = null,
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     val shape = AlisioTokens.RowShape
     Row(
@@ -119,6 +122,7 @@ fun ItemRow(
                 )
             }
         }
+        if (actions != null) actions()
         if (trailing != null) {
             Spacer(Modifier.width(8.dp))
             Text(

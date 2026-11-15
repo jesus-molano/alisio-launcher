@@ -14,6 +14,7 @@ import dev.jesusmolano.alisio.core.people.MainChannel
 import dev.jesusmolano.alisio.core.people.channelKey
 import dev.jesusmolano.alisio.core.people.mainChannel
 import dev.jesusmolano.alisio.core.people.openingsByPerson
+import dev.jesusmolano.alisio.core.people.orderedChannels
 import dev.jesusmolano.alisio.core.people.personKey
 import dev.jesusmolano.alisio.core.people.withoutContacts
 import dev.jesusmolano.alisio.core.search.IndexItem
@@ -178,9 +179,13 @@ class SearchViewModel(
     /** Tras responder al diálogo de permisos: la agenda se lee o se vacía según lo concedido. */
     fun onContactsPermissionResult() = contacts.onPermissionChanged()
 
-    /** Canal del botón principal de la tarjeta de [person], según lo aprendido. */
+    /** Canal principal de [person], según lo aprendido. */
     fun mainChannel(person: Person, channels: Set<Channel>, source: SearchSource): MainChannel? =
         mainChannel(person.lookupKey, channels, source.usage.frecency)
+
+    /** Sus canales en el orden en que se enseñan: el principal primero. */
+    fun orderedChannels(person: Person, channels: Set<Channel>, source: SearchSource): List<Channel> =
+        orderedChannels(person.lookupKey, channels, source.usage.frecency)
 
     /** Apunta el canal usado: de ahí sale el canal aprendido y el orden de las personas. */
     fun recordContact(person: Person, channel: Channel) =

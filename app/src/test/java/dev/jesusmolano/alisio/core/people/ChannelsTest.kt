@@ -91,4 +91,18 @@ class ChannelsTest {
         val contacts = listOf("mama", "Ana García")
         assertEquals(listOf("Grupo familia", "Nuevo chat"), shortcuts.withoutContacts(contacts) { it })
     }
+
+    @Test
+    fun `los canales se ordenan con el principal delante y despues por uso`() {
+        val frecency = mapOf(channelKey("ana", Channel.SMS) to 1.0, channelKey("ana", Channel.CALL) to 3.0)
+        assertEquals(
+            listOf(Channel.CALL, Channel.SMS, Channel.WHATSAPP_CHAT, Channel.WHATSAPP_CALL, Channel.WHATSAPP_VIDEO),
+            orderedChannels("ana", all, frecency)
+        )
+        assertEquals(
+            listOf(Channel.WHATSAPP_CHAT, Channel.CALL, Channel.SMS),
+            orderedChannels("ana", setOf(Channel.SMS, Channel.CALL, Channel.WHATSAPP_CHAT), emptyMap())
+        )
+        assertEquals(emptyList<Channel>(), orderedChannels("ana", emptySet(), frecency))
+    }
 }
