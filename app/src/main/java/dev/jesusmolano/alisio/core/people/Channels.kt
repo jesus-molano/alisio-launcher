@@ -1,5 +1,6 @@
 package dev.jesusmolano.alisio.core.people
 
+import dev.jesusmolano.alisio.core.text.normalize
 import dev.jesusmolano.alisio.core.text.takeGraphemes
 import java.security.MessageDigest
 
@@ -74,3 +75,13 @@ data class MainChannel(val channel: Channel, val learned: Boolean)
 /** Iniciales para el avatar: la primera letra de las dos primeras palabras, en mayúscula. */
 fun initials(name: String): String =
     name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.takeGraphemes(1).uppercase() }
+
+/**
+ * Quita de [this] lo que se llama igual que un contacto, sin distinguir acentos ni mayúsculas. Una
+ * conversación de una app de mensajería con alguien de la agenda es esa misma persona: en la barra
+ * basta con su tarjeta, que ya ofrece ese canal.
+ */
+fun <T> List<T>.withoutContacts(contactNames: Collection<String>, label: (T) -> String): List<T> {
+    val names = contactNames.mapTo(HashSet(), ::normalize)
+    return filterNot { normalize(label(it)) in names }
+}

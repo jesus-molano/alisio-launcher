@@ -23,8 +23,19 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Acceso directo de una app (§5.2). Se muestra con el icono de su app. */
-class ShortcutEntry(val key: String, val label: String, val app: AppEntry, val info: ShortcutInfo)
+/**
+ * Acceso directo de una app (§5.2). Se muestra con el icono de su app.
+ *
+ * @param isConversation la app lo publica como una conversación con alguien (un chat de WhatsApp),
+ *   no como una acción suya: la barra lo trata como una persona.
+ */
+class ShortcutEntry(
+    val key: String,
+    val label: String,
+    val app: AppEntry,
+    val info: ShortcutInfo,
+    val isConversation: Boolean
+)
 
 /**
  * Apps con icono de inicio de todos los perfiles y sus accesos directos, al día con instalaciones,
@@ -188,13 +199,26 @@ class AppsRepository(
                 val app = appByPackage[info.`package` to serial] ?: return@mapNotNull null
                 val label = (info.shortLabel ?: info.longLabel)?.toString()?.takeIf { it.isNotBlank() }
                 if (!info.isEnabled || label == null) return@mapNotNull null
-                ShortcutEntry("shortcut:${info.`package`}/${info.id}#$serial", label, app, info)
+                ShortcutEntry(
+                    key = "shortcut:${info.`package`}/${info.id}#$serial",
+                    label = label,
+                    app = app,
+                    info = info,
+                    // Las apps de mensajería publican sus conversaciones con la categoría de conversación o
+                    // como destinos para compartir (WhatsApp, Discord y Mensajes usan `…SHARE_TARGET…`).
+                    isConversation =
+                        info.categories.orEmpty().any {
+                            it == CONVERSATION_CATEGORY || it.contains(SHARE_TARGET_MARK, ignoreCase = true)
+                        }
+                )
             }
         }
     }
 
     private companion object {
         const val TAG = "AppsRepository"
+        const val CONVERSATION_CATEGORY = "android.shortcut.conversation"
+        const val SHARE_TARGET_MARK = "SHARE_TARGET"
         const val ICON_SIZE_DP = 52
 
         // Tokens «Texto» y «Superficie elevada» de docs/PLAN.md §6.

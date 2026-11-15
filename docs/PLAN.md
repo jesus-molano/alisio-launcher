@@ -356,7 +356,7 @@ Dispositivo: SM-S948B con **Android 17 (API 37) y One UI 9.0**, parche de octubr
 - **Búsqueda web elegible.** Por defecto decide el sistema (`ACTION_WEB_SEARCH`). Se puede fijar una app que atienda ese intent o un navegador; a un navegador que no lo atiende se le manda la búsqueda como dirección de Google.
 - **Pendiente:** ordenar a mano las apps de una pila; icono de pila a partir de una imagen; elegir tipografías; cambiar el icono de una app concreta.
 - Esquema: `DockSlot` guarda una app o el nombre de una pila, y `StackItem` las apps de cada pila por hueco. `IconGesture` y `ZoneAssignment` llegan con sus fases.
-- Barra: los accesos directos y los ajustes puntúan un poco menos que las apps (×0,9 y ×0,85) para que, a igual coincidencia, gane la app. Límite por sección: 6 apps, 4 accesos directos y 3 ajustes. Las secciones se ordenan por su mejor resultado, de modo que el mejor de todos queda pegado a la barra.
+- Barra: los accesos directos y los ajustes puntúan un poco menos que las apps (×0,85 y ×0,8; las conversaciones, ×0,95) para que, a igual coincidencia, gane la app. Límite por sección: 4 personas, 6 apps, 4 accesos directos y 3 ajustes. Las secciones se ordenan por su mejor resultado, de modo que el mejor de todos queda pegado a la barra.
 - Los accesos directos se muestran con el icono de su app, no con el suyo: cargar el de cada uno al indexar era caro. Revisar si se echa de menos.
 - Cálculo: si lo escrito es una operación, Enter copia el resultado al portapapeles.
 - Sin resultados, Enter pregunta a Claude; si Claude no está instalado, busca en la web.
@@ -384,6 +384,7 @@ Empezada el 15 de noviembre de 2026 con el visto bueno para seguir, sin esperar 
 - Canal aprendido: cada contacto por un canal se apunta con la clave `person:<resumen del LOOKUP_KEY>|<canal>`. El botón principal es el canal con más frecencia; sin historial, chat de WhatsApp y, si no, llamada. La tarjeta solo dice «Sueles usar…» cuando el canal sale del historial.
 - Las personas se ordenan con la suma de la frecencia de sus canales. Con la barra vacía salen las 3 contactadas hace menos, encima de las apps recientes.
 - El avatar son las iniciales; la foto del contacto no se carga todavía.
+- **Personas unificadas.** Las apps de mensajería publican sus conversaciones como accesos directos, y salían en «Acciones de apps» por delante del contacto. Ahora una conversación que se llama igual que un contacto se funde con él (solo sale su tarjeta, que ya ofrece ese canal), y las demás conversaciones (un grupo, alguien sin guardar) van en Personas. «Acciones de apps» queda para las acciones de verdad.
 - En el historial no se guarda el `LOOKUP_KEY` del contacto, sino un resumen SHA-256 recortado: en contactos locales esa clave lleva el nombre codificado, y el historial está en disco. Los contactos siguen solo en memoria.
 - Enter no contacta hasta 0,6 s después de abrirse la tarjeta, para que un doble Enter no llame a nadie por sorpresa.
 - Si el permiso de contactos está denegado para siempre, pedirlo abre la ficha de Alisio en los ajustes del sistema.

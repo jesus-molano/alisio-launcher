@@ -84,4 +84,11 @@ class ChannelsTest {
         assertEquals("", initials(" "))
         assertEquals("\uD83D\uDE00A", initials("\uD83D\uDE00 Ana"))
     }
+
+    @Test
+    fun `una conversacion con alguien de la agenda se funde con su contacto`() {
+        val shortcuts = listOf("Mamá", "Grupo familia", "ana garcía", "Nuevo chat")
+        val contacts = listOf("mama", "Ana García")
+        assertEquals(listOf("Grupo familia", "Nuevo chat"), shortcuts.withoutContacts(contacts) { it })
+    }
 }

@@ -15,6 +15,7 @@ import dev.jesusmolano.alisio.core.people.channelKey
 import dev.jesusmolano.alisio.core.people.mainChannel
 import dev.jesusmolano.alisio.core.people.openingsByPerson
 import dev.jesusmolano.alisio.core.people.personKey
+import dev.jesusmolano.alisio.core.people.withoutContacts
 import dev.jesusmolano.alisio.core.search.IndexItem
 import dev.jesusmolano.alisio.core.search.Usage
 import dev.jesusmolano.alisio.core.search.mostRecentKeys
@@ -54,7 +55,7 @@ sealed interface Target {
 }
 
 enum class Section(val limit: Int) {
-    PEOPLE(3),
+    PEOPLE(4),
     APPS(6),
     SHORTCUTS(4),
     SETTINGS(3)
@@ -113,9 +114,15 @@ class SearchViewModel(
 
     private val index =
         combine(appsRepository.apps, appsRepository.shortcuts, contacts.people) { apps, shortcuts, people ->
+            // Una conversación con alguien de la agenda es esa persona: solo sale su tarjeta. Las demás
+            // conversaciones (un grupo, alguien sin guardar) van con las personas, no con las acciones.
+            val (conversations, actions) = shortcuts.partition { it.isConversation }
             people.map { IndexItem<Target>(personKey(it.lookupKey), it.name, Target.Contact(it)) } +
+                conversations
+                    .withoutContacts(people.map { it.name }) { it.label }
+                    .map { IndexItem<Target>(it.key, it.label, Target.Shortcut(it), weight = CONVERSATION_WEIGHT) } +
                 apps.orEmpty().map { IndexItem<Target>(it.key.toString(), it.label, Target.App(it)) } +
-                shortcuts.map { IndexItem<Target>(it.key, it.label, Target.Shortcut(it), weight = SHORTCUT_WEIGHT) } +
+                actions.map { IndexItem<Target>(it.key, it.label, Target.Shortcut(it), weight = SHORTCUT_WEIGHT) } +
                 settingItems
         }
 
@@ -209,7 +216,7 @@ class SearchViewModel(
 
     private fun sectionOf(target: Target) = when (target) {
         is Target.App -> Section.APPS
-        is Target.Shortcut -> Section.SHORTCUTS
+        is Target.Shortcut -> if (target.shortcut.isConversation) Section.PEOPLE else Section.SHORTCUTS
         is Target.Setting -> Section.SETTINGS
         is Target.AlisioSettings -> Section.SETTINGS
         is Target.Contact -> Section.PEOPLE
@@ -220,9 +227,10 @@ class SearchViewModel(
         private const val RECENT_PEOPLE = 3
         private const val ALISIO_SETTINGS_KEY = "setting:alisio"
 
-        // Por debajo de 1 para que, a igual coincidencia, gane la app.
-        private const val SHORTCUT_WEIGHT = 0.9
-        private const val SETTING_WEIGHT = 0.85
+        // Por debajo de 1 para que, a igual coincidencia, ganen la app y la persona de la agenda.
+        private const val CONVERSATION_WEIGHT = 0.95
+        private const val SHORTCUT_WEIGHT = 0.85
+        private const val SETTING_WEIGHT = 0.8
 
         fun factory(container: AppContainer, context: Context): ViewModelProvider.Factory = viewModelFactory {
             initializer {
