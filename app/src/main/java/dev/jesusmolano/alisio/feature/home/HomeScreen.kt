@@ -178,6 +178,7 @@ import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import dev.jesusmolano.alisio.ui.theme.onWallpaper
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 private val DockIconSize = AlisioTokens.DockIconSize
@@ -193,6 +194,10 @@ private val StackOrderRowMinHeight = 56.dp
 private val DockHeight = 86.dp
 private val OpenSearchDrag = 48.dp
 private val ShowNotificationsDrag = 48.dp
+
+// Cuánto se puede desviar a lo ancho un deslizar vertical, en proporción a su recorrido, para seguir
+// siendo gesto y no letra cuando «Dibujar la inicial» está encendida.
+private const val STRAIGHT_DRAG_RATIO = 0.35f
 
 // Recorrido hacia arriba sobre un icono del dock que abre su destino secundario.
 private val SwipeOpenDrag = 40.dp
@@ -412,19 +417,27 @@ fun HomeScreen(
             // Pellizcar hacia dentro abre Zonas (§5.7). Va antes que los demás gestos: con dos dedos
             // en la pantalla ni se abre la barra ni saltan los ajustes.
             .onPinch(enabled = prefs.zonesPinch && !searchOpen) { if (it == Pinch.IN) onOpenZones() }
-            .pointerInput(onOpenSearch) {
+            .pointerInput(onOpenSearch, prefs.drawInitial) {
+                val drawing = prefs.drawInitial
                 var dragged = 0f
                 var pulledDown = false
+                var minX = 0f
+                var maxX = 0f
                 detectVerticalDragGestures(
                     onDragStart = {
                         dragged = 0f
                         pulledDown = false
+                        minX = it.x
+                        maxX = it.x
                     },
-                    onVerticalDrag = { _, amount ->
+                    onVerticalDrag = { change, amount ->
                         dragged += amount
+                        minX = minOf(minX, change.position.x)
+                        maxX = maxOf(maxX, change.position.x)
                         // Hacia abajo se actúa al pasar el umbral, sin esperar a soltar, como al tirar
-                        // de la barra de estado. Una vez por gesto.
-                        if (!pulledDown && dragged > ShowNotificationsDrag.toPx()) {
+                        // de la barra de estado. Una vez por gesto. Con la inicial encendida se espera a
+                        // soltar: muchas letras empiezan bajando y esto las cortaba.
+                        if (!drawing && !pulledDown && dragged > ShowNotificationsDrag.toPx()) {
                             showNotifications?.let {
                                 pulledDown = true
                                 // Gana el gesto de siempre: el trazo ya no se lee como letra.
@@ -433,11 +446,26 @@ fun HomeScreen(
                             }
                         }
                     },
-                    // Un gesto que ya ha bajado las notificaciones no abre además la barra.
+                    // Corre antes que initialDrawing, que mira la pasada Final: si aquí gana un gesto,
+                    // drawGate ya está marcado cuando la letra se evalúa.
                     onDragEnd = {
-                        if (!pulledDown && dragged < -OpenSearchDrag.toPx()) {
-                            drawGate.taken = true
-                            onOpenSearch()
+                        // Con la inicial encendida, solo un trazo recto es gesto; uno que se tuerce es
+                        // una letra.
+                        val straight = !drawing || maxX - minX < abs(dragged) * STRAIGHT_DRAG_RATIO
+                        val pull = showNotifications
+                        when {
+                            pulledDown -> Unit
+
+                            straight && dragged > ShowNotificationsDrag.toPx() && pull != null -> {
+                                drawGate.taken = true
+                                pull()
+                            }
+
+                            // Un gesto que ya ha bajado las notificaciones no abre además la barra.
+                            straight && dragged < -OpenSearchDrag.toPx() -> {
+                                drawGate.taken = true
+                                onOpenSearch()
+                            }
                         }
                     }
                 )
