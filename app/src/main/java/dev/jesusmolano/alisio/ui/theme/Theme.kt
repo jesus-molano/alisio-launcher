@@ -83,6 +83,13 @@ object AlisioTokens {
         PlateOpacity.LOW -> HomePlate(Surface.copy(alpha = 0.40f), Text.copy(alpha = 0.8f))
     }
 
+    /**
+     * Las manchas de color que se mueven tras la bienvenida: los acentos a esta alfa sobre
+     * [Background]. Con menos, los tres se mezclaban en un gris apagado (visto en el S26); el texto
+     * se sigue leyendo porque el pie lleva [Scrim].
+     */
+    const val WELCOME_GLOW_ALPHA = 0.7f
+
     /** Velo uniforme de Zonas sobre el fondo de pantalla. */
     val ZonesVeil = Background.copy(alpha = 0.70f)
 

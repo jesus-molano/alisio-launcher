@@ -40,6 +40,13 @@ class MusicTest {
     }
 
     @Test
+    fun `google no cuenta como musica aunque publique navegacion multimedia`() {
+        assertFalse(countsAsMusic("com.google.android.googlequicksearchbox", knownBrowser = true))
+        assertFalse(countsAsMusic("com.microsoft.skydrive", knownBrowser = true))
+        assertTrue(countsAsMusic("deezer.android.app", knownBrowser = true))
+    }
+
+    @Test
     fun `al elegir app las de musica van primero y cada grupo conserva su orden`() {
         val apps = listOf("calc", spotify, "brave", other, ytMusic)
         assertEquals(

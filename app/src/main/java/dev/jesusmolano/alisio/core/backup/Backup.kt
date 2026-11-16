@@ -40,6 +40,14 @@ fun acceptedPrefs(
     expected: (String) -> KClass<out PrefValue>?
 ): Map<String, PrefValue> = values.filter { (name, value) -> expected(name)?.isInstance(value) == true }
 
+/**
+ * Las preferencias que quedan al cargar una copia: las de la copia ([accepted]) salvo las de
+ * [deviceKeys], que son del teléfono y conservan el valor de [current] (o faltan si no lo había).
+ * Así una copia anterior a la bienvenida no la vuelve a enseñar.
+ */
+fun <T> mergeRestored(current: Map<String, T>, accepted: Map<String, T>, deviceKeys: Set<String>): Map<String, T> =
+    accepted.filterKeys { it !in deviceKeys } + current.filterKeys { it in deviceKeys }
+
 /** Un hueco del dock, como en `dock_slot`. */
 data class BackupSlot(
     val position: Int,

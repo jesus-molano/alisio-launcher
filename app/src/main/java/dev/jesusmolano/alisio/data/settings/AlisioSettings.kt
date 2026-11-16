@@ -16,6 +16,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.jesusmolano.alisio.core.backup.PrefValue
 import dev.jesusmolano.alisio.core.backup.acceptedPrefs
+import dev.jesusmolano.alisio.core.backup.mergeRestored
 import dev.jesusmolano.alisio.core.dock.DEFAULT_DOCK_SLOTS
 import dev.jesusmolano.alisio.core.dock.dockLabelsShown
 import dev.jesusmolano.alisio.core.dock.normalizeDockSlots
@@ -89,6 +90,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param weatherPlace la ciudad elegida para el tiempo; `null` es la ubicación aproximada.
  * @param weatherApp app que abre tocar el tiempo; `null` lo busca en la web.
  * @param onboardingSkipped la bienvenida se descartó con «Ahora no»: Alisio se usa sin ser la app de inicio.
+ * @param welcomeDone el recorrido de bienvenida ya se vio (o se saltó); se repite desde los ajustes.
  * @param liveNow si Ahora enseña lo que está en curso (un viaje, un temporizador) antes que su
  *   sugerencia (docs/IDEAS.md §2.7). Apagado de serie: no se ha probado en el S26.
  * @param pauseStats si la pausa dice cuántas veces se ha abierto la app hoy y cuánto tiempo
@@ -141,6 +143,7 @@ data class Prefs(
     val weatherPlace: Place? = null,
     val weatherApp: String? = null,
     val onboardingSkipped: Boolean = false,
+    val welcomeDone: Boolean = false,
     val liveNow: Boolean = false,
     val pauseStats: Boolean = true,
     val homeNotes: Boolean = true,
@@ -242,6 +245,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         weatherPlace = storedPlace(stored),
         weatherApp = stored[WEATHER_APP],
         onboardingSkipped = stored[ONBOARDING_SKIPPED] ?: false,
+        welcomeDone = stored[WELCOME_DONE] ?: false,
         liveNow = stored[LIVE_NOW] ?: false,
         pauseStats = stored[PAUSE_STATS] ?: true,
         homeNotes = stored[HOME_NOTES] ?: true,
@@ -297,6 +301,18 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     fun setAccent(index: Int) {
         accentDraft.value = null
         write { it[ACCENT] = index }
+    }
+
+    /**
+     * Elige un acento fijo y apaga el del día, en una sola escritura: con el del día encendido, el
+     * acento elegido no se vería. Repetirla no cambia nada (no conmuta).
+     */
+    fun chooseFixedAccent(index: Int) {
+        accentDraft.value = null
+        write {
+            it[ACCENT] = index
+            it[DAY_ACCENT] = false
+        }
     }
 
     /**
@@ -417,7 +433,8 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
 
     fun togglePhoneCommands() = write { it[PHONE_COMMANDS] = !(it[PHONE_COMMANDS] ?: true) }
 
-    fun toggleDrawInitial() = write { it[DRAW_INITIAL] = !(it[DRAW_INITIAL] ?: true) }
+    // Sin guardar vale apagado, como al leerlo: con «?: true» el primer toque no la encendía.
+    fun toggleDrawInitial() = write { it[DRAW_INITIAL] = !(it[DRAW_INITIAL] ?: false) }
 
     fun setLiveIcons(on: Boolean) = write { it[LIVE_ICONS] = on }
 
@@ -455,7 +472,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     suspend fun snapshot(): Map<String, PrefValue> = try {
         store.data.first().asMap()
             // Una clave que ya nadie lee (la del gasto rápido, borrado) no se lleva a otro teléfono.
-            .filterKeys { it.name !in RETIRED_KEYS }
+            .filterKeys { it.name !in RETIRED_KEYS && it.name !in DEVICE_KEYS }
             .mapNotNull { (key, value) -> value.toPrefValue()?.let { key.name to it } }
             .toMap()
     } catch (e: IOException) {
@@ -471,8 +488,15 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val accepted = acceptedPrefs(values, ::expectedType)
         (values.keys - accepted.keys).forEach { Log.w(TAG, "Preferencia de la copia descartada: $it") }
         store.edit { prefs ->
+            // Haber visto la bienvenida es de este teléfono: una copia (sobre todo una anterior a la
+            // bienvenida) no debe volver a enseñarla ni ocultar el Inicio tras cargarse.
+            val device =
+                DEVICE_KEYS.mapNotNull { name ->
+                    prefs[booleanPreferencesKey(name)]?.let { name to PrefValue.Bool(it) }
+                }.toMap()
+            val merged = mergeRestored(device, accepted, DEVICE_KEYS)
             prefs.clear()
-            accepted.forEach { (name, value) -> prefs.put(name, value) }
+            merged.forEach { (name, value) -> prefs.put(name, value) }
         }
         accentDraft.value = null
         true
@@ -504,8 +528,17 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** La bienvenida no vuelve a salir; ser la app de inicio queda como un permiso más de los ajustes. */
-    fun skipOnboarding() = write { it[ONBOARDING_SKIPPED] = true }
+    /**
+     * Acaba el recorrido de bienvenida. También cuenta como «Ahora no» de la bienvenida antigua: sin
+     * ser la app de inicio, Alisio se usa igual y lo pide desde los ajustes.
+     */
+    fun finishWelcome() = write {
+        it[WELCOME_DONE] = true
+        it[ONBOARDING_SKIPPED] = true
+    }
+
+    /** Vuelve a enseñar el recorrido de bienvenida (Ajustes → «Ver la bienvenida»). */
+    fun replayWelcome() = write { it[WELCOME_DONE] = false }
 
     fun setAssistant(packageName: String) = write { it[ASSISTANT] = packageName }
 
@@ -578,7 +611,11 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val CONTACT_PHOTOS = bool("contact_photos")
         val TRACE_RAIL = text("trace_rail")
         val ONBOARDING_SKIPPED = bool("onboarding_skipped")
+        val WELCOME_DONE = bool("welcome_done")
         val RETIRED_KEYS = setOf("expense_template")
+
+        // Estado del teléfono, no configuración: ni viaja en la copia ni la copia lo pisa.
+        val DEVICE_KEYS = setOf(WELCOME_DONE.name, ONBOARDING_SKIPPED.name)
         val LIVE_NOW = bool("live_now")
         val PAUSE_STATS = bool("pause_stats")
         val DOCK_SLOTS = whole("dock_slots")

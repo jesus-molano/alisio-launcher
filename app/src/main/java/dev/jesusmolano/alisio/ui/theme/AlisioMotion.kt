@@ -1,5 +1,6 @@
 package dev.jesusmolano.alisio.ui.theme
 
+import android.provider.Settings
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -13,12 +14,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
 /**
  * Movimiento de docs/DISENO.md §2.7. Solo se animan la alfa y un desplazamiento corto: lo que entra
- * sube un poco y aparece; lo que sale se desvanece. Sin rebotes ni nada en bucle.
+ * sube un poco y aparece; lo que sale se desvanece. Sin rebotes ni nada en bucle, salvo la
+ * bienvenida, que por decisión del dueño lleva un fondo que se mueve y demostraciones en bucle.
  *
  * Compose ya multiplica estas duraciones por la escala de animaciones del sistema: con las
  * animaciones desactivadas valen 0.
@@ -50,6 +54,18 @@ object AlisioMotion {
     fun screenEnter(): EnterTransition {
         val rise = with(LocalDensity.current) { Rise.roundToPx() }
         return fadeIn(screen()) + slideInVertically(screen()) { rise }
+    }
+
+    /**
+     * Si el sistema deja animar. Con «Quitar animaciones» (escala 0) lo que se mueve solo, como el fondo
+     * de la bienvenida, se queda quieto: las animaciones infinitas no respetan esa escala por sí solas.
+     */
+    @Composable
+    fun animationsOn(): Boolean {
+        val context = LocalContext.current
+        return remember {
+            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        }
     }
 
     /** Salida de cualquier pantalla: solo se desvanece. */

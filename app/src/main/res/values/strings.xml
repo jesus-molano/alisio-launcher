@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Alisio</string>
-    <string name="onboarding_title" translatable="false">Alisio</string>
-    <string name="onboarding_body">To use Alisio as your home screen, make it your default home app. You can switch back at any time in Settings.</string>
-    <string name="onboarding_set_default">Set as default</string>
-    <string name="onboarding_skip">Not now</string>
     <string name="home_open_clock">Open clock</string>
     <string name="home_open_calendar">Open calendar</string>
     <string name="trace_rail_description">Alphabetical app index</string>
@@ -640,4 +636,59 @@
     <string name="settings_music_missing">The chosen one is gone: %1$s for now</string>
     <string name="search_music_title">Play %1$s</string>
     <string name="search_music_hint">Picks up where you left off, without opening it</string>
+    <string name="welcome_step">%1$d of %2$d</string>
+    <string name="welcome_skip">Skip</string>
+    <string name="welcome_start">Get started</string>
+    <string name="welcome_next">Next</string>
+    <string name="welcome_hello_big">Hello,</string>
+    <string name="welcome_hello_title">this is Alisio</string>
+    <string name="welcome_hello_body">A calm home screen, without grids full of icons, that gets you to any app in a single gesture. We\'ll show you the essentials in a minute.</string>
+    <string name="welcome_style_title">Make it yours</string>
+    <string name="welcome_style_body">Pick the colour that goes with Alisio: you\'ll see it in what you tap and what you choose. The wallpaper is your phone\'s, and you can change it whenever you like.</string>
+    <string name="welcome_change_wallpaper">Change wallpaper</string>
+    <string name="welcome_search_title">Search, calculate and ask</string>
+    <string name="welcome_search_body">Swipe up on the home screen and type. Find apps, people and settings, work out sums, and if the answer isn\'t on your phone, ask your AI assistant.</string>
+    <string name="welcome_trace_title">Trace: any app, without searching</string>
+    <string name="welcome_trace_body">Slide your thumb down the right edge to the app\'s letter, then inwards to its icon. Let go and it opens. With a little practice it becomes a single gesture.</string>
+    <string name="welcome_initial_title">Or draw its initial</string>
+    <string name="welcome_initial_body">Draw the first letter of an app or a person in the middle of the home screen and Alisio opens it. It starts off so nothing opens by accident; turn it on if you\'d like to try it.</string>
+    <string name="welcome_initial_toggle">Draw an initial</string>
+    <string name="welcome_zones_title">Zones: all your apps, in order</string>
+    <string name="welcome_zones_body">Pinch on the home screen to see all your apps grouped into islands. You can make your own and put each app wherever you want.</string>
+    <string name="welcome_music_title">Your music, always at hand</string>
+    <string name="welcome_music_body">When something plays, the player shows up at the bottom with its artwork. Pick your music app and you can start it from the home screen without opening it.</string>
+    <string name="welcome_music_none">We couldn\'t find a music app. You can pick one later in Settings.</string>
+    <string name="welcome_access_title">You decide what Alisio sees</string>
+    <string name="welcome_access_body">Each permission turns on something specific, and you can grant it now or later in Settings. What Alisio reads stays on your phone; only the weather uses the internet, with your approximate location.</string>
+    <string name="welcome_access_notifications">Notifications</string>
+    <string name="welcome_access_notifications_why">The player, what\'s ongoing and the dots on apps</string>
+    <string name="welcome_access_contacts">Contacts</string>
+    <string name="welcome_access_contacts_why">Your people in the search bar and when you draw their initial</string>
+    <string name="welcome_access_calendar">Calendar</string>
+    <string name="welcome_access_calendar_why">Your next event, under the clock</string>
+    <string name="welcome_access_location">Approximate location</string>
+    <string name="welcome_access_location_why">The weather and sunset</string>
+    <string name="welcome_access_usage">App usage</string>
+    <string name="welcome_access_usage_why">Your screen time and the pause before opening an app</string>
+    <string name="welcome_allow">Allow</string>
+    <string name="welcome_granted">Done</string>
+    <string name="welcome_home_big">Almost there.</string>
+    <string name="welcome_home_title">Make Alisio your home</string>
+    <string name="welcome_home_body">That way it opens every time you go home. If you ever want your old one back, you can switch in your phone\'s settings. Below is what you chose: tap a line to change it.</string>
+    <string name="welcome_home_big_ready">All set.</string>
+    <string name="welcome_home_ready_title">Alisio is already your home</string>
+    <string name="welcome_home_ready_body">This is what you chose. Tap a line to change it; everything else is in Settings, whenever you like.</string>
+    <string name="welcome_make_home">Make Alisio my home</string>
+    <string name="welcome_home_ready">Start using Alisio</string>
+    <string name="welcome_later">Not now</string>
+    <string name="welcome_recap_accent">Colour</string>
+    <string name="welcome_recap_assistant">AI assistant</string>
+    <string name="welcome_recap_music">Music app</string>
+    <string name="welcome_recap_none">Not chosen yet</string>
+    <string name="welcome_recap_on">On</string>
+    <string name="welcome_recap_off">Off</string>
+    <string name="settings_replay_welcome">See the welcome again</string>
+    <string name="settings_kofi">Buy me a coffee</string>
+    <string name="settings_kofi_hint">Support Alisio on Ko-fi</string>
+    <string name="settings_credits">Alisio %1$s · Made with care by Jesús Molano</string>
 </resources>

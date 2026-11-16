@@ -101,4 +101,19 @@ class BackupTest {
 
         assertEquals(mapOf("icon_style" to PrefValue.Text("squircle")), acceptedPrefs(prefs) { expected[it] })
     }
+
+    @Test
+    fun `cargar una copia no cambia si ya se vio la bienvenida`() {
+        val device = setOf("welcome_done", "onboarding_skipped")
+        val current = mapOf("welcome_done" to PrefValue.Bool(true), "accent" to PrefValue.Whole(1))
+        // Una copia anterior a la bienvenida no la lleva; una editada a mano podría traerla en false.
+        val fromOld = mapOf("accent" to PrefValue.Whole(3))
+        val fromEdited = mapOf("accent" to PrefValue.Whole(3), "welcome_done" to PrefValue.Bool(false))
+
+        val expected = mapOf("accent" to PrefValue.Whole(3), "welcome_done" to PrefValue.Bool(true))
+        assertEquals(expected, mergeRestored(current, fromOld, device))
+        assertEquals(expected, mergeRestored(current, fromEdited, device))
+        // En un teléfono que no la ha visto, la copia tampoco la marca como vista.
+        assertEquals(mapOf("accent" to PrefValue.Whole(3)), mergeRestored(emptyMap(), fromEdited, device))
+    }
 }

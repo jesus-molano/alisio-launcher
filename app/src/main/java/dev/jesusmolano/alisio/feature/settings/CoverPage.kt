@@ -1,13 +1,21 @@
 package dev.jesusmolano.alisio.feature.settings
 
+import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.glance.GlanceItem
 import dev.jesusmolano.alisio.core.icons.IconStyle
@@ -18,8 +26,10 @@ import dev.jesusmolano.alisio.core.settings.blockingAccess
 import dev.jesusmolano.alisio.core.theme.CUSTOM_ACCENT
 import dev.jesusmolano.alisio.core.theme.FontChoice
 import dev.jesusmolano.alisio.data.apps.installedIconPacks
+import dev.jesusmolano.alisio.feature.home.openNoteLink
 import dev.jesusmolano.alisio.feature.search.appLabel
 import dev.jesusmolano.alisio.ui.components.ItemRow
+import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 // Los nombres de los acentos, en el orden de `AlisioTokens.Accents`.
 private val AccentNames =
@@ -75,7 +85,49 @@ internal fun CoverPage(
         )
     }
     BackupRows(backup)
+    ItemRow(
+        title = AnnotatedString(stringResource(R.string.settings_replay_welcome)),
+        leadingIcon = R.drawable.ic_restart,
+        // Al dejar de estar vista, MainActivity enseña la bienvenida en lugar de todo lo demás.
+        onClick = { context.settings.replayWelcome() }
+    )
+    Credits()
 }
+
+/**
+ * Al final de todo y en pequeño: quién hace Alisio, la versión y dónde invitarle a un café. El enlace
+ * se abre en el navegador; Alisio no usa la red para esto.
+ */
+@Composable
+private fun Credits() {
+    val android = LocalContext.current
+    val version = remember { android.packageManager.getPackageInfo(android.packageName, 0).versionName.orEmpty() }
+    val failed = stringResource(R.string.app_launch_failed, KOFI_NAME)
+    ItemRow(
+        title = AnnotatedString(stringResource(R.string.settings_kofi)),
+        leadingIcon = R.drawable.ic_kofi,
+        // Sale de Alisio al navegador: lo avisa la marca junto al título, como en Permisos.
+        titleMark = R.drawable.ic_open_in_new,
+        subtitle = stringResource(R.string.settings_kofi_hint),
+        secondary = true,
+        // Sin navegador no se abre nada: se dice, como al fallar una app en el Inicio.
+        onClick = {
+            if (!android.openNoteLink(KOFI_URL)) Toast.makeText(android, failed, Toast.LENGTH_SHORT).show()
+        }
+    )
+    Text(
+        text = stringResource(R.string.settings_credits, version),
+        style = MaterialTheme.typography.bodySmall,
+        color = AlisioTokens.TextSecondary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+    )
+}
+
+private const val KOFI_URL = "https://ko-fi.com/jesusmolano"
+
+// Nombre propio: igual en todos los idiomas.
+private const val KOFI_NAME = "Ko-fi"
 
 /** Los accesos que faltan y que algo encendido necesita (ver [blockingAccess]). */
 private fun SettingsContext.blockingAccess(): Set<Access> = blockingAccess(

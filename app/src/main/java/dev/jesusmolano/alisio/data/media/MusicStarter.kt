@@ -177,6 +177,7 @@ class MusicStarter(
         .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE), 0)
         .mapNotNullTo(HashSet()) { it.serviceInfo?.packageName }
         .apply { addAll(KNOWN_MUSIC_APPS) }
+        .filterTo(HashSet()) { countsAsMusic(it, knownBrowser = true) }
 
     private fun started(packageName: String) {
         settings.setLastMusicApp(packageName)

@@ -39,8 +39,8 @@ private val PhotoPreviewSize = 56.dp
 /** Las hojas que abre la página para elegir una app. */
 private enum class SearchChoice { ASSISTANT, WEB_SEARCH }
 
-// Asistentes de IA conocidos: si están instalados salen los primeros al elegir.
-private val KNOWN_ASSISTANTS =
+// Asistentes de IA conocidos: si están instalados salen los primeros al elegir, aquí y en la bienvenida.
+internal val KNOWN_ASSISTANTS =
     setOf(
         "com.anthropic.claude",
         "com.openai.chatgpt",

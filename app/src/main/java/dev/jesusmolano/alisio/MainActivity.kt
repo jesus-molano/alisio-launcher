@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,7 +59,7 @@ import dev.jesusmolano.alisio.feature.home.HomeScreen
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
 import dev.jesusmolano.alisio.feature.home.SystemCancel
 import dev.jesusmolano.alisio.feature.home.dockApps
-import dev.jesusmolano.alisio.feature.onboarding.OnboardingScreen
+import dev.jesusmolano.alisio.feature.onboarding.WelcomeScreen
 import dev.jesusmolano.alisio.feature.pause.PauseScreen
 import dev.jesusmolano.alisio.feature.search.SearchScreen
 import dev.jesusmolano.alisio.feature.search.SearchViewModel
@@ -415,6 +416,16 @@ class MainActivity : ComponentActivity() {
                     val accessibilityEnabled by container.globalActions.enabled.collectAsStateWithLifecycle()
                     // El gesto mueve con el dedo la capa que va a cerrar (docs/IDEAS.md §2.2).
                     val back = rememberBackFollow()
+                    // «Ver la bienvenida otra vez» se pulsa con los ajustes abiertos: se cierran para que
+                    // al acabarla se vuelva al Inicio y Atrás no cierre capas que no se ven.
+                    LaunchedEffect(prefs.welcomeDone) {
+                        if (!prefs.welcomeDone) {
+                            settingsOpen = false
+                            settingsPage = SettingsDestination.COVER
+                            searchOpen = false
+                            zonesOpen = false
+                        }
+                    }
                     FollowingBackHandler(
                         back,
                         // De arriba abajo: la pausa, el aviso de accesibilidad, los ajustes, la barra y,
@@ -422,12 +433,21 @@ class MainActivity : ComponentActivity() {
                         // portada: la capa es la propia subpágina.
                         layer = {
                             when {
+                                // La bienvenida lleva su propio Atrás, de paso en paso.
+                                !prefs.welcomeDone -> null
+
                                 pendingPause != null -> Layer.PAUSE
+
                                 accessibilityNoticeOpen -> Layer.NOTICE
+
                                 settingsOpen && settingsPage != SettingsDestination.COVER -> settingsPage
+
                                 settingsOpen -> Layer.SETTINGS
+
                                 searchOpen -> Layer.SEARCH
+
                                 zonesOpen -> Layer.ZONES
+
                                 else -> null
                             }
                         },
@@ -444,7 +464,9 @@ class MainActivity : ComponentActivity() {
                     )
                     // App cuyo Interior piden la barra o Zonas; lo abre el Inicio, que es quien tiene esa hoja.
                     var menuRequest by remember { mutableStateOf<String?>(null) }
-                    if (isDefaultHome || prefs.onboardingSkipped) {
+                    // La bienvenida sale una vez, también a quien ya tenía Alisio de inicio, y vuelve desde
+                    // los ajustes. Acabarla cuenta como el «Ahora no» de antes.
+                    if (prefs.welcomeDone) {
                         Box(Modifier.fillMaxSize()) {
                             HomeScreen(
                                 menuRequest = menuRequest,
@@ -528,15 +550,7 @@ class MainActivity : ComponentActivity() {
                                 exit = AlisioMotion.screenExit()
                             ) {
                                 val contacts = (application as AlisioApp).container.contacts
-                                val contactsGranted by contacts.granted.collectAsStateWithLifecycle()
-                                val bluetooth = (application as AlisioApp).container.bluetoothAudio
-                                val bluetoothGranted by bluetooth.granted.collectAsStateWithLifecycle()
-                                val bluetoothConnected by bluetooth.connected.collectAsStateWithLifecycle()
-                                val notificationAccess = (application as AlisioApp).container.notificationAccess
-                                val notificationsGranted by notificationAccess.granted.collectAsStateWithLifecycle()
-                                val usageGranted by homeViewModel.usageGranted.collectAsStateWithLifecycle()
-                                val calendarGranted by container.glance.calendarGranted.collectAsStateWithLifecycle()
-                                val locationGranted by container.glance.locationGranted.collectAsStateWithLifecycle()
+                                val access = settingsAccess(accessibilityEnabled) { accessibilityNoticeOpen = true }
                                 val zonesState by zonesViewModel.state.collectAsStateWithLifecycle()
                                 BackFollowLayer(back, Layer.SETTINGS) {
                                     SettingsScreen(
@@ -556,59 +570,7 @@ class MainActivity : ComponentActivity() {
                                             ),
                                         prefs = prefs,
                                         settings = settings,
-                                        access =
-                                            SettingsAccess(
-                                                homeRole = isDefaultHome,
-                                                onHomeRole = {
-                                                    if (isDefaultHome) openHomeSettings() else requestHomeRole()
-                                                },
-                                                contacts = contactsGranted,
-                                                onContacts = {
-                                                    if (contactsGranted) openAppDetails() else askContacts()
-                                                },
-                                                calendar = calendarGranted,
-                                                onCalendar = {
-                                                    if (calendarGranted) {
-                                                        openAppDetails()
-                                                    } else {
-                                                        askGlancePermission(Manifest.permission.READ_CALENDAR)
-                                                    }
-                                                },
-                                                location = locationGranted,
-                                                onLocation = {
-                                                    if (locationGranted) {
-                                                        openAppDetails()
-                                                    } else {
-                                                        askGlancePermission(Manifest.permission.ACCESS_COARSE_LOCATION)
-                                                    }
-                                                },
-                                                bluetooth = bluetoothGranted,
-                                                bluetoothDevice = bluetoothConnected?.name,
-                                                onBluetooth = {
-                                                    if (bluetoothGranted) openAppDetails() else askBluetooth()
-                                                },
-                                                notifications = notificationsGranted,
-                                                onNotifications = ::openNotificationAccess,
-                                                usage = usageGranted,
-                                                onUsage = ::openUsageAccess,
-                                                accessibility = accessibilityEnabled,
-                                                // Activado, el aviso ya se leyó: se va directo a donde se desactiva.
-                                                onAccessibility = {
-                                                    if (accessibilityEnabled) {
-                                                        openAccessibilitySettings()
-                                                    } else {
-                                                        accessibilityNoticeOpen = true
-                                                    }
-                                                },
-                                                writeSettings = writeSettingsGranted,
-                                                onWriteSettings = {
-                                                    openSystemScreen(container.phoneControls.writeSettingsIntent())
-                                                },
-                                                doNotDisturb = dndGranted,
-                                                onDoNotDisturb = {
-                                                    openSystemScreen(container.phoneControls.dndAccessIntent())
-                                                }
-                                            ),
+                                        access = access,
                                         wallpaper = wallpaperActions,
                                         contacts = contacts,
                                         onWallpaper = ::openWallpaperPicker,
@@ -707,19 +669,76 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     } else {
-                        // El onboarding va sobre fondo opaco: la ventana deja ver el fondo de pantalla.
-                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                            OnboardingScreen(
-                                onSetDefault = ::requestHomeRole,
-                                // Se guarda: si no, la bienvenida volvería cada vez que el sistema
-                                // recrea la actividad.
-                                onSkip = { settings.skipOnboarding() }
-                            )
-                        }
+                        val apps by homeViewModel.apps.collectAsStateWithLifecycle()
+                        val musicPackages = remember { homeViewModel.musicPackages() }
+                        // Pinta su propio fondo opaco: la ventana deja ver el fondo de pantalla.
+                        WelcomeScreen(
+                            prefs = prefs,
+                            settings = settings,
+                            access = settingsAccess(accessibilityEnabled) {},
+                            apps = apps.orEmpty(),
+                            musicPackages = musicPackages,
+                            onWallpaper = ::openWallpaperPicker,
+                            // Se guarda: si no, la bienvenida volvería cada vez que el sistema recrea la
+                            // actividad.
+                            onFinish = { askHomeRole ->
+                                settings.finishWelcome()
+                                if (askHomeRole) requestHomeRole()
+                            }
+                        )
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Los permisos y accesos de Alisio, con qué pedir cada uno: lo usan los ajustes y la bienvenida.
+     *
+     * @param onAccessibilityNotice abre el aviso que se lee antes de activar el servicio de accesibilidad.
+     */
+    @Composable
+    private fun settingsAccess(accessibilityEnabled: Boolean, onAccessibilityNotice: () -> Unit): SettingsAccess {
+        val container = (application as AlisioApp).container
+        val contactsGranted by container.contacts.granted.collectAsStateWithLifecycle()
+        val bluetoothGranted by container.bluetoothAudio.granted.collectAsStateWithLifecycle()
+        val bluetoothConnected by container.bluetoothAudio.connected.collectAsStateWithLifecycle()
+        val notificationsGranted by container.notificationAccess.granted.collectAsStateWithLifecycle()
+        val usageGranted by homeViewModel.usageGranted.collectAsStateWithLifecycle()
+        val calendarGranted by container.glance.calendarGranted.collectAsStateWithLifecycle()
+        val locationGranted by container.glance.locationGranted.collectAsStateWithLifecycle()
+        return SettingsAccess(
+            homeRole = isDefaultHome,
+            onHomeRole = { if (isDefaultHome) openHomeSettings() else requestHomeRole() },
+            contacts = contactsGranted,
+            onContacts = { if (contactsGranted) openAppDetails() else askContacts() },
+            calendar = calendarGranted,
+            onCalendar = {
+                if (calendarGranted) openAppDetails() else askGlancePermission(Manifest.permission.READ_CALENDAR)
+            },
+            location = locationGranted,
+            onLocation = {
+                if (locationGranted) {
+                    openAppDetails()
+                } else {
+                    askGlancePermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
+            },
+            bluetooth = bluetoothGranted,
+            bluetoothDevice = bluetoothConnected?.name,
+            onBluetooth = { if (bluetoothGranted) openAppDetails() else askBluetooth() },
+            notifications = notificationsGranted,
+            onNotifications = ::openNotificationAccess,
+            usage = usageGranted,
+            onUsage = ::openUsageAccess,
+            accessibility = accessibilityEnabled,
+            // Activado, el aviso ya se leyó: se va directo a donde se desactiva.
+            onAccessibility = { if (accessibilityEnabled) openAccessibilitySettings() else onAccessibilityNotice() },
+            writeSettings = writeSettingsGranted,
+            onWriteSettings = { openSystemScreen(container.phoneControls.writeSettingsIntent()) },
+            doNotDisturb = dndGranted,
+            onDoNotDisturb = { openSystemScreen(container.phoneControls.dndAccessIntent()) }
+        )
     }
 
     override fun onResume() {

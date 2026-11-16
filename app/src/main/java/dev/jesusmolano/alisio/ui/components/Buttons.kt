@@ -119,6 +119,7 @@ fun TonalButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
  * Una acción escrita, sin caja.
  *
  * @param secondary una acción destructiva o de menor peso: va en el color secundario, no en acento.
+ * @param plain en el color del texto, sobre un fondo que puede ser del propio acento (la bienvenida).
  */
 @Composable
 fun TextAction(
@@ -126,6 +127,7 @@ fun TextAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     secondary: Boolean = false,
+    plain: Boolean = false,
     enabled: Boolean = true
 ) {
     Box(
@@ -140,7 +142,12 @@ fun TextAction(
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            color = if (secondary) AlisioTokens.TextSecondary else AlisioTokens.Accent,
+            color =
+                when {
+                    plain -> AlisioTokens.Text
+                    secondary -> AlisioTokens.TextSecondary
+                    else -> AlisioTokens.Accent
+                },
             textAlign = TextAlign.Center
         )
     }

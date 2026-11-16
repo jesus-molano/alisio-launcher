@@ -343,9 +343,12 @@ Gestos, sin cambio: deslizar arriba o tocar la píldora abre la barra; pellizcar
 
 ### 6.7 Bienvenida
 
-- `Background` opaco. Contenido en el filo, anclado abajo.
-- «Alisio» en `headlineLarge`; 16 dp; texto en `bodyLarge` `TextSecondary` («Para usar Alisio como pantalla de inicio, elígelo como app de inicio predeterminada. Puedes volver a la anterior cuando quieras desde Ajustes.»); 32 dp; `PrimaryButton` «Hacer predeterminado»; 8 dp; `TextAction` «Ahora no», centrado.
-- «Ahora no» se guarda en `Prefs`. Después, la opción queda en Ajustes → Permisos.
+- Nueve pasos en un `HorizontalPager` (`feature/onboarding/WelcomeScreen.kt`): saludo, estilo, barra, Trazo, inicial, Zonas, música, permisos e inicio. Arriba, «1 de 9» y «Saltar» en `Text` pleno; abajo, los puntos y un `PrimaryButton` de ancho completo.
+- **Excepción a §2.7 (decisión del dueño):** el fondo se mueve solo. Tres manchas de color (la primera, el acento) derivan despacio sobre `Background` (`WelcomeBackground.kt`, una vuelta cada 24 s), con un velo hacia `Scrim` en la mitad de abajo. Con «Quitar animaciones» se quedan quietas.
+- Las demostraciones son grabaciones reales del Inicio (`res/raw/welcome_*.mp4`), mudas y en bucle, con `CardShape` y un borde de `Text` α 0,16. Solo avanza la del paso que se ve, y se pausa fuera de la app; sin animaciones queda el primer fotograma.
+- El primer paso abre con «Hola,» y el último con «Todo listo.» o «Ya casi está.», con el estilo de la hora y un degradado del acento a otro color; encogen para caber en una línea.
+- El último paso repasa lo elegido (color, asistente, inicial, música): cada fila vuelve a su paso. Si Alisio no es el inicio, el botón lo pide y `TextAction` «Ahora no» acaba sin pedirlo.
+- Acabar o saltar la bienvenida se guarda en `Prefs` y no viaja en la copia de ajustes. Se repite desde Ajustes → «Ver la bienvenida otra vez».
 
 ### 6.8 Aviso de accesibilidad
 
@@ -521,7 +524,6 @@ Añadidos en `res/drawable`: `ic_close`, `ic_search`, `ic_settings`, `ic_check`,
 - Interior de app (§6.5): con destino elegido, la fila «Al deslizar hacia arriba» enseña el icono del destino en lugar de `ic_swipe_up`. En «Poner en el dock», tocar una pila mete la app en ella en vez de sustituirla; la hoja se cierra y la barra de deshacer dice dónde ha quedado.
 - `tnum` no se aplica en `Numeral`: no se ha comprobado que `space_grotesk.ttf` lo traiga.
 - Pausa (§6.6): la cuenta atrás va antes que el icono. Con el icono lo primero, la cuenta apagada dejaba un hueco entre el icono y el título.
-- Bienvenida (§6.7): arriba va la hora con el estilo `Clock`, en el sitio que tendrá en el Inicio; sin ella dos tercios de la pantalla quedaban vacíos.
 - Hoja de una pila (§6.2): mantener una fila de «En esta pila» no abre su Interior (sería una hoja sobre otra). Sí lo abre mantener una app en la pila abierta.
 - Hueco del dock (§6.2): «Dejar vacío» va en el grupo fijo de arriba, no al final de la lista: la lista crece desde el buscador y lo que borra queda lejos del pulgar.
 - Barra (§6.3): Zonas y los ajustes de Alisio no van a la derecha de las salidas, sino en el extremo del campo mientras está vacío (`PillTextField(emptyActions)`). Tres salidas con icono y dos botones de 48 dp no caben en 384 dp, y las salidas tendrían que pasar a dos líneas.
