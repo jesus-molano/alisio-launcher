@@ -112,7 +112,9 @@
         android:theme="@style/Theme.Alisio"
         tools:ignore="DataExtractionRules">
 
-        <!-- Atributos de referencia de Launcher3 (docs/PLAN.md §5.1). -->
+        <!-- Atributos de referencia de Launcher3 (docs/PLAN.md §5.1). Solo en vertical: el Inicio, Trazo
+             y los gestos están hechos para el móvil de pie y en horizontal se descolocaban (docs/PLAN.md
+             §11). Android 16 ignora el bloqueo en pantallas grandes; en el S26 se respeta. -->
         <activity
             android:name=".MainActivity"
             android:clearTaskOnLaunch="true"
@@ -120,6 +122,8 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:resumeWhilePausing="true"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"
             android:stateNotNeeded="true"
             android:taskAffinity=""
             android:windowSoftInputMode="adjustResize">
