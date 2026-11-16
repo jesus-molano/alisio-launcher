@@ -191,6 +191,10 @@
     <string name="settings_dim_light">Light</string>
     <string name="settings_dim_medium">Medium</string>
     <string name="settings_dim_strong">Strong</string>
+    <string name="settings_plate_opacity">Bar, Now and player</string>
+    <string name="settings_plate_solid">Solid</string>
+    <string name="settings_plate_medium">Medium</string>
+    <string name="settings_plate_low">See-through</string>
     <string name="settings_font">Typeface</string>
     <string name="font_pair">Original</string>
     <string name="font_inter" translatable="false">Inter</string>

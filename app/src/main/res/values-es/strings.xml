@@ -190,6 +190,10 @@
     <string name="settings_dim_light">Poco</string>
     <string name="settings_dim_medium">Medio</string>
     <string name="settings_dim_strong">Mucho</string>
+    <string name="settings_plate_opacity">Barra, Ahora y reproductor</string>
+    <string name="settings_plate_solid">Opacas</string>
+    <string name="settings_plate_medium">Medias</string>
+    <string name="settings_plate_low">Translúcidas</string>
     <string name="settings_font">Tipografía</string>
     <string name="font_pair">Original</string>
     <string name="font_system">Sistema</string>

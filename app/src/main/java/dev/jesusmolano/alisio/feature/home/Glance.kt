@@ -338,7 +338,8 @@ internal fun GlanceLine(pieces: List<GlancePiece>, modifier: Modifier = Modifier
                             Modifier.clearAndSetSemantics {}
                         }
                     )
-                    .heightIn(min = AlisioTokens.MinTouch)
+                    // Renglón junto, por debajo del toque mínimo a elección del dueño (AlisioTokens.InfoRow).
+                    .heightIn(min = AlisioTokens.InfoRow)
                     .padding(start = PieceStart, end = PieceEnd),
                 verticalAlignment = Alignment.CenterVertically
             ) {

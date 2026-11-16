@@ -84,6 +84,8 @@ import dev.jesusmolano.alisio.ui.components.rememberUndoState
 import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTheme
+import dev.jesusmolano.alisio.ui.theme.AlisioTokens
+import dev.jesusmolano.alisio.ui.theme.LocalHomePlate
 import dev.jesusmolano.alisio.ui.theme.accentColor
 import dev.jesusmolano.alisio.ui.theme.dayAccentColor
 import kotlinx.coroutines.launch
@@ -401,7 +403,12 @@ class MainActivity : ComponentActivity() {
             AlisioTheme(accent = accent, font = prefs.font) {
                 // Una sola barra de deshacer para toda la actividad: la usan el Inicio, Zonas y los ajustes.
                 val undo = rememberUndoState()
-                CompositionLocalProvider(LocalUndo provides undo, LocalPickImage provides ::pickImage) {
+                // Las placas del Inicio y de su miniatura en los ajustes, con la opacidad elegida.
+                CompositionLocalProvider(
+                    LocalUndo provides undo,
+                    LocalPickImage provides ::pickImage,
+                    LocalHomePlate provides AlisioTokens.homePlate(prefs.plateOpacity)
+                ) {
                     // Atrás cierra lo que haya encima del Inicio; en el Inicio no hace nada.
                     val container = (application as AlisioApp).container
                     val pendingPause by container.launchPause.pending.collectAsStateWithLifecycle()

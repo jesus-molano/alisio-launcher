@@ -3,10 +3,16 @@ package dev.jesusmolano.alisio.feature.settings
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -26,6 +33,7 @@ import dev.jesusmolano.alisio.core.dock.DOCK_ITEM_SPARE_DP
 import dev.jesusmolano.alisio.core.icons.CustomIcon
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.core.theme.FontChoice
+import dev.jesusmolano.alisio.core.theme.PlateOpacity
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppKey
 import dev.jesusmolano.alisio.data.apps.installedIconPacks
@@ -52,6 +60,9 @@ import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import dev.jesusmolano.alisio.ui.theme.fontsFor
 
 private val VeilPreviewHeight = 88.dp
+
+// La píldora de muestra de la opacidad de las placas: cabe en la tesela y deja ver el fondo alrededor.
+private val PlatePreviewHeight = 36.dp
 
 // Una tesela de estilo de iconos: cuatro apps en 2 × 2 (docs/DISENO.md §6.9).
 private val StyleIconSize = 40.dp
@@ -99,6 +110,11 @@ internal fun LookPage(
 
     SectionLabel(stringResource(R.string.settings_wallpaper_dim))
     VeilChoices(prefs.wallpaperDim, settings::setWallpaperDim)
+
+    // Cuánto tapan el fondo la barra, Ahora y el reproductor: la miniatura de arriba lo enseña
+    // sobre el fondo de verdad, y cada tesela, sobre el velo elegido.
+    SectionLabel(stringResource(R.string.settings_plate_opacity))
+    PlateChoices(prefs.plateOpacity, prefs.wallpaperDim, settings::setPlateOpacity)
 
     SectionLabel(stringResource(R.string.settings_accent))
     AccentChoices(context)
@@ -255,6 +271,54 @@ private fun VeilChoices(current: WallpaperDim, onChoose: (WallpaperDim) -> Unit)
                         .wallpaperVeil(dim.factor, lightWallpaper)
             ) {
                 Text(text = time, style = AlisioTokens.Numeral, color = AlisioTokens.Text, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * Las opacidades de las placas del Inicio, cada una con una píldora de la barra dibujada con ella
+ * sobre el velo elegido: se ve cuánto del fondo deja pasar.
+ */
+@Composable
+private fun PlateChoices(current: PlateOpacity, dim: WallpaperDim, onChoose: (PlateOpacity) -> Unit) {
+    val lightWallpaper = rememberLightWallpaper()
+    ChoiceRow(PlateOpacity.entries.size) { tile ->
+        PlateOpacity.entries.forEach { opacity ->
+            PreviewChoice(
+                label =
+                    stringResource(
+                        when (opacity) {
+                            PlateOpacity.SOLID -> R.string.settings_plate_solid
+                            PlateOpacity.MEDIUM -> R.string.settings_plate_medium
+                            PlateOpacity.LOW -> R.string.settings_plate_low
+                        }
+                    ),
+                selected = opacity == current,
+                onClick = { onChoose(opacity) },
+                modifier = tile,
+                previewHeight = VeilPreviewHeight,
+                backdrop =
+                    Modifier
+                        .background(AlisioTokens.TextSecondary)
+                        .wallpaperVeil(dim.factor, lightWallpaper)
+            ) {
+                // Con el icono gris de la píldora real: se ve cómo se lee de verdad, no mejor.
+                val plate = AlisioTokens.homePlate(opacity)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(PlatePreviewHeight)
+                        .background(plate.fill, AlisioTokens.PillShape),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_search),
+                        contentDescription = null,
+                        tint = plate.secondary,
+                        modifier = Modifier.padding(start = 12.dp).size(AlisioTokens.GlanceIconSize)
+                    )
+                }
             }
         }
     }

@@ -46,6 +46,7 @@ import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
+import dev.jesusmolano.alisio.ui.theme.LocalHomePlate
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -126,7 +127,7 @@ internal fun PlayerBar(
                     alpha = (1f - abs(slide.value) / (2 * HideDrag.toPx())).coerceIn(0f, 1f)
                 }
                 .clip(shape)
-                .background(AlisioTokens.Plate, shape)
+                .background(LocalHomePlate.current.fill, shape)
                 .clickable(onClickLabel = stringResource(R.string.player_open, player.appLabel), onClick = onOpen)
                 // El gesto no existe para TalkBack: apartar el reproductor va como acción con nombre.
                 .semantics {
@@ -156,7 +157,7 @@ internal fun PlayerBar(
                     player.artist?.let { stringResource(R.string.player_subtitle, it, player.appLabel) }
                         ?: player.appLabel,
                 style = MaterialTheme.typography.bodyMedium,
-                color = AlisioTokens.TextSecondary,
+                color = LocalHomePlate.current.secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -172,7 +173,7 @@ internal fun PlayerBar(
             RoundIconButton(
                 icon = R.drawable.ic_skip_next,
                 description = stringResource(R.string.player_next),
-                tint = AlisioTokens.TextSecondary,
+                tint = LocalHomePlate.current.secondary,
                 onClick = onNext,
                 iconSize = PlayerIconSize
             )
@@ -199,7 +200,7 @@ private fun Cover(art: Bitmap?, appIcon: Bitmap?) {
                 Icon(
                     painter = painterResource(R.drawable.ic_music_note),
                     contentDescription = null,
-                    tint = AlisioTokens.TextSecondary,
+                    tint = LocalHomePlate.current.secondary,
                     modifier = Modifier.size(22.dp)
                 )
             }

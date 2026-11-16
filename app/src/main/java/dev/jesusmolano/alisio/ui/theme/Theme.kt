@@ -15,6 +15,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -28,11 +29,25 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.jesusmolano.alisio.core.theme.CUSTOM_ACCENT
 import dev.jesusmolano.alisio.core.theme.FontChoice
+import dev.jesusmolano.alisio.core.theme.PlateOpacity
 import dev.jesusmolano.alisio.core.theme.dayAccent
 import dev.jesusmolano.alisio.core.theme.daylight
 import dev.jesusmolano.alisio.core.theme.sunMinutes
 import dev.jesusmolano.alisio.core.time.ClockSize
 import java.time.ZonedDateTime
+
+/**
+ * Las placas del pie del Inicio (píldora, Ahora, En curso y reproductor) con la opacidad elegida en
+ * los ajustes (`Prefs.plateOpacity`). `MainActivity` la fija para toda la actividad, pero solo deben
+ * leerla esas placas, en el Inicio y en su miniatura: lo demás flota con [AlisioTokens.Plate].
+ */
+val LocalHomePlate = staticCompositionLocalOf { HomePlate(AlisioTokens.Plate, AlisioTokens.TextSecondary) }
+
+/**
+ * El relleno de una placa del Inicio y el color de su texto secundario (motivo, artista, pista y
+ * botones grises). Con la placa translúcida el gris de siempre no se lee sobre un fondo claro.
+ */
+data class HomePlate(val fill: Color, val secondary: Color)
 
 /**
  * Tokens de docs/DISENO.md §2 que Material 3 no tiene con ese nombre. Ninguna pantalla define
@@ -56,6 +71,17 @@ object AlisioTokens {
 
     /** Todo lo que flota sobre el fondo de pantalla: píldora, Ahora, reproductor, islas, pila y hueco vacío. */
     val Plate = Surface.copy(alpha = 0.86f)
+
+    /**
+     * Las placas del Inicio con la opacidad elegida. Medias y translúcidas llevan el texto secundario
+     * en [Text] al 80 %: sobre una zona blanca del fondo con el velo «Poco», el gris quedaría cerca de
+     * 2,5:1 y este pasa de 4,5:1. Por debajo de [PlateOpacity.LOW] ni el texto principal se leería.
+     */
+    fun homePlate(opacity: PlateOpacity): HomePlate = when (opacity) {
+        PlateOpacity.SOLID -> HomePlate(Plate, TextSecondary)
+        PlateOpacity.MEDIUM -> HomePlate(Surface.copy(alpha = 0.62f), Text.copy(alpha = 0.8f))
+        PlateOpacity.LOW -> HomePlate(Surface.copy(alpha = 0.40f), Text.copy(alpha = 0.8f))
+    }
 
     /** Velo uniforme de Zonas sobre el fondo de pantalla. */
     val ZonesVeil = Background.copy(alpha = 0.70f)
@@ -121,6 +147,13 @@ object AlisioTokens {
     /** Entre las piezas del pie del Inicio y entre islas. */
     val PlateGap = 12.dp
     val MinTouch = 48.dp
+
+    /**
+     * Alto de cada renglón bajo la hora (fecha, piezas y notas). Excepción a [MinTouch] elegida por el
+     * dueño para que vayan juntos (docs/PLAN.md §11): Compose solo amplía el toque hacia donde no hay
+     * otro renglón, así que los de en medio se tocan en unos 32 dp y solo el último gana algo abajo.
+     */
+    val InfoRow = 32.dp
 
     /** Lado del icono de una app en el dock, en Zonas y en las teselas. */
     val DockIconSize = 52.dp

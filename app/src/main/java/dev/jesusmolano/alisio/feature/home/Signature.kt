@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -156,7 +157,8 @@ internal fun NotesLine(
             val struck = striking == note.id
             Row(
                 Modifier
-                    .heightIn(min = AlisioTokens.MinTouch)
+                    // Renglón junto, por debajo del toque mínimo a elección del dueño (AlisioTokens.InfoRow).
+                    .heightIn(min = AlisioTokens.InfoRow)
                     .then(
                         if (!interactive) {
                             Modifier
@@ -207,7 +209,7 @@ internal fun NotesLine(
                 style = style,
                 modifier =
                     Modifier
-                        .heightIn(min = AlisioTokens.MinTouch)
+                        .heightIn(min = AlisioTokens.InfoRow)
                         .then(
                             if (interactive) {
                                 Modifier.clickable(
@@ -220,7 +222,9 @@ internal fun NotesLine(
                                 Modifier
                             }
                         )
-                        .padding(top = 12.dp)
+                        .padding(top = 4.dp)
+                        // Centrado en su renglón, como las notas.
+                        .wrapContentHeight()
             )
         }
     }

@@ -193,6 +193,7 @@ import dev.jesusmolano.alisio.ui.components.wallpaperVeil
 import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
+import dev.jesusmolano.alisio.ui.theme.LocalHomePlate
 import dev.jesusmolano.alisio.ui.theme.onWallpaper
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -1033,14 +1034,16 @@ private fun ClockAndDate(
                                 Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)
                             )
                         }
-                        .heightIn(min = 48.dp)
+                        // Renglón junto, por debajo del toque mínimo a elección del dueño (AlisioTokens.InfoRow).
+                        .heightIn(min = AlisioTokens.InfoRow)
+                        .wrapContentHeight()
                         .then(layout)
             )
         }
         // Sin aire delante: su tinta cae en el filo, como la de la hora.
-        dateText(Modifier.padding(top = 4.dp, bottom = if (pieces.isEmpty()) 12.dp else 0.dp, end = 12.dp))
+        dateText(Modifier.padding(top = 4.dp, bottom = if (pieces.isEmpty()) 8.dp else 0.dp, end = 12.dp))
         // Las piezas van en su renglón bajo la fecha, más pequeñas: datos de un vistazo, no una lista.
-        if (pieces.isNotEmpty()) GlanceLine(pieces, Modifier.padding(bottom = 8.dp))
+        if (pieces.isNotEmpty()) GlanceLine(pieces, Modifier.padding(bottom = 4.dp))
         // Las notas siguen a la línea, con su misma letra: son lo que el dueño se ha dejado dicho.
         if (notes.isNotEmpty()) NotesLine(notes, onStrikeNote, onOpenLink)
     }
@@ -1307,7 +1310,7 @@ internal fun SearchPill(hint: String, onClick: () -> Unit, modifier: Modifier = 
             .fillMaxWidth()
             .heightIn(min = PillMinHeight)
             .clip(shape)
-            .background(AlisioTokens.Plate, shape)
+            .background(LocalHomePlate.current.fill, shape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1315,14 +1318,14 @@ internal fun SearchPill(hint: String, onClick: () -> Unit, modifier: Modifier = 
         Icon(
             painter = painterResource(R.drawable.ic_search),
             contentDescription = null,
-            tint = AlisioTokens.TextSecondary,
+            tint = LocalHomePlate.current.secondary,
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(12.dp))
         Text(
             text = hint,
             style = MaterialTheme.typography.bodyLarge,
-            color = AlisioTokens.TextSecondary
+            color = LocalHomePlate.current.secondary
         )
     }
 }
@@ -1837,7 +1840,7 @@ internal fun NowCard(
         RoundIconButton(
             R.drawable.ic_close,
             stringResource(R.string.now_dismiss),
-            AlisioTokens.TextSecondary,
+            LocalHomePlate.current.secondary,
             onDismiss,
             iconSize = 20.dp
         )
@@ -1904,7 +1907,7 @@ private fun NowPlate(
                 .fillMaxWidth()
                 .heightIn(min = 68.dp)
                 .clip(shape)
-                .background(AlisioTokens.Plate, shape)
+                .background(LocalHomePlate.current.fill, shape)
                 .combinedClickable(
                     role = Role.Button,
                     onLongClickLabel = stringResource(R.string.now_why),
@@ -1927,7 +1930,7 @@ private fun NowPlate(
             Text(
                 text = reason,
                 style = MaterialTheme.typography.bodyMedium,
-                color = AlisioTokens.TextSecondary,
+                color = LocalHomePlate.current.secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

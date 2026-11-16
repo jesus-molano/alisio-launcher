@@ -75,7 +75,7 @@ Colores base, sin cambio: `Background` `#0B0C0E`, `Surface` `#15171A`, `Text` `#
 | `Veil` | Degradado vertical de `Background`; ver §3 | Inicio y vista previa de ajustes |
 | `ZonesVeil` | `Background` α 0,70 uniforme | Zonas |
 | `Scrim` | `Background` α 0,86 | Trazo abierto |
-| `Plate` | `Surface` α 0,86 | Todo lo que flota sobre el fondo: píldora, Ahora, reproductor, islas, carpeta de pila, hueco vacío |
+| `Plate` | `Surface` α 0,86 | Todo lo que flota sobre el fondo: píldora, Ahora, reproductor, islas, carpeta de pila, hueco vacío. La píldora, Ahora, En curso y el reproductor siguen la opacidad elegida (`homePlate`: 0,86, 0,62 o 0,40; con 0,62 y 0,40 su secundario pasa a `Text` α 0,8) |
 | `Background` opaco | `#0B0C0E` | Barra, ajustes, pausa, bienvenida, aviso |
 | `Surface` opaco | `#15171A` | Hojas inferiores y barra de deshacer |
 | `Fill` | `Text` α 0,06 | Único relleno dentro de fondo opaco, hoja o placa: campo, chip sin elegir, botón tonal, avatar sin foto, fondo de tesela, asa de hoja, pista del interruptor apagado |
@@ -135,7 +135,7 @@ Fuera de esos cuatro usos no hay acento: ni en iconos de fila, ni en etiquetas, 
 2. **Paradas.** Arriba `max(0,38 × dim, suelo)`; al 45 % de la altura `max(0,30 × dim, suelo × 0,6)`; abajo `(valor actual).coerceIn(0,66, 1)`.
 3. **Suelo según el fondo.** Se lee `WallpaperManager.getWallpaperColors(FLAG_SYSTEM)` y se escucha `addOnColorsChangedListener`. Con `HINT_SUPPORTS_DARK_TEXT`, `suelo = 0,50`; sin esa pista o con `null`, `suelo = 0`. «Poco», «Medio» y «Mucho» siguen graduando por encima del suelo.
 4. **Sombra única.** `OnWallpaperShadow` con `style.copy(shadow = …)` en reloj, fecha, `DockLabel` del dock, título y pista de Zonas y letras del índice. No se aplica dentro de placas ni sobre fondo opaco.
-5. **Placas.** `Plate` a 0,86 deja el secundario en torno a 4,6:1 sobre blanco puro (comprobar). No se baja para lucir el fondo: el fondo se ve en los dos tercios libres del Inicio.
+5. **Placas.** `Plate` a 0,86 deja el secundario en torno a 4,6:1 sobre blanco puro (comprobar). No se baja para lucir el fondo: el fondo se ve en los dos tercios libres del Inicio. Excepción elegida por el dueño: las placas del pie pueden ser medias o translúcidas (Ajustes → Aspecto), y entonces su texto secundario se aclara para no bajar de 4,5:1.
 6. **Sin texto fantasma.** Con Zonas, Trazo o los ajustes abiertos, el contenido del Inicio (reloj, fecha, Ahora, reproductor, dock, píldora, índice) pasa a alfa 0 con `Standard`. El `drawBehind` del velo no se toca.
 7. **Sin brillo radial** en Inicio ni en Zonas.
 8. **Texto siempre claro.** No hay modo de texto oscuro: la pista describe el fondo entero, no la franja.
@@ -249,7 +249,7 @@ Arriba:
 - Reloj en el filo, 40 dp bajo la barra de estado, `Clock`, con sombra. `maxLines = 1`; si no cabe (12 h o fuente grande), se reduce el tamaño.
 - Fecha 4 dp debajo, `bodyLarge` Medium, `Text` opaco con sombra.
 - Los dos son botones (`role = Button`) con `onClickLabel` «Abrir el reloj» y «Abrir el calendario».
-- **Línea bajo la hora** (fase 7): con alguna pieza que decir, la fecha abre una línea de texto con su misma letra y las piezas detrás (`GlanceLine`, `feature/home/Glance.kt`): vector de `GlanceIconSize` (18 dp) en `Text`, 6 dp y el texto; 16 dp entre piezas; toque de 48 dp de alto; hasta tres renglones. Sin caja, sin acento. La hora se escala con `AlisioTokens.clockScale` (tamaño elegido) y sigue el formato elegido.
+- **Línea bajo la hora** (fase 7): con alguna pieza que decir, la fecha abre una línea de texto con su misma letra y las piezas detrás (`GlanceLine`, `feature/home/Glance.kt`): vector de `GlanceIconSize` (18 dp) en `Text`, 6 dp y el texto; 16 dp entre piezas; renglones de `InfoRow` (32 dp), como la fecha y las notas, más juntos que el toque mínimo por elección del dueño; hasta tres renglones. Sin caja, sin acento. La hora se escala con `AlisioTokens.clockScale` (tamaño elegido) y sigue el formato elegido.
 - **Dock** (fase 7): de 0 a 8 huecos; con 7 u 8 el icono encoge (`dockIconSize`) y, si el dueño no ha elegido, los nombres se ocultan.
 - Índice de Trazo a la derecha, centrado a 24 dp del borde, `RailLetter` con sombra. Para TalkBack: nombre «Índice alfabético de apps» y acción «Abrir Zonas».
 
@@ -469,7 +469,7 @@ Lo que existe en el código tras el paso 1 (fundamentos). Antes de crear algo, s
 | Grupo | Nombres |
 | --- | --- |
 | Color | `Background`, `Surface`, `Text`, `TextSecondary`, `TextTertiary`, `Fill`, `Plate`, `ZonesVeil`, `Scrim`, `Accents`, `Accent`, `AccentSoft`, `DISABLED_ALPHA` (0,38) |
-| Espaciado | `Edge` 24, `Outset` 12, `IconSlot` 44, `IconGap` 16, `RowMinHeight` 56, `GroupGap` 28, `LabelGap` 8, `TitleGap` 24, `SheetTitleGap` 20, `PlateGap` 12, `MinTouch` 48, `DockIconSize` 52 |
+| Espaciado | `Edge` 24, `Outset` 12, `IconSlot` 44, `IconGap` 16, `RowMinHeight` 56, `GroupGap` 28, `LabelGap` 8, `TitleGap` 24, `SheetTitleGap` 20, `PlateGap` 12, `MinTouch` 48, `InfoRow` 32 (renglones bajo la hora), `DockIconSize` 52 |
 | Radios | `PillShape`, `CardShape`, `RowShape`, `DockIconShape`, `SheetShape` (esquinas superiores de hoja) |
 | Tipografía propia | `Clock`, `Numeral`, `SectionLabel`, `DockLabel`, `RailLetter`. Son propiedades `@Composable`: leen la familia elegida |
 

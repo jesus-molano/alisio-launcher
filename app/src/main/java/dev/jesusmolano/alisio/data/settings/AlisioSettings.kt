@@ -35,6 +35,7 @@ import dev.jesusmolano.alisio.core.people.parseFavorites
 import dev.jesusmolano.alisio.core.people.toggleFavorite as toggledFavorites
 import dev.jesusmolano.alisio.core.theme.CUSTOM_ACCENT
 import dev.jesusmolano.alisio.core.theme.FontChoice
+import dev.jesusmolano.alisio.core.theme.PlateOpacity
 import dev.jesusmolano.alisio.core.time.ClockFormat
 import dev.jesusmolano.alisio.core.time.ClockSize
 import dev.jesusmolano.alisio.core.trace.TraceRail
@@ -59,6 +60,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param accent índice del color de acento en la paleta del tema, o [CUSTOM_ACCENT] para [customAccent].
  * @param customAccent el color propio (ARGB) elegido a mano; se recuerda aunque se vuelva a la paleta.
  * @param font familias de letra de toda la interfaz.
+ * @param plateOpacity cuánto tapan el fondo las placas del pie del Inicio.
  * @param assistantPackage app de IA a la que la barra manda las preguntas.
  * @param webSearchPackage app que hace la búsqueda web; `null` es la que elija el sistema.
  * @param nowEnabled si el Inicio enseña la sugerencia de Ahora.
@@ -113,6 +115,7 @@ data class Prefs(
     val customAccent: Int? = null,
     val font: FontChoice = FontChoice.PAIR,
     val wallpaperDim: WallpaperDim = WallpaperDim.MEDIUM,
+    val plateOpacity: PlateOpacity = PlateOpacity.SOLID,
     val assistantPackage: String = DEFAULT_ASSISTANT,
     val webSearchPackage: String? = null,
     val nowEnabled: Boolean = true,
@@ -214,6 +217,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
             WallpaperDim.entries.getOrElse(stored[WALLPAPER_DIM] ?: WallpaperDim.MEDIUM.ordinal) {
                 WallpaperDim.MEDIUM
             },
+        plateOpacity = PlateOpacity.entries.getOrElse(stored[PLATE_OPACITY] ?: 0) { PlateOpacity.SOLID },
         assistantPackage = stored[ASSISTANT] ?: DEFAULT_ASSISTANT,
         webSearchPackage = stored[WEB_SEARCH],
         nowEnabled = stored[NOW_ENABLED] ?: true,
@@ -374,6 +378,8 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     fun toggleClipboardActions() = write { it[CLIPBOARD_ACTIONS] = !(it[CLIPBOARD_ACTIONS] ?: true) }
 
     fun setWallpaperDim(dim: WallpaperDim) = write { it[WALLPAPER_DIM] = dim.ordinal }
+
+    fun setPlateOpacity(opacity: PlateOpacity) = write { it[PLATE_OPACITY] = opacity.ordinal }
 
     fun toggleNow() = write { it[NOW_ENABLED] = !(it[NOW_ENABLED] ?: true) }
 
@@ -554,6 +560,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val FONT = text("font")
         val DOCK_LABELS = bool("dock_labels")
         val WALLPAPER_DIM = whole("wallpaper_dim")
+        val PLATE_OPACITY = whole("plate_opacity")
         val ASSISTANT = text("assistant")
         val WEB_SEARCH = text("web_search")
         val NOW_ENABLED = bool("now_enabled")

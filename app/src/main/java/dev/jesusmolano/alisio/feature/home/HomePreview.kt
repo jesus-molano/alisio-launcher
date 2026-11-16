@@ -177,9 +177,14 @@ fun HomePreview(
                         Text(
                             text = date,
                             style = style,
-                            modifier = Modifier.heightIn(min = AlisioTokens.MinTouch).wrapContentHeight()
+                            // Los mismos márgenes que en el Inicio (ClockAndDate).
+                            modifier =
+                                Modifier
+                                    .padding(top = 4.dp, end = 12.dp)
+                                    .heightIn(min = AlisioTokens.InfoRow)
+                                    .wrapContentHeight()
                         )
-                        GlanceLine(pieces, interactive = false)
+                        GlanceLine(pieces, Modifier.padding(bottom = 4.dp), interactive = false)
                     }
                     // Las notas, o una de muestra si aún no hay ninguna: se ve dónde salen al encenderlas.
                     if (prefs.homeNotes) {

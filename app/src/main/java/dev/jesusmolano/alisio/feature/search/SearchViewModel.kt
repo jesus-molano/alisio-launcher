@@ -456,7 +456,8 @@ class SearchViewModel(
                     listOf(
                         "aspecto", "apariencia", "look", "appearance", "acento", "accent", "color propio",
                         "custom color", "color del día", "day color", "velo", "veil", "fondo de pantalla",
-                        "wallpaper", "fondos que rotan", "rotating wallpapers", "tipografía", "letra", "fuente", "font"
+                        "wallpaper", "fondos que rotan", "rotating wallpapers", "tipografía", "letra", "fuente", "font",
+                        "opacidad", "transparencia", "translúcido", "opacity", "transparency", "see-through"
                     )
                 ),
                 AlisioPage(
