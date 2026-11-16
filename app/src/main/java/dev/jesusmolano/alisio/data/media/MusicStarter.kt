@@ -11,6 +11,7 @@ import android.service.media.MediaBrowserService
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.util.AtomicFile
+import dev.jesusmolano.alisio.core.media.KNOWN_MUSIC_APPS
 import dev.jesusmolano.alisio.core.media.ResumeStep
 import dev.jesusmolano.alisio.core.media.countsAsMusic
 import dev.jesusmolano.alisio.core.media.musicAppFor
@@ -166,6 +167,16 @@ class MusicStarter(
             }
         return sent && awaitPlaying(packageName, watching)
     }
+
+    /**
+     * Los paquetes que cuentan como apps de música ([countsAsMusic]) de una sola consulta: los que
+     * publican un servicio de navegación multimedia, más los conocidos. El selector de la app de
+     * música los pone primero; preguntar app por app al abrirlo tardaría.
+     */
+    fun musicPackages(): Set<String> = appContext.packageManager
+        .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE), 0)
+        .mapNotNullTo(HashSet()) { it.serviceInfo?.packageName }
+        .apply { addAll(KNOWN_MUSIC_APPS) }
 
     private fun started(packageName: String) {
         settings.setLastMusicApp(packageName)

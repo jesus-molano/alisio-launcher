@@ -40,6 +40,15 @@ class MusicTest {
     }
 
     @Test
+    fun `al elegir app las de musica van primero y cada grupo conserva su orden`() {
+        val apps = listOf("calc", spotify, "brave", other, ytMusic)
+        assertEquals(
+            listOf(spotify, other, ytMusic, "calc", "brave"),
+            musicAppsFirst(apps, setOf(spotify, ytMusic, other)) { it }
+        )
+    }
+
+    @Test
     fun `la clave de musica no choca con la de abrir la app`() {
         assertEquals("music:$spotify", musicKey(spotify))
     }

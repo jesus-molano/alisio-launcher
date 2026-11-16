@@ -38,6 +38,7 @@ import dev.jesusmolano.alisio.core.dock.MAX_DOCK_SLOTS
 import dev.jesusmolano.alisio.core.glance.BatteryShow
 import dev.jesusmolano.alisio.core.glance.GlanceItem
 import dev.jesusmolano.alisio.core.glance.Place
+import dev.jesusmolano.alisio.core.media.musicAppsFirst
 import dev.jesusmolano.alisio.core.time.ClockFormat
 import dev.jesusmolano.alisio.core.time.ClockSize
 import dev.jesusmolano.alisio.data.apps.AppEntry
@@ -272,7 +273,7 @@ internal fun GlanceChoices(context: SettingsContext, home: HomeViewModel) {
     // Siempre a la vista, no solo con la pieza: la app de música también decide qué enseña el
     // reproductor, qué reanuda Ahora y qué abre «música» en la barra.
     SectionLabel(stringResource(R.string.settings_music))
-    MusicAppOption(context, musicApp)
+    MusicAppOption(context, musicApp, home::musicPackages)
 }
 
 /**
@@ -280,9 +281,10 @@ internal fun GlanceChoices(context: SettingsContext, home: HomeViewModel) {
  * ninguna: entonces vale la última que sonó, y la fila dice cuál es.
  *
  * @param current la que se usa ahora (elegida, la última que sonó o una conocida instalada).
+ * @param musicPackages las apps que cuentan como de música; se leen al abrir el selector.
  */
 @Composable
-private fun MusicAppOption(context: SettingsContext, current: AppEntry?) {
+private fun MusicAppOption(context: SettingsContext, current: AppEntry?, musicPackages: () -> Set<String>) {
     val prefs = context.prefs
     var choosing by remember { mutableStateOf(false) }
     ItemRow(
@@ -308,9 +310,14 @@ private fun MusicAppOption(context: SettingsContext, current: AppEntry?) {
         onClick = { choosing = true }
     )
     if (choosing) {
+        // Una sola consulta al sistema por apertura del selector, no en cada recomposición.
+        val music = remember { musicPackages() }
+        val apps = remember(context.apps, music) {
+            musicAppsFirst(context.apps, music) { it.component.packageName }
+        }
         AppPickerSheet(
             title = stringResource(R.string.settings_music_app),
-            items = context.apps,
+            items = apps,
             key = { it.key.toString() },
             label = AppEntry::label,
             icon = { it.icon },

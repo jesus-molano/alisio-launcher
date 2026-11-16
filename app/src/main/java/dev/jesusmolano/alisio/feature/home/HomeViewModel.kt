@@ -151,6 +151,9 @@ class HomeViewModel(
     /** La app de música por defecto; la usan la pieza «Música» y la sugerencia «Reanudar». */
     val musicApp: StateFlow<AppEntry?> = music.app
 
+    /** Los paquetes que cuentan como apps de música, para ponerlas primero al elegir una. */
+    fun musicPackages(): Set<String> = music.musicPackages()
+
     /** La última carátula guardada de cada app de música: la lleva la sugerencia «Reanudar». */
     val musicArt: StateFlow<Map<String, Bitmap>> = music.lastArt
 
@@ -423,15 +426,17 @@ class HomeViewModel(
     )
 
     // La app de música y lo que suena, para la regla de música; sus horas de empezar a sonar están
-    // en el historial y se leen con él.
+    // en el historial y se leen con él. Un toque en «Reanudar» cuenta ya como sonando: la placa se
+    // va con el toque y no espera a que la app suene, como la pieza «Música» (musicPieceShown).
     private val musicInput =
         combine(
             musicApp,
             mediaSessions.playingApps,
             music.lastPlayedAt,
-            mediaSessions.watching
-        ) { app, playing, lastPlayed, watching ->
-            app?.let { MusicNow(it, playing.isNotEmpty(), lastPlayed, watching) }
+            mediaSessions.watching,
+            musicStarting
+        ) { app, playing, lastPlayed, watching, starting ->
+            app?.let { MusicNow(it, playing.isNotEmpty() || starting, lastPlayed, watching) }
         }
 
     private class MusicNow(val app: AppEntry, val playing: Boolean, val lastPlayedAt: Long?, val watching: Boolean)

@@ -35,3 +35,11 @@ private const val MUSIC_KEY_PREFIX = "music:"
  * navegador no pasan a ser la app de música por defecto.
  */
 fun countsAsMusic(packageName: String, knownBrowser: Boolean): Boolean = knownBrowser || packageName in KNOWN_MUSIC_APPS
+
+/**
+ * [apps] con las de música ([music]) delante y el resto detrás, cada grupo en su orden de antes. En
+ * el selector la lista crece desde abajo: las primeras quedan junto al buscador y al pulgar, y no
+ * hay que buscar Spotify entre la calculadora y el navegador.
+ */
+fun <T> musicAppsFirst(apps: List<T>, music: Set<String>, packageOf: (T) -> String): List<T> =
+    apps.sortedBy { packageOf(it) !in music }
