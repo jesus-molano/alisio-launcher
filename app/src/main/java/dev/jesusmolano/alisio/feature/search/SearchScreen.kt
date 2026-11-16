@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,7 +33,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -59,9 +60,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +73,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -112,7 +116,9 @@ import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
+import dev.jesusmolano.alisio.ui.components.stableSystemBars
 import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
+import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -155,6 +161,15 @@ fun SearchScreen(
     // Lo que había en el portapapeles al abrir la barra, si tiene acción. Vive solo mientras la barra
     // está abierta: no se guarda ni sobrevive a cerrarla (§5.8).
     var clip by remember { mutableStateOf<ClipContent?>(null) }
+    // La acción del portapapeles llega unos fotogramas después de abrir (hace falta el foco de la
+    // ventana) y entra junto al campo: si la lista ya se viera, los recientes subirían una fila de
+    // golpe. La lista aparece cuando ya se sabe si la hay; la barra entra con su fundido y no se nota.
+    var clipChecked by remember { mutableStateOf(!prefs.clipboardActions) }
+    val listAlpha by animateFloatAsState(
+        targetValue = if (clipChecked) 1f else 0f,
+        animationSpec = AlisioMotion.fast(),
+        label = "search-list"
+    )
     val windowInfo = LocalWindowInfo.current
     // Persona elegida: su tarjeta sustituye a los resultados hasta que se contacta o se vuelve atrás.
     // Se guarda su clave y no el objeto: si la agenda cambia con la tarjeta abierta, la tarjeta usa
@@ -248,8 +263,12 @@ fun SearchScreen(
     // ventana: sin él, Android no deja leer el portapapeles y la lectura se perdería.
     LaunchedEffect(Unit) {
         if (prefs.clipboardActions) {
-            snapshotFlow { windowInfo.isWindowFocused }.first { it }
-            clip = context.clipboardContent()
+            try {
+                snapshotFlow { windowInfo.isWindowFocused }.first { it }
+                clip = context.clipboardContent()
+            } finally {
+                clipChecked = true
+            }
         }
     }
     // Al cambiar los resultados la lista vuelve al que está pegado a la barra, que es el que abre Enter;
@@ -457,7 +476,7 @@ fun SearchScreen(
                     onDragEnd = { if (dragged > closeDragPx) onClose() }
                 )
             }
-            .systemBarsPadding()
+            .windowInsetsPadding(stableSystemBars())
             .imePadding()
     ) {
         if (card != null) {
@@ -484,7 +503,13 @@ fun SearchScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .graphicsLayer { alpha = listAlpha }
+                        // Invisible, tampoco se toca ni la lee TalkBack: abriría algo que no se ve.
+                        .then(if (clipChecked) Modifier else Modifier.blockInput()),
                 state = listState,
                 reverseLayout = true,
                 // Arriba, aire bajo la barra de estado: la última fila no se corta en seco contra ella.
@@ -597,6 +622,17 @@ fun SearchScreen(
 }
 
 private const val PLAY_STORE_PACKAGE = "com.android.vending"
+
+/**
+ * Ni toques ni TalkBack para lo que está y no se ve: consume cada dedo en la pasada Initial, antes que
+ * las filas, y quita su semántica.
+ */
+private fun Modifier.blockInput(): Modifier = clearAndSetSemantics {}
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
 
 /** El icono de una app instalada, tal como sale en los resultados; `null` si no está. */
 private fun SearchSource.appIcon(packageName: String): Bitmap? = index.firstNotNullOfOrNull { item ->

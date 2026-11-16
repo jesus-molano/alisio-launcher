@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -43,8 +44,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -243,6 +244,7 @@ private class MenuTarget(val key: String, val slot: Int?)
  * @param searchOpen con la barra encima, Trazo se retira: su índice seguiría recibiendo toques y
  *   quitándole al sistema el gesto atrás del borde derecho.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -283,7 +285,10 @@ fun HomeScreen(
         }
     val context = LocalContext.current
     val resources = LocalResources.current
-    val bars = WindowInsets.systemBars.asPaddingValues()
+    // Ignorando si se ven: con «Ocultar la barra de estado» (MainActivity) el margen de arriba valdría
+    // 0, la hora subiría hasta la cámara y todo el Inicio saltaría unos 40 dp cada vez que la barra
+    // asoma al deslizar desde arriba.
+    val bars = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val density = LocalDensity.current
     val undo = LocalUndo.current
     val lightWallpaper = rememberLightWallpaper()
@@ -475,7 +480,8 @@ fun HomeScreen(
     val feedback = remember { GestureFeedback(gestureScope) }
     val fingers = remember { HomeFingers() }
     val systemGestures = WindowInsets.systemGestures
-    val statusBars = WindowInsets.statusBars
+    // La franja de arriba es del sistema también con la barra oculta: deslizar ahí la hace asomar.
+    val statusBars = WindowInsets.statusBarsIgnoringVisibility
 
     Box(
         modifier
@@ -734,21 +740,31 @@ fun HomeScreen(
 
         // Una app oculta no sale en Trazo: solo se llega a ella buscando su nombre.
         val sections = remember(apps) { apps.orEmpty().filterNot { it.hidden }.toSections { it.label } }
-        if (!searchOpen) {
-            Trace(
-                sections = sections,
-                mode = prefs.traceRail,
-                railTop = bars.calculateTopPadding() + 16.dp,
-                // El índice en reposo acaba donde empieza el pie; durante el trazo baja sobre él.
-                railBottom = footerHeight + AlisioTokens.PlateGap,
-                onLaunch = ::launch,
-                onOpenZones = onOpenZones,
-                pressedFingers = { fingers.pressed },
-                onTracing = {
-                    if (it) TouchTrace.mark("trazo")
-                    tracing = it
-                }
-            )
+        // Al abrir la barra el índice se desvanece con el resto del Inicio en vez de quitarse de golpe,
+        // y sale de la composición al acabar. Mientras tanto los toques son de la barra, que va encima.
+        val traceAlpha by animateFloatAsState(
+            targetValue = if (searchOpen) 0f else 1f,
+            animationSpec = AlisioMotion.standard(),
+            label = "trace-rail"
+        )
+        if (!searchOpen || traceAlpha > 0f) {
+            Box(Modifier.matchParentSize().graphicsLayer { alpha = traceAlpha }) {
+                Trace(
+                    sections = sections,
+                    mode = prefs.traceRail,
+                    railTop = bars.calculateTopPadding() + 16.dp,
+                    // El índice en reposo acaba donde empieza el pie; durante el trazo baja sobre él.
+                    railBottom = footerHeight + AlisioTokens.PlateGap,
+                    onLaunch = ::launch,
+                    onOpenZones = onOpenZones,
+                    pressedFingers = { fingers.pressed },
+                    onTracing = {
+                        if (it) TouchTrace.mark("trazo")
+                        tracing = it
+                    },
+                    leaving = searchOpen
+                )
+            }
         }
         // La persiana propia: la de verdad es del sistema y no se puede enseñar a medias.
         NotificationsShade(progress = { feedback.of(Candidate.NOTIFICATIONS) })

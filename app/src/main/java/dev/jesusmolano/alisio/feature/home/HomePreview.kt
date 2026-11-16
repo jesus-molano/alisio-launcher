@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,6 +53,7 @@ import dev.jesusmolano.alisio.ui.components.DockIcon
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberLightWallpaper
 import dev.jesusmolano.alisio.ui.components.rememberNow
+import dev.jesusmolano.alisio.ui.components.stableStatusBars
 import dev.jesusmolano.alisio.ui.components.wallpaperVeil
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import dev.jesusmolano.alisio.ui.theme.onWallpaper
@@ -135,7 +136,8 @@ fun HomePreview(
         Box(
             Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
+                // Como el Inicio: con la barra de estado oculta la miniatura no sube hasta la cámara.
+                .windowInsetsPadding(stableStatusBars())
                 .padding(top = PreviewTopGap, bottom = PreviewBottomGap)
                 .width(width)
                 .fillMaxHeight()

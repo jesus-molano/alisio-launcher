@@ -392,9 +392,11 @@ class MainActivity : ComponentActivity() {
                 } else {
                     chosenAccent
                 }
-            // Solo con el Inicio a la vista: oculta, sus insets valen 0 y la barra, los ajustes y Zonas
-            // subirían hasta la cámara. Sale un momento al deslizar desde arriba.
-            val hideBar = prefs.hideStatusBar && !searchOpen && !settingsOpen && !zonesOpen
+            // En todo Alisio, no solo en el Inicio: si volviera al abrir la barra, Zonas o los ajustes,
+            // aparecería y se iría arriba en cada apertura. Las pantallas miden su margen con
+            // *IgnoringVisibility, así que oculta no suben hasta la cámara. Sale un momento al
+            // deslizar desde arriba.
+            val hideBar = prefs.hideStatusBar
             LaunchedEffect(hideBar) { applyStatusBar(hideBar) }
             AlisioTheme(accent = accent, font = prefs.font) {
                 // Una sola barra de deshacer para toda la actividad: la usan el Inicio, Zonas y los ajustes.

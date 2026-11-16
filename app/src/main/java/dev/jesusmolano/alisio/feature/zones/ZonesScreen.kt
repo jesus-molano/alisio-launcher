@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,7 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -192,6 +193,7 @@ private class Geometry {
  * @param onAppMenu abre el Interior de una app. La hoja la pinta el Inicio, que tiene sus datos y
  *   el dock donde ponerla.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ZonesScreen(
     viewModel: ZonesViewModel,
@@ -206,7 +208,9 @@ fun ZonesScreen(
     val resources = LocalResources.current
     val view = LocalView.current
     val density = LocalDensity.current
-    val bars = WindowInsets.systemBars.asPaddingValues()
+    // Ignorando si se ven: con la barra de estado oculta (MainActivity) el contenido no sube hasta la
+    // cámara ni salta cuando la barra asoma.
+    val bars = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val listState = rememberLazyListState()
     val geometry = remember { Geometry() }
     var drag by remember { mutableStateOf<DragState?>(null) }

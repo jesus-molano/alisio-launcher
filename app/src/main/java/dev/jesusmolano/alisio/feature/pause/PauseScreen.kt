@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,6 +42,7 @@ import dev.jesusmolano.alisio.feature.appmenu.usageText
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.PrimaryButton
 import dev.jesusmolano.alisio.ui.components.TextAction
+import dev.jesusmolano.alisio.ui.components.stableSystemBars
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import kotlinx.coroutines.delay
@@ -104,7 +105,7 @@ fun PauseScreen(
                 .background(AlisioTokens.Background)
                 // La pausa se queda los toques: no llegan a lo que haya debajo.
                 .pointerInput(Unit) {}
-                .systemBarsPadding()
+                .windowInsetsPadding(stableSystemBars())
                 .padding(AlisioTokens.Edge),
         verticalArrangement = Arrangement.Bottom
     ) {

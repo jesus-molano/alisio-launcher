@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.TextAutoSize
@@ -196,6 +197,7 @@ internal class SettingsContext(
  * @param backup guarda la configuración en un archivo o la carga de uno.
  * @param wallpaper elige la carpeta de los fondos que rotan y pasa al siguiente.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     page: SettingsDestination,
@@ -229,7 +231,8 @@ fun SettingsScreen(
             val inDock = dock.dockApps().mapTo(HashSet()) { it.key }
             apps.firstOrNull { it.key !in inDock } ?: apps.firstOrNull()
         }
-    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Ignorando si se ve: con la barra de estado oculta (MainActivity) el margen no cambia cuando asoma.
+    val statusBar = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     // Lo que mide la miniatura por dentro (HomePreview lo mide: la línea bajo la hora, las notas, Ahora,
     // las caras y el dock cambian con cada opción, con la letra y con el tamaño de la hora). Hasta la
     // primera medida vale el alto de siempre.

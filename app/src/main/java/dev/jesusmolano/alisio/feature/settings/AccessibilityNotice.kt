@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -34,6 +34,7 @@ import dev.jesusmolano.alisio.ui.components.PrimaryButton
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.TextAction
+import dev.jesusmolano.alisio.ui.components.stableSystemBars
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 /**
@@ -53,7 +54,7 @@ fun AccessibilityNotice(onContinue: () -> Unit, onDismiss: () -> Unit, modifier:
                 .background(AlisioTokens.Background)
                 // El aviso se queda los toques: no llegan a los ajustes de debajo.
                 .pointerInput(Unit) {}
-                .systemBarsPadding()
+                .windowInsetsPadding(stableSystemBars())
                 .padding(vertical = 16.dp)
     ) {
         // El texto se desplaza si no cabe (letra grande); los botones se quedan siempre a la vista.

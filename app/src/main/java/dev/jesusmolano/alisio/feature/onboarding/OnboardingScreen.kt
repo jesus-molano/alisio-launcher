@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +23,7 @@ import dev.jesusmolano.alisio.ui.components.TextAction
 import dev.jesusmolano.alisio.ui.components.clockAutoSize
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
+import dev.jesusmolano.alisio.ui.components.stableSystemBars
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 /** Bienvenida: lo único que pide es ser la app de inicio. El contenido va abajo, junto al pulgar. */
@@ -32,7 +33,7 @@ fun OnboardingScreen(onSetDefault: () -> Unit, onSkip: () -> Unit, modifier: Mod
         modifier =
             modifier
                 .fillMaxSize()
-                .systemBarsPadding()
+                .windowInsetsPadding(stableSystemBars())
                 .padding(AlisioTokens.Edge)
     ) {
         // La hora, donde estará en el Inicio y con su misma letra: lo primero que se ve ya es Alisio,

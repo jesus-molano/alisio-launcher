@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.MaterialTheme
@@ -152,7 +153,10 @@ private data class TraceState(
  * @param pressedFingers cuántos dedos hay en toda la pantalla de quien lo contiene; Trazo solo ve los
  *   que caen sobre él, y un segundo dedo fuera del índice es un pellizco, no un trazo.
  * @param onTracing avisa cuando empieza y cuando acaba un trazo.
+ * @param leaving el índice se está desvaneciendo bajo otra pantalla: deja de quitarle al sistema el
+ *   gesto atrás del borde derecho.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BoxScope.Trace(
     sections: List<AppSection<AppEntry>>,
@@ -163,12 +167,14 @@ fun BoxScope.Trace(
     railTopLimit: Dp = railTop,
     onOpenZones: (() -> Unit)? = null,
     pressedFingers: () -> Int = { 0 },
-    onTracing: (Boolean) -> Unit = {}
+    onTracing: (Boolean) -> Unit = {},
+    leaving: Boolean = false
 ) {
     if (sections.isEmpty() || mode == TraceRail.NEVER) return
     val view = LocalView.current
     val density = LocalDensity.current
-    val insets = WindowInsets.systemBars
+    // Como el Inicio (HomeScreen): el índice no se mueve cuando la barra de estado se oculta o vuelve.
+    val insets = WindowInsets.systemBarsIgnoringVisibility
     val launch by rememberUpdatedState(onLaunch)
     // Si la lista de apps cambia a mitad de un trazo, el trazo se descarta: sus índices ya no valen.
     var trace by remember(sections) { mutableStateOf<TraceState?>(null) }
@@ -227,7 +233,9 @@ fun BoxScope.Trace(
                 // El índice pisa la franja del gesto atrás del borde derecho: sin esto, One UI se queda
                 // el trazo. Solo el índice y su zona muerta: por encima y por debajo, atrás sigue
                 // funcionando (en Zonas cierra la pantalla).
-                .systemGestureExclusion()
+                // Mientras se desvanece ([leaving]) ya hay otra pantalla encima: atrás vuelve a ser del
+                // sistema y cierra esa pantalla.
+                .then(if (leaving) Modifier else Modifier.systemGestureExclusion())
                 // TalkBack se queda los gestos y el trazo no se puede hacer con él: el camino
                 // equivalente es Zonas, que tiene todas las apps y su propio índice.
                 .semantics {
