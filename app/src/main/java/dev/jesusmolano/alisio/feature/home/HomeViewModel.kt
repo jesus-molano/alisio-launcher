@@ -145,10 +145,10 @@ class HomeViewModel(
     /** Tacha una nota. Devuelve cómo deshacerlo. */
     fun removeNote(note: HomeNote): () -> Unit = notesSource.remove(note)
 
-    /** La agenda: las personas favoritas sobre el dock y las iniciales dibujadas también las encuentran. */
+    /** La agenda: las iniciales dibujadas y la elección de favoritas en los ajustes las encuentran. */
     val people: StateFlow<List<Person>> = contacts.people
 
-    /** Si hay permiso para leer la agenda; sin él no hay caras sobre el dock. */
+    /** Si hay permiso para leer la agenda; sin él no hay caras favoritas ni iniciales de personas. */
     val contactsGranted: StateFlow<Boolean> = contacts.granted
 
     val photos: ContactPhotos = contacts.photos

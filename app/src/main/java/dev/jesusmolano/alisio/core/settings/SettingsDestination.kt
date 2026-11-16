@@ -50,7 +50,7 @@ enum class Access {
  * @param nextEvent el próximo evento en la línea bajo la hora.
  * @param deviceLocation el tiempo o la salida del sol sin una ciudad fijada: van por la ubicación.
  * @param screenTime el uso del teléfono de hoy en la línea bajo la hora.
- * @param favoritePeople hay caras elegidas sobre el dock: sin la agenda no se pueden pintar ni abrir.
+ * @param favoritePeople hay caras favoritas elegidas: sin la agenda no se pueden pintar ni abrir.
  */
 data class AccessUse(
     val player: Boolean,

@@ -240,8 +240,8 @@ internal fun Context.openNoteLink(link: String): Boolean = try {
 }
 
 /**
- * Las caras de las personas favoritas sobre el dock, con su nombre de pila debajo. Un toque abre su
- * canal principal; mantener enseña todos sus canales.
+ * Las caras de las personas favoritas, con su nombre de pila debajo. Salen en la barra con el campo
+ * vacío (SearchScreen), que decide qué hacen un toque ([onOpen]) y mantener ([onChannels]).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -451,9 +451,15 @@ internal class DrawGate {
  * soltar. Mira los toques al final de todo (`PointerEventPass.Final`), después de los gestos del
  * Inicio, y no consume nada: así los de siempre siguen igual y, si uno de ellos actúa, lo dice
  * [gate] y el trazo no cuenta. Un segundo dedo (pellizco) lo cancela.
+ *
+ * @param enabled la preferencia: solo cambia fuera de un gesto.
+ * @param paused si ahora no se escucha (barra abierta, Trazo en curso). Se pregunta en cada toque en
+ *   vez de quitar el modificador: quitarlo a mitad de gesto cancela también los gestos de los hijos
+ *   del Inicio, y un Trazo que empieza se cortaría al instante.
  */
 internal fun Modifier.initialDrawing(
     enabled: Boolean,
+    paused: () -> Boolean,
     gate: DrawGate,
     canStart: (Offset) -> Boolean,
     trail: SnapshotStateList<Offset>,
@@ -467,12 +473,12 @@ internal fun Modifier.initialDrawing(
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
             gate.taken = false
             trail.clear()
-            if (!canStart(down.position)) return@awaitEachGesture
+            if (paused() || !canStart(down.position)) return@awaitEachGesture
             val points = arrayListOf(down.position)
             var drawing = false
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Final)
-                if (event.changes.size > 1 || gate.taken) {
+                if (event.changes.size > 1 || gate.taken || paused()) {
                     trail.clear()
                     return@awaitEachGesture
                 }

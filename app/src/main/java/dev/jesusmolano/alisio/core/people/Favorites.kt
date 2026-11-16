@@ -1,6 +1,6 @@
 package dev.jesusmolano.alisio.core.people
 
-/** Caras que caben sobre el dock sin apretarse ni tapar sus nombres. */
+/** Caras que caben en una fila de la barra sin apretarse ni tapar sus nombres. */
 const val MAX_FAVORITES = 5
 
 // Las claves de persona ([personKey]) no llevan este carácter: separa sin ambigüedad.

@@ -282,6 +282,7 @@ fun HomeScreen(
     // Con algo encima (Zonas, los ajustes, un trazo) el contenido del Inicio se retira: los velos de
     // esas pantallas dejan ver el fondo de pantalla, y el reloj y el dock asomarían detrás.
     var tracing by remember { mutableStateOf(false) }
+    val searchOpenNow by rememberUpdatedState(searchOpen)
     val contentAlpha by animateFloatAsState(
         targetValue = if (searchOpen || tracing) 0f else 1f,
         animationSpec = AlisioMotion.standard(),
@@ -297,7 +298,6 @@ fun HomeScreen(
     val people by viewModel.people.collectAsStateWithLifecycle()
     val timers by viewModel.timers.collectAsStateWithLifecycle()
     val photos = viewModel.photos.takeIf { prefs.contactPhotos }
-    val favorites = remember(prefs.favoritePeople, people) { favoritePeople(prefs.favoritePeople, people) }
     val liveApps = rememberLiveApps(apps, prefs.liveIcons)
     val liveLook = liveLookFor(prefs.iconStyle)
     // La persona favorita cuyos canales se enseñan, al mantener su cara.
@@ -486,7 +486,9 @@ fun HomeScreen(
             // Dibujar una inicial, solo en el hueco libre entre la hora y el pie, y lejos del índice de
             // Trazo: lo demás tiene sus propios toques.
             .initialDrawing(
-                enabled = prefs.drawInitial && !searchOpen && !tracing,
+                enabled = prefs.drawInitial,
+                // El gesto guarda la primera lambda: lee estados, no valores de esta composición.
+                paused = { searchOpenNow || tracing },
                 gate = drawGate,
                 canStart = { at ->
                     val footerTop = homeSize.height - with(density) { footerHeight.toPx() }
@@ -580,19 +582,6 @@ fun HomeScreen(
                     onNext = viewModel::skipToNext,
                     onHide = viewModel::hidePlayer,
                     modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
-                )
-                Spacer(Modifier.height(AlisioTokens.PlateGap))
-            }
-            // Las caras favoritas van encima del dock, que es donde está el pulgar.
-            if (favorites.isNotEmpty()) {
-                FavoritesRow(
-                    people = favorites,
-                    photos = photos,
-                    showLabels = prefs.dockLabels,
-                    // Como la inicial dibujada: la fila está donde se apoya el pulgar, y un roce no
-                    // debe llamar a nadie. Una llamada pasa por el marcador.
-                    onOpen = { contactPerson(it, direct = false) },
-                    onChannels = { channelsOf = it }
                 )
                 Spacer(Modifier.height(AlisioTokens.PlateGap))
             }
@@ -945,14 +934,10 @@ private fun ClockAndDate(
                         .then(layout)
             )
         }
-        if (pieces.isEmpty()) {
-            // Sin aire delante: su tinta cae en el filo, como la de la hora.
-            dateText(Modifier.padding(top = 4.dp, bottom = 12.dp, end = 12.dp))
-        } else {
-            // La fecha abre la línea y las piezas siguen detrás, con su misma letra: es una sola
-            // línea de datos que pasa a la siguiente si no cabe, no dos bloques apilados.
-            GlanceLine(pieces) { dateText(Modifier.wrapContentHeight().padding(start = PieceStart, end = PieceEnd)) }
-        }
+        // Sin aire delante: su tinta cae en el filo, como la de la hora.
+        dateText(Modifier.padding(top = 4.dp, bottom = if (pieces.isEmpty()) 12.dp else 0.dp, end = 12.dp))
+        // Las piezas van en su renglón bajo la fecha, más pequeñas: datos de un vistazo, no una lista.
+        if (pieces.isNotEmpty()) GlanceLine(pieces, Modifier.padding(bottom = 8.dp))
         // Las notas siguen a la línea, con su misma letra: son lo que el dueño se ha dejado dicho.
         if (notes.isNotEmpty()) NotesLine(notes, onStrikeNote, onOpenLink)
     }

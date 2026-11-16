@@ -219,8 +219,6 @@ fun SettingsScreen(
     val swipeTargets by home.swipeTargets.collectAsStateWithLifecycle()
     val glance by home.glance.collectAsStateWithLifecycle()
     val notes by home.notes.collectAsStateWithLifecycle()
-    val people by home.people.collectAsStateWithLifecycle()
-    val favorites = remember(prefs.favoritePeople, people) { favoritePeople(prefs.favoritePeople, people) }
     val apps = loadedApps.orEmpty()
     val dock = loadedDock.orEmpty()
     val context = remember(prefs, settings, apps, dock, access) { SettingsContext(prefs, settings, apps, dock, access) }
@@ -270,8 +268,6 @@ fun SettingsScreen(
                 glance = glance,
                 modifier = Modifier.fillMaxWidth().height(window),
                 notes = notes,
-                favorites = favorites,
-                photos = home.photos.takeIf { prefs.contactPhotos },
                 onContentHeight = { measured = it }
             )
         }

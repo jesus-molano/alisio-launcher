@@ -93,6 +93,8 @@ import dev.jesusmolano.alisio.data.contacts.ContactPhotos
 import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.data.system.PhoneResult
+import dev.jesusmolano.alisio.feature.home.FavoritesRow
+import dev.jesusmolano.alisio.feature.home.favoritePeople
 import dev.jesusmolano.alisio.feature.people.ChannelButton
 import dev.jesusmolano.alisio.feature.people.PersonCard
 import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
@@ -202,6 +204,15 @@ fun SearchScreen(
 
     // Apagadas en los ajustes, nadie pide fotos y todos los avatares son iniciales.
     val photos = viewModel.photos.takeIf { prefs.contactPhotos }
+
+    // Las favoritas salen de la misma agenda que la búsqueda: sin permiso no hay ninguna.
+    val favorites =
+        remember(prefs.favoritePeople, source) {
+            favoritePeople(
+                prefs.favoritePeople,
+                source.index.mapNotNull { (it.payload as? Target.Contact)?.person }
+            )
+        }
 
     val cardChannels = selected?.let(::channelsOf).orEmpty()
     val card = selected?.takeIf { cardChannels.isNotEmpty() }
@@ -504,6 +515,17 @@ fun SearchScreen(
                     ) { person -> PersonActions(person, ::channelsOf, whatsappIcon, ::contact) }
                 }
             }
+        }
+        // Las personas favoritas, solo con el campo vacío: salen al abrir la barra y no ocupan el Inicio.
+        // Un toque abre su tarjeta con los canales, como al buscarla; un roce no llama a nadie.
+        if (card == null && state.query.isBlank() && favorites.isNotEmpty()) {
+            FavoritesRow(
+                people = favorites,
+                photos = photos,
+                showLabels = true,
+                onOpen = { selectedKey = personKey(it.lookupKey) },
+                onChannels = { selectedKey = personKey(it.lookupKey) }
+            )
         }
         // Las salidas: a dónde mandar lo escrito si no está en el teléfono. Si no caben en una línea
         // pasan a otra; nunca se cortan ni se desplazan.

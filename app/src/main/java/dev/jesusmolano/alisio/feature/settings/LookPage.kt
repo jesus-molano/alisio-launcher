@@ -85,6 +85,14 @@ internal fun LookPage(
         titleMark = R.drawable.ic_open_in_new,
         onClick = onWallpaper
     )
+    // Se ve el efecto al momento en la propia página: la barra de arriba se va o vuelve.
+    ItemRow(
+        title = AnnotatedString(stringResource(R.string.settings_hide_status_bar)),
+        subtitle = stringResource(R.string.settings_hide_status_bar_hint),
+        leadingIcon = R.drawable.ic_smartphone,
+        checked = prefs.hideStatusBar,
+        onClick = { settings.toggleHideStatusBar() }
+    )
 
     SectionLabel(stringResource(R.string.settings_wallpaper_rotation))
     WallpaperRotationOptions(context, wallpaper)

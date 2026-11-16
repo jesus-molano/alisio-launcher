@@ -95,6 +95,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param phoneCommands si la barra entiende órdenes para el teléfono («linterna», «brillo 40»).
  * @param drawInitial si dibujar una letra en una zona vacía del Inicio abre la app o la persona más
  *   usada con esa inicial.
+ * @param hideStatusBar si Alisio oculta la barra de estado; se ve un momento al deslizar desde arriba.
  * @param liveIcons si el calendario, el reloj y la app que suena enseñan en el dock su dato vivo.
  *   Apagado de serie: cambia el icono de marca solo en el dock, y la app debe reconocerse igual en
  *   Zonas, Trazo y la barra; se enciende viéndolo en su tesela.
@@ -102,7 +103,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param nightAccent el tono de la noche, un índice de la paleta.
  * @param wallpaperRotation si el fondo cambia cada día con una imagen de [wallpaperFolder].
  * @param wallpaperFolder la carpeta elegida (URI de árbol con permiso persistente); `null` sin elegir.
- * @param favoritePeople las personas sobre el dock, por su clave de persona y en su orden.
+ * @param favoritePeople las personas que salen al abrir la barra, por su clave de persona y en su orden.
  */
 data class Prefs(
     val iconStyle: IconStyle = IconStyle.Color,
@@ -143,6 +144,7 @@ data class Prefs(
     // podría tomarse por letra (IDEAS §0, que no se abra nada sin querer).
     val drawInitial: Boolean = false,
     val liveIcons: Boolean = false,
+    val hideStatusBar: Boolean = false,
     val dayAccent: Boolean = false,
     val nightAccent: Int = DEFAULT_NIGHT_ACCENT,
     val wallpaperRotation: Boolean = false,
@@ -238,6 +240,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         phoneCommands = stored[PHONE_COMMANDS] ?: true,
         drawInitial = stored[DRAW_INITIAL] ?: false,
         liveIcons = stored[LIVE_ICONS] ?: false,
+        hideStatusBar = stored[HIDE_STATUS_BAR] ?: false,
         dayAccent = stored[DAY_ACCENT] ?: false,
         nightAccent = stored[NIGHT_ACCENT] ?: DEFAULT_NIGHT_ACCENT,
         wallpaperRotation = stored[WALLPAPER_ROTATION] ?: false,
@@ -374,6 +377,8 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     fun toggleContactPhotos() = write { it[CONTACT_PHOTOS] = !(it[CONTACT_PHOTOS] ?: true) }
 
     fun toggleLiveNow() = write { it[LIVE_NOW] = !(it[LIVE_NOW] ?: false) }
+
+    fun toggleHideStatusBar() = write { it[HIDE_STATUS_BAR] = !(it[HIDE_STATUS_BAR] ?: false) }
 
     fun setPauseStats(shown: Boolean) = write { it[PAUSE_STATS] = shown }
 
@@ -558,6 +563,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val PHONE_COMMANDS = bool("phone_commands")
         val DRAW_INITIAL = bool("draw_initial")
         val LIVE_ICONS = bool("live_icons")
+        val HIDE_STATUS_BAR = bool("hide_status_bar")
         val DAY_ACCENT = bool("day_accent")
         val NIGHT_ACCENT = whole("night_accent")
         val WALLPAPER_ROTATION = bool("wallpaper_rotation")

@@ -64,17 +64,18 @@ import kotlin.math.roundToInt
 
 private const val TAG = "Glance"
 
-// La fecha y las piezas caben en tres renglones como mucho: un cuarto ya compite con la hora.
-private const val GLANCE_MAX_LINES = 3
+// Las piezas caben en dos renglones como mucho: un tercero ya compite con la hora.
+private const val GLANCE_MAX_LINES = 2
 
 // Un título largo de evento no se come la línea: se corta y deja sitio a la hora del evento.
-private val EventTitleMaxWidth = 180.dp
+private val EventTitleMaxWidth = 140.dp
 
 // Lo que separa una pieza de la siguiente, repartido a sus dos lados: así el toque de cada una
-// llega hasta la mitad del hueco y la primera cae donde empieza la fecha. La fecha usa los mismos.
+// llega hasta la mitad del hueco y la primera cae donde empieza la fecha.
 internal val PieceStart = 6.dp
 internal val PieceEnd = 10.dp
-private val PieceIconGap = 6.dp
+private val PieceIconGap = 4.dp
+private val PieceIconSize = 16.dp
 
 // Valores de muestra para la miniatura de los ajustes: enseñan la pieza aunque hoy no diga nada.
 private const val SAMPLE_ALARM_HOURS = 8
@@ -240,22 +241,18 @@ private fun sunPiece(prefs: Prefs, data: GlanceData, now: Long, sample: Boolean,
     val kind = event?.kind ?: SunEventKind.SUNSET.takeIf { sample } ?: return null
     val at = event?.at ?: (now + SAMPLE_SUN_HOURS * HOUR_MILLIS)
     val time = formatShortTime(at, prefs.clockFormat)
-    val text = stringResource(
-        if (kind ==
-            SunEventKind.SUNSET
-        ) {
-            R.string.glance_sunset
-        } else {
-            R.string.glance_sunrise
-        },
+    val spoken = stringResource(
+        if (kind == SunEventKind.SUNSET) R.string.glance_sunset else R.string.glance_sunrise,
         time
     )
     val query = stringResource(R.string.glance_weather_query, prefs.weatherPlace?.name.orEmpty()).trim()
+    // La palabra («Puesta», «Salida») se queda: el dibujo es el mismo para las dos y sin ella la
+    // hora se confunde con la de la alarma.
     return GlancePiece(
         item = GlanceItem.SUN,
         icon = R.drawable.ic_twilight,
-        text = text,
-        spoken = text,
+        text = spoken,
+        spoken = spoken,
         action = stringResource(R.string.glance_weather_action)
     ) { context.openWeather(prefs, query) }
 }
@@ -274,31 +271,24 @@ private fun screenPiece(data: GlanceData, sample: Boolean, context: Context): Gl
 }
 
 /**
- * La línea bajo la hora: la fecha y piezas de texto con su dibujo pequeño, con la letra de la fecha
- * y sin caja (docs/DISENO.md §6.1). Pasa al renglón siguiente si no cabe, hasta tres; lo que no
- * cabe se queda fuera, nunca se encoge.
+ * La línea de piezas bajo la fecha: un dibujo pequeño y el dato justo, sin caja (docs/DISENO.md
+ * §6.1). Más pequeña que la fecha para que se lea como un renglón de datos y no como un listado. Pasa
+ * al renglón siguiente si no cabe, hasta dos; lo que no cabe se queda fuera, nunca se encoge.
  *
  * @param interactive en la miniatura de los ajustes es un dibujo: ni toques ni nada que leer.
- * @param leading lo que abre la línea: la fecha en el Inicio.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun GlanceLine(
-    pieces: List<GlancePiece>,
-    modifier: Modifier = Modifier,
-    interactive: Boolean = true,
-    leading: @Composable () -> Unit = {}
-) {
-    val style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium).onWallpaper()
+internal fun GlanceLine(pieces: List<GlancePiece>, modifier: Modifier = Modifier, interactive: Boolean = true) {
+    val style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium).onWallpaper()
     val noRipple = remember { MutableInteractionSource() }
-    // Cada pieza (y la fecha que abre la línea) lleva su media separación delante: la línea se
-    // adelanta eso para que la tinta de la primera caiga en el filo, como la de la hora (ClockText).
+    // Cada pieza lleva su media separación delante: la línea se adelanta eso para que la tinta de la
+    // primera caiga en el filo, como la de la hora (ClockText).
     FlowRow(
         modifier.offset(x = -PieceStart),
         horizontalArrangement = Arrangement.Start,
         maxLines = GLANCE_MAX_LINES
     ) {
-        leading()
         pieces.forEach { piece ->
             Row(
                 Modifier
@@ -326,7 +316,7 @@ internal fun GlanceLine(
                     painter = painterResource(piece.icon),
                     contentDescription = null,
                     tint = AlisioTokens.Text,
-                    modifier = Modifier.size(AlisioTokens.GlanceIconSize)
+                    modifier = Modifier.size(PieceIconSize)
                 )
                 Spacer(Modifier.width(PieceIconGap))
                 Text(

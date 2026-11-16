@@ -504,6 +504,8 @@
     </plurals>
     <string name="settings_live_now">Ongoing</string>
     <string name="settings_live_now_hint">A trip or a timer in place of the suggestion. Experimental.</string>
+    <string name="settings_hide_status_bar">Hide the status bar</string>
+    <string name="settings_hide_status_bar_hint">Swipe down from the top to see it for a moment</string>
 
     <!-- El Inicio respeta al sistema (docs/IDEAS.md §2.8). -->
     <string name="app_suspended">Paused by Digital Wellbeing</string>
@@ -608,14 +610,14 @@
     <string name="settings_choose">Choose</string>
 
     <!-- Personas favoritas -->
-    <string name="settings_favorites">People above the dock</string>
+    <string name="settings_favorites">People in the search bar</string>
     <string name="settings_favorites_pick">Favourite people</string>
     <string name="picker_search_people">Search people</string>
     <string name="settings_section_notes">Notes</string>
     <string name="settings_favorites_count">%1$d of %2$d</string>
     <string name="settings_favorite_remove">Remove %1$s</string>
     <string name="settings_needs_contacts">Contacts access is missing</string>
-    <string name="undo_favorite_removed">Removed from above the dock</string>
+    <string name="undo_favorite_removed">Removed from the search bar</string>
     <string name="favorite_open">Contact</string>
     <string name="favorite_channels">See their channels</string>
 </resources>

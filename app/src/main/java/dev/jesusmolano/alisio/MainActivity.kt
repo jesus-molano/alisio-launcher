@@ -42,6 +42,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -342,6 +345,9 @@ class MainActivity : ComponentActivity() {
         val transparent = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = transparent, navigationBarStyle = transparent)
         super.onCreate(savedInstanceState)
+        // Con las preferencias ya leídas, se oculta antes del primer fotograma: sin esto la barra se
+        // ve un instante en cada arranque y cada vez que Android rehace la actividad.
+        if ((application as AlisioApp).container.settings.prefs.value?.hideStatusBar == true) applyStatusBar(true)
         // Poner un fondo nuevo cambia los colores del sistema y Android rehace la actividad: los
         // ajustes abiertos (desde «Pasar al siguiente» o al elegir la carpeta) siguen donde estaban.
         savedInstanceState?.let { saved ->
@@ -385,6 +391,10 @@ class MainActivity : ComponentActivity() {
                 } else {
                     chosenAccent
                 }
+            // Solo con el Inicio a la vista: oculta, sus insets valen 0 y la barra, los ajustes y Zonas
+            // subirían hasta la cámara. Sale un momento al deslizar desde arriba.
+            val hideBar = prefs.hideStatusBar && !searchOpen && !settingsOpen && !zonesOpen
+            LaunchedEffect(hideBar) { applyStatusBar(hideBar) }
             AlisioTheme(accent = accent, font = prefs.font) {
                 // Una sola barra de deshacer para toda la actividad: la usan el Inicio, Zonas y los ajustes.
                 val undo = rememberUndoState()
@@ -930,6 +940,13 @@ class MainActivity : ComponentActivity() {
     private fun onGestureIgnored() {
         AlisioHaptics.limit(window.decorView)
         Toast.makeText(this, R.string.gesture_service_silent, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyStatusBar(hidden: Boolean) {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (hidden) hide(WindowInsetsCompat.Type.statusBars()) else show(WindowInsetsCompat.Type.statusBars())
+        }
     }
 
     private fun holdsHomeRole(): Boolean = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)

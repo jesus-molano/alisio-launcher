@@ -132,7 +132,7 @@ internal fun NotesOption(context: SettingsContext) {
 }
 
 /**
- * Personas sobre el dock: las caras elegidas tal como salen (un toque quita una, con deshacer) y la
+ * Personas en la barra: las caras elegidas tal como salen (un toque quita una, con deshacer) y la
  * fila que abre el selector de personas. Sin acceso a la agenda, la fila que lo pide.
  */
 @Composable

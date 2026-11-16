@@ -99,8 +99,6 @@ fun HomePreview(
     glance: GlanceData,
     modifier: Modifier = Modifier,
     notes: List<HomeNote> = emptyList(),
-    favorites: List<Person> = emptyList(),
-    photos: ContactPhotos? = null,
     onContentHeight: ((Dp) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -165,15 +163,12 @@ fun HomePreview(
                         val style = MaterialTheme.typography.bodyLarge.copy(
                             fontWeight = FontWeight.Medium
                         ).onWallpaper()
-                        GlanceLine(pieces, interactive = false) {
-                            Text(
-                                text = date,
-                                style = style,
-                                modifier = Modifier.heightIn(
-                                    min = AlisioTokens.MinTouch
-                                ).wrapContentHeight().padding(start = PieceStart, end = PieceEnd)
-                            )
-                        }
+                        Text(
+                            text = date,
+                            style = style,
+                            modifier = Modifier.heightIn(min = AlisioTokens.MinTouch).wrapContentHeight()
+                        )
+                        GlanceLine(pieces, interactive = false)
                     }
                     // Las notas, o una de muestra si aún no hay ninguna: se ve dónde salen al encenderlas.
                     if (prefs.homeNotes) {
@@ -218,17 +213,6 @@ fun HomePreview(
                             onNext = {},
                             onHide = {},
                             modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
-                        )
-                        Spacer(Modifier.height(AlisioTokens.PlateGap))
-                    }
-                    if (favorites.isNotEmpty()) {
-                        FavoritesRow(
-                            people = favorites,
-                            photos = photos,
-                            showLabels = prefs.dockLabels,
-                            onOpen = {},
-                            onChannels = {},
-                            interactive = false
                         )
                         Spacer(Modifier.height(AlisioTokens.PlateGap))
                     }

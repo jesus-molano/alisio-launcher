@@ -453,7 +453,7 @@ class SearchViewModel(
                         "next to the time", "alarma", "batería", "battery", "tiempo", "weather", "salida del sol",
                         "puesta del sol", "sunrise", "sunset", "evento", "event", "uso del teléfono", "screen time",
                         "notas", "notes", "sugerencia", "ahora", "suggestion", "en curso", "reproductor", "player",
-                        "puntos", "no leído", "unread", "dots", "personas sobre el dock", "favoritos", "favorites",
+                        "puntos", "no leído", "unread", "dots", "personas en la barra", "favoritos", "favorites",
                         "bluetooth"
                     )
                 ),

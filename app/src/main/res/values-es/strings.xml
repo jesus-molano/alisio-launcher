@@ -490,6 +490,8 @@
     </plurals>
     <string name="settings_live_now">En curso</string>
     <string name="settings_live_now_hint">Un viaje o un temporizador en el sitio de la sugerencia. En prueba.</string>
+    <string name="settings_hide_status_bar">Ocultar la barra de estado</string>
+    <string name="settings_hide_status_bar_hint">Desliza desde arriba para verla un momento</string>
 
     <!-- El Inicio respeta al sistema (docs/IDEAS.md §2.8). -->
     <string name="app_suspended">En pausa por Bienestar digital</string>
@@ -595,14 +597,14 @@
     <string name="settings_choose">Elegir</string>
 
     <!-- Personas favoritas -->
-    <string name="settings_favorites">Personas sobre el dock</string>
+    <string name="settings_favorites">Personas en la barra</string>
     <string name="settings_favorites_pick">Personas favoritas</string>
     <string name="picker_search_people">Buscar personas</string>
     <string name="settings_section_notes">Notas</string>
     <string name="settings_favorites_count">%1$d de %2$d</string>
     <string name="settings_favorite_remove">Quitar a %1$s</string>
     <string name="settings_needs_contacts">Falta el acceso a los contactos</string>
-    <string name="undo_favorite_removed">Quitada de encima del dock</string>
+    <string name="undo_favorite_removed">Quitada de la barra</string>
     <string name="favorite_open">Contactar</string>
     <string name="favorite_channels">Ver sus canales</string>
 </resources>
