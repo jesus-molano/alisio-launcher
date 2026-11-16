@@ -2,7 +2,7 @@
 
 Launcher Android personal para un Galaxy S26 Ultra. **Lee `docs/PLAN.md` antes de tocar nada**: es la fuente de verdad (alcance por fases, arquitectura, diseño y reglas de §10). Lo que se descubra al implementar va a su §11.
 
-Estado: fases 0 a 5 implementadas y sin probar del todo a mano; en curso la fase 6 (revisión de experiencia y estética, §8 del plan).
+Estado: fases 0 a 6 implementadas (la 6 es el rediseño de `docs/DISENO.md`); en curso la fase 7 (personalización, Trazo nuevo e ideas de `docs/IDEAS.md`).
 
 ## Requisitos
 
@@ -17,11 +17,8 @@ Estado: fases 0 a 5 implementadas y sin probar del todo a mano; en curso la fase
 ./gradlew testDebugUnitTest            # tests JUnit
 ./gradlew lintDebug                    # lint de Android
 ./gradlew spotlessApply                # formatea con ktlint (spotlessCheck solo comprueba)
-./gradlew checkNoInternetPermission    # falla si el manifiesto final de debug o release pide INTERNET
-./gradlew spotlessCheck check          # todo lo anterior de una vez (check incluye tests, lint y anti-INTERNET)
+./gradlew spotlessCheck check          # todo lo anterior de una vez (check incluye tests y lint)
 ```
-
-`assemble*` e `install*` dependen del task anti-INTERNET de su variante: no se puede generar un APK que lo pida.
 
 ## Instalar por adb
 
@@ -62,7 +59,7 @@ También desde la app («Hacer predeterminado») o en Ajustes → Aplicaciones �
 - DI manual: `AppContainer` en `AlisioApp`. Un `ViewModel` por pantalla con `StateFlow`.
 - Ajustes de Alisio: toda función nueva añade sus opciones a `Prefs` (`data/settings/AlisioSettings.kt`) y a `feature/settings/SettingsScreen.kt`. Las opciones se eligen viendo el resultado (vista previa), no leyendo una descripción.
 - Room con KSP: las entidades y los DAO están en `data/db/AlisioDatabase.kt`. Al cambiar el esquema, subir `version` y añadir su `Migration` (como `MIGRATION_2_3`) en `AppContainer`; sin ella la base se borra y se pierde el dock configurado.
-- Versiones solo en `gradle/libs.versions.toml`. Ninguna dependencia nueva sin justificarla, y ninguna que añada `INTERNET`.
+- Versiones solo en `gradle/libs.versions.toml`. Ninguna dependencia nueva sin justificarla. La red (`INTERNET`) se usa solo en funciones que la necesitan, cada una con su interruptor y sin enviar datos personales más allá de lo imprescindible (ver §7 del plan).
 - Textos de interfaz en el idioma del sistema: inglés en `res/values/strings.xml` y español en `res/values-es/strings.xml`, siempre los dos. Comentarios y mensajes de commit en español.
 - `contentDescription` en todo lo que sea solo icono y toque mínimo de 48 dp.
 - Antes de dar algo por terminado: `./gradlew spotlessCheck check assembleDebug`.

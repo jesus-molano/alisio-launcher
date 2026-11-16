@@ -8,7 +8,7 @@ Alisio sustituye a One UI Home con tres ideas:
 
 1. **Inicio fijo y casi vacío.** Reloj arriba; abajo, al alcance del pulgar: hueco *Ahora*, reproductor, dock y barra. Nada cambia de sitio solo.
 2. **Una barra para todo.** Apps (por su nombre o parte de él), personas con su canal (WhatsApp o teléfono), accesos directos de apps, ajustes, cálculos, comandos y, si nada encaja, Claude.
-3. **Local por diseño.** Sin cuentas, sin analítica y sin permiso de `INTERNET`.
+3. **Local por diseño.** Sin cuentas ni analítica. La red solo para lo que la necesita (§7).
 
 Es para uso personal: se instala por adb y no se publica en Play Store por ahora.
 
@@ -233,9 +233,9 @@ Los textos de la interfaz siguen el idioma del sistema: inglés por defecto (`va
 | `BLUETOOTH_CONNECT` | 3 | Saber qué audio está conectado | No |
 | `SET_ALARM` | 5 | Comandos de alarma | Se concede al instalar |
 | Accesibilidad | 5 | Bloquear y bajar notificaciones | No |
-| `INTERNET` | — | — | **Nunca** |
+| `INTERNET` | 7 | El tiempo junto a la hora | Se concede al instalar |
 
-Un task de Gradle debe fallar si el manifiesto final de debug o de release contiene `android.permission.INTERNET`.
+El dueño levantó en la fase 7 la regla de no usar la red. La red queda solo para funciones que la necesitan de verdad, cada una con su interruptor, que sigue funcionando sin red (enseña lo último guardado o se oculta) y que no envía nada personal salvo lo imprescindible (la ubicación aproximada para el tiempo). Sin cuentas, sin analítica y sin SDKs de terceros. Se quitó el task anti-`INTERNET` de Gradle.
 
 ## 8. Fases
 
@@ -315,7 +315,7 @@ Pedida expresamente para el final, con todo lo anterior ya construido.
 
 - Leer este plan antes de empezar cada fase y no salirse de su alcance.
 - Si una API no se comporta en One UI como dice el plan, apuntarlo en §11 y preguntar antes de cambiar el enfoque.
-- Ninguna dependencia nueva sin justificarla en el resumen de la fase, y ninguna que añada `INTERNET`.
+- Ninguna dependencia nueva sin justificarla en el resumen de la fase. La red, solo como dice §7.
 - La lógica pura (ranking, parsers y reglas de *Ahora*) va sin dependencias de Android y con tests.
 - Accesibilidad: `contentDescription` en todo lo que solo es un icono, y toque mínimo de 48 dp.
 
@@ -330,7 +330,7 @@ Aquí se apunta lo que se descubra al implementar: comportamientos de One UI, ve
 - AGP 9 trae Kotlin integrado: no se aplica el plugin `kotlin-android`, solo el del compilador de Compose. AGP 9.5 exige Gradle 9.
 - `targetSdk 37` es el último estable del SDK, como pide §4, pero puede ir por delante del Android que lleve el S26 con One UI 8.5. No debería afectar; si algo se comporta raro en el teléfono, lo primero es probar con `targetSdk 36`. **Pendiente de confirmar en el dispositivo.**
 - La variante release va con R8 y firmada con la clave de debug. Motivo: Compose en debug da tirones que no son reales, y la puerta de la fase 0 es justo la fluidez; así se instala por adb sin gestionar un keystore. Si algún día se publica, hay que cambiar la firma.
-- El task anti-`INTERNET` (`checkNoInternetPermission`) lee el manifiesto ya fusionado de cada variante y cuelga de `check`, `assemble*` e `install*`.
+- El task anti-`INTERNET` (`checkNoInternetPermission`) leía el manifiesto ya fusionado de cada variante y colgaba de `check`, `assemble*` e `install*`. Se quitó en la fase 7, cuando el dueño permitió la red (§7).
 - Dependencias: solo `core-ktx`, `activity-compose`, `lifecycle-*-compose`, Compose (UI, Foundation, Material 3) y JUnit. Ninguna añade permisos.
 - Aplazado a su fase, aunque §5.2 lo describe: guardar la hora de instalación/actualización y compararla con `lastUpdateTime` (necesita Room; fase 3 con *Ahora*), accesos directos (fase 1), «Información de la app» (fase 3) y el resto de `<queries>` (se añaden con cada función). Room, DataStore y las fuentes tampoco entran aún: nada de la fase 0 los usa.
 - El tema de la fase 0 solo lleva los colores de §6; tipografías y formas son de la fase 1.
