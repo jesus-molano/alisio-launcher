@@ -1,7 +1,11 @@
 package dev.jesusmolano.alisio.core.media
 
-/** Spotify y YouTube Music: las del dueño, por si aún no ha elegido ninguna ni ha sonado nada. */
-val KNOWN_MUSIC_APPS: List<String> = listOf("com.spotify.music", "com.google.android.apps.youtube.music")
+/**
+ * Spotify y YouTube Music: las del dueño, por si aún no ha elegido ninguna ni ha sonado nada.
+ * YouTube Music va también con el paquete de ReVanced, que es el que tiene instalado el S26.
+ */
+val KNOWN_MUSIC_APPS: List<String> =
+    listOf("com.spotify.music", "com.google.android.apps.youtube.music", "app.revanced.android.apps.youtube.music")
 
 /**
  * La app de música por defecto (Música siempre a mano): la elegida en los ajustes; si no, la última
