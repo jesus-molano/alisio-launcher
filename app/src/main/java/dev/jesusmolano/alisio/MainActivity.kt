@@ -56,6 +56,7 @@ import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.data.usage.AppToday
 import dev.jesusmolano.alisio.feature.home.HomeScreen
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
+import dev.jesusmolano.alisio.feature.home.SystemCancel
 import dev.jesusmolano.alisio.feature.home.dockApps
 import dev.jesusmolano.alisio.feature.onboarding.OnboardingScreen
 import dev.jesusmolano.alisio.feature.pause.PauseScreen
@@ -747,6 +748,8 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) TouchTrace.touched()
+        // Compose entrega el cancelar como un soltar: el Inicio necesita saber que fue el sistema.
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) SystemCancel.mark(event.eventTime)
         return super.dispatchTouchEvent(event)
     }
 

@@ -2,9 +2,12 @@ package dev.jesusmolano.alisio.core.zones
 
 enum class Pinch { IN, OUT }
 
-// Los dedos tienen que acercarse o separarse un cuarto largo de lo que distaban: menos que eso lo
-// hace sin querer cualquier toque con dos dedos.
-private const val PINCH_IN_RATIO = 0.72f
+/**
+ * Los dedos tienen que acercarse o separarse un cuarto largo de lo que distaban: menos que eso lo
+ * hace sin querer cualquier toque con dos dedos. El árbitro del Inicio (`core/gesture`) usa el mismo
+ * umbral para comprometer el pellizco.
+ */
+const val PINCH_IN_RATIO = 0.72f
 private const val PINCH_OUT_RATIO = 1.35f
 
 /**

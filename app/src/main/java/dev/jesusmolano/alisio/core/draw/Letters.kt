@@ -16,8 +16,12 @@ private const val MAX_DISTANCE = 0.17f
 // Ventaja mínima de la mejor letra sobre la segunda: si dos se parecen igual, no se adivina.
 private const val MIN_MARGIN = 0.012f
 
-// Un trazo casi recto es deslizar, no dibujar: es el gesto que ya tenían la barra y las notificaciones.
-private const val MAX_STRAIGHTNESS = 0.9f
+/**
+ * Rectitud (cuerda entre recorrido) por encima de la cual un trazo es deslizar, no dibujar: es el
+ * gesto que ya tenían la barra y las notificaciones. La usa también el árbitro de gestos del Inicio
+ * (`core/gesture`) para que entre «deslizar» y «letra» no quede ninguna franja que no sea ninguno.
+ */
+const val LETTER_MAX_STRAIGHTNESS = 0.9f
 
 /**
  * Reconoce la letra mayúscula que dibuja un trazo de un solo dedo, comparándolo con plantillas de
@@ -37,7 +41,7 @@ fun recognizeLetter(points: List<StrokePoint>, minSize: Float): Char? {
     if (length <= 0f) return null
     val first = points.first()
     val last = points.last()
-    if (hypot(last.x - first.x, last.y - first.y) / length > MAX_STRAIGHTNESS) return null
+    if (hypot(last.x - first.x, last.y - first.y) / length > LETTER_MAX_STRAIGHTNESS) return null
     val ranked = letterDistances(points)
     val (best, bestDistance) = ranked.first()
     val second = ranked.getOrNull(1)?.second ?: Float.MAX_VALUE

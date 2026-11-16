@@ -15,9 +15,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +38,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,6 +57,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -84,6 +87,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -102,8 +106,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.TouchTrace
@@ -113,6 +120,12 @@ import dev.jesusmolano.alisio.core.draw.InitialPick
 import dev.jesusmolano.alisio.core.draw.StrokePoint
 import dev.jesusmolano.alisio.core.draw.pickByInitial
 import dev.jesusmolano.alisio.core.draw.recognizeLetter
+import dev.jesusmolano.alisio.core.gesture.Candidate
+import dev.jesusmolano.alisio.core.gesture.GestureOptions
+import dev.jesusmolano.alisio.core.gesture.GestureThresholds
+import dev.jesusmolano.alisio.core.gesture.Haptic
+import dev.jesusmolano.alisio.core.gesture.HomeGestureArbiter
+import dev.jesusmolano.alisio.core.gesture.StartArea
 import dev.jesusmolano.alisio.core.notify.packagesWithDot
 import dev.jesusmolano.alisio.core.now.HABIT_DAYS
 import dev.jesusmolano.alisio.core.now.NowRule
@@ -120,7 +133,6 @@ import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.search.filterByName
 import dev.jesusmolano.alisio.core.search.moved
 import dev.jesusmolano.alisio.core.text.takeGraphemes
-import dev.jesusmolano.alisio.core.zones.Pinch
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.ShortcutEntry
 import dev.jesusmolano.alisio.data.apps.toSections
@@ -168,7 +180,6 @@ import dev.jesusmolano.alisio.ui.components.VectorTileIcon
 import dev.jesusmolano.alisio.ui.components.clockAutoSize
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.liveLookFor
-import dev.jesusmolano.alisio.ui.components.onPinch
 import dev.jesusmolano.alisio.ui.components.rememberLightWallpaper
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.components.wallpaperVeil
@@ -192,12 +203,6 @@ private val RailClearance = 28.dp
 private val PillMinHeight = 56.dp
 private val StackOrderRowMinHeight = 56.dp
 private val DockHeight = 86.dp
-private val OpenSearchDrag = 48.dp
-private val ShowNotificationsDrag = 48.dp
-
-// Cuánto se puede desviar a lo ancho un deslizar vertical, en proporción a su recorrido, para seguir
-// siendo gesto y no letra cuando «Dibujar la inicial» está encendida.
-private const val STRAIGHT_DRAG_RATIO = 0.35f
 
 // Recorrido hacia arriba sobre un icono del dock que abre su destino secundario.
 private val SwipeOpenDrag = 40.dp
@@ -302,14 +307,14 @@ fun HomeScreen(
     val liveLook = liveLookFor(prefs.iconStyle)
     // La persona favorita cuyos canales se enseñan, al mantener su cara.
     var channelsOf by remember { mutableStateOf<Person?>(null) }
-    // Dibujar una inicial: el rastro del dedo, lo que hay que elegir y si otro gesto se quedó el trazo.
-    val drawGate = remember { DrawGate() }
+    // Dibujar una inicial: el rastro del dedo y lo que hay que elegir.
     val trail = remember { mutableStateListOf<Offset>() }
     var initialChoice by remember { mutableStateOf<InitialChoice?>(null) }
     // Dónde acaba la hora con su línea y sus notas: por encima de ahí no se dibuja.
     var clockBottom by remember { mutableFloatStateOf(0f) }
     var homeSize by remember { mutableStateOf(IntSize.Zero) }
     val view = LocalView.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     LaunchedEffect(homePresses) {
         editing = null
@@ -342,6 +347,15 @@ fun HomeScreen(
 
     fun launch(target: SwipeTarget) {
         if (!viewModel.launch(target)) launchFailed(target.label)
+    }
+
+    // Reanudar la música puede tardar hasta 1,5 s sin nada que ver: la vibración dice que el toque
+    // ha llegado. La app solo se abre después si el Inicio sigue delante.
+    fun playMusic(app: AppEntry) {
+        AlisioHaptics.done(view)
+        viewModel.playMusic(app, stillShown = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }) {
+            launchFailed(app.label)
+        }
     }
 
     // Vaciar un hueco se hace al primer toque y se puede deshacer: vuelve su app o su pila entera.
@@ -384,6 +398,8 @@ fun HomeScreen(
     fun onStroke(points: List<Offset>) {
         val minSize = with(density) { MinLetterSize.toPx() }
         val letter = recognizeLetter(points.map { StrokePoint(it.x, it.y) }, minSize)
+        // En el registro de gestos: el emulador no vibra y así se sabe qué letra se ha leído.
+        Log.d(GESTURE_TAG, "letra leída: ${letter ?: "ninguna"}")
         if (letter == null) {
             // Un trazo que no es ninguna letra no hace nada, pero lo dice al dedo.
             AlisioHaptics.limit(view)
@@ -410,99 +426,106 @@ fun HomeScreen(
         }
     }
 
+    // Lo que hace cada gesto al ganar. El detector vive lo que vive la pantalla: lee siempre la orden
+    // de ahora.
+    val fire by rememberUpdatedState<(Candidate, List<Offset>) -> Unit> { candidate, stroke ->
+        when (candidate) {
+            Candidate.SEARCH -> onOpenSearch()
+            Candidate.NOTIFICATIONS -> showNotifications?.invoke()
+            Candidate.LETTER -> onStroke(stroke)
+            Candidate.SETTINGS -> onOpenSettings()
+            Candidate.LOCK -> lockScreen?.invoke()
+            Candidate.ZONES -> onOpenZones()
+        }
+    }
+    val gestureOptions =
+        GestureOptions(
+            drawInitial = prefs.drawInitial,
+            notifications = onShowNotifications != null,
+            lock = canLock,
+            pinch = prefs.zonesPinch
+        )
+    val viewConfiguration = LocalViewConfiguration.current
+    val gestureThresholds =
+        GestureThresholds.of(
+            density = density.density,
+            touchSlop = viewConfiguration.touchSlop,
+            longPressMillis = viewConfiguration.longPressTimeoutMillis,
+            doubleTapMillis = viewConfiguration.doubleTapTimeoutMillis
+        )
+    val arbiter =
+        remember {
+            HomeGestureArbiter(gestureOptions, gestureThresholds) { points ->
+                val minSize = with(density) { MinLetterSize.toPx() }
+                recognizeLetter(points.map { StrokePoint(it.x, it.y) }, minSize) != null
+            }
+        }
+    // Las opciones se leen al bajar el dedo: cambiarlas aquí no corta un gesto en curso.
+    SideEffect {
+        arbiter.options = gestureOptions
+        arbiter.thresholds = gestureThresholds
+    }
+    val gestureScope = rememberCoroutineScope()
+    val feedback = remember { GestureFeedback(gestureScope) }
+    val fingers = remember { HomeFingers() }
+    val systemGestures = WindowInsets.systemGestures
+    val statusBars = WindowInsets.statusBars
+
     Box(
         modifier
             .fillMaxSize()
             .wallpaperVeil(prefs.wallpaperDim.factor, lightWallpaper)
-            // Pellizcar hacia dentro abre Zonas (§5.7). Va antes que los demás gestos: con dos dedos
-            // en la pantalla ni se abre la barra ni saltan los ajustes.
-            .onPinch(enabled = prefs.zonesPinch && !searchOpen) { if (it == Pinch.IN) onOpenZones() }
-            .pointerInput(onOpenSearch, prefs.drawInitial) {
-                val drawing = prefs.drawInitial
-                var dragged = 0f
-                var pulledDown = false
-                var minX = 0f
-                var maxX = 0f
-                detectVerticalDragGestures(
-                    onDragStart = {
-                        dragged = 0f
-                        pulledDown = false
-                        minX = it.x
-                        maxX = it.x
-                    },
-                    onVerticalDrag = { change, amount ->
-                        dragged += amount
-                        minX = minOf(minX, change.position.x)
-                        maxX = maxOf(maxX, change.position.x)
-                        // Hacia abajo se actúa al pasar el umbral, sin esperar a soltar, como al tirar
-                        // de la barra de estado. Una vez por gesto. Con la inicial encendida se espera a
-                        // soltar: muchas letras empiezan bajando y esto las cortaba.
-                        if (!drawing && !pulledDown && dragged > ShowNotificationsDrag.toPx()) {
-                            showNotifications?.let {
-                                pulledDown = true
-                                // Gana el gesto de siempre: el trazo ya no se lee como letra.
-                                drawGate.taken = true
-                                it()
-                            }
-                        }
-                    },
-                    // Corre antes que initialDrawing, que mira la pasada Final: si aquí gana un gesto,
-                    // drawGate ya está marcado cuando la letra se evalúa.
-                    onDragEnd = {
-                        // Con la inicial encendida, solo un trazo recto es gesto; uno que se tuerce es
-                        // una letra.
-                        val straight = !drawing || maxX - minX < abs(dragged) * STRAIGHT_DRAG_RATIO
-                        val pull = showNotifications
-                        when {
-                            pulledDown -> Unit
-
-                            straight && dragged > ShowNotificationsDrag.toPx() && pull != null -> {
-                                drawGate.taken = true
-                                pull()
-                            }
-
-                            // Un gesto que ya ha bajado las notificaciones no abre además la barra.
-                            straight && dragged < -OpenSearchDrag.toPx() -> {
-                                drawGate.taken = true
-                                onOpenSearch()
-                            }
-                        }
-                    }
-                )
-            }
-            // El detector de dos toques solo existe con el gesto disponible: sin él queda el de
-            // siempre, que no espera a un segundo toque. Aquí no hay acción de un solo toque, así que
-            // esa espera no retrasa nada; los iconos y el reloj se quedan sus toques antes.
-            .pointerInput(onOpenSettings, canLock) {
-                detectTapGestures(
-                    onLongPress = {
-                        drawGate.taken = true
-                        onOpenSettings()
-                    },
-                    onDoubleTap = if (canLock) ({ lockScreen?.invoke() }) else null
-                )
-            }
             .onSizeChanged { homeSize = it }
-            // Dibujar una inicial, solo en el hueco libre entre la hora y el pie, y lejos del índice de
-            // Trazo: lo demás tiene sus propios toques.
-            .initialDrawing(
-                enabled = prefs.drawInitial,
-                // El gesto guarda la primera lambda: lee estados, no valores de esta composición.
-                paused = { searchOpenNow || tracing },
-                gate = drawGate,
-                canStart = { at ->
+            // Buscar, notificaciones, la inicial, mantener, dos toques y pellizcar comparten el
+            // centro: un solo árbitro decide por intención cuál gana (docs/PLAN.md §11, «Gestos sin
+            // pisarse»). Trazo, el dock y el reproductor se quedan antes sus propios gestos, salvo el
+            // pellizco: con dos dedos el Inicio se queda el evento antes que ellos. Las opciones del
+            // árbitro ya son las de ahora (SideEffect), y el detector guarda la primera lambda.
+            .homeFingers(fingers) { arbiter.options.pinch && !searchOpenNow }
+            .homeGestures(
+                arbiter = arbiter,
+                feedback = feedback,
+                fingers = fingers,
+                trail = trail,
+                // Lee estados, no valores de esta composición: el detector guarda la primera lambda.
+                paused = { searchOpenNow || tracing || initialChoice != null },
+                areaOf = { at ->
+                    val top = statusBars.getTop(density)
+                    val bottom = homeSize.height - systemGestures.getBottom(density)
+                    val left = systemGestures.getLeft(density, LayoutDirection.Ltr) + with(density) { 8.dp.toPx() }
                     val footerTop = homeSize.height - with(density) { footerHeight.toPx() }
                     val railStart = homeSize.width - with(density) { (AlisioTokens.Edge + RailClearance * 2).toPx() }
-                    at.y > clockBottom && at.y < footerTop && at.x < railStart
+                    when {
+                        at.y < top || at.y > bottom -> StartArea.SYSTEM
+
+                        at.x < left -> StartArea.LEFT_EDGE
+
+                        // La inicial solo en el hueco libre entre la hora y el pie, lejos del índice.
+                        at.y > clockBottom && at.y < footerTop && at.x < railStart -> StartArea.DRAW
+
+                        else -> StartArea.FREE
+                    }
                 },
-                trail = trail,
-                onStroke = ::onStroke
+                onHaptic = {
+                    when (it) {
+                        Haptic.COMMIT -> AlisioHaptics.threshold(view, true)
+                        Haptic.RELEASE -> AlisioHaptics.threshold(view, false)
+                        Haptic.NONE -> Unit
+                    }
+                },
+                onFire = { candidate, stroke -> fire(candidate, stroke) }
             )
     ) {
         val glanceData by viewModel.glance.collectAsStateWithLifecycle()
+        val musicApp by viewModel.musicApp.collectAsStateWithLifecycle()
+        val somethingPlaying by viewModel.somethingPlaying.collectAsStateWithLifecycle()
+        // Recordada: una pieza nueva en cada recomposición impediría saltarse ClockAndDate.
+        val musicGlance =
+            remember(musicApp) { musicApp?.let { app -> MusicGlance(app.label) { playMusic(app) } } }
         ClockAndDate(
             prefs = prefs,
             glance = glanceData,
+            music = musicGlance?.takeIf { !somethingPlaying },
             notes = if (prefs.homeNotes) notes else emptyList(),
             onStrikeNote = { note ->
                 undo.show(resources.getString(R.string.undo_note_struck), viewModel.removeNote(note))
@@ -512,7 +535,11 @@ fun HomeScreen(
                 Modifier
                     .align(Alignment.TopStart)
                     .onGloballyPositioned { clockBottom = it.boundsInParent().bottom }
-                    .graphicsLayer { alpha = contentAlpha }
+                    .graphicsLayer {
+                        alpha = contentAlpha * feedback.homeAlpha()
+                        // La hora baja un poco con la persiana: soltar ya baja las notificaciones.
+                        translationY = feedback.of(Candidate.NOTIFICATIONS) * AlisioMotion.Rise.toPx()
+                    }
                     .padding(
                         top = bars.calculateTopPadding() + 40.dp,
                         start = AlisioTokens.Edge,
@@ -524,7 +551,7 @@ fun HomeScreen(
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                .graphicsLayer { alpha = contentAlpha }
+                .graphicsLayer { alpha = contentAlpha * feedback.homeAlpha() }
                 .onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
                 .padding(bottom = bars.calculateBottomPadding() + 16.dp)
         ) {
@@ -553,10 +580,15 @@ fun HomeScreen(
                 Spacer(Modifier.height(AlisioTokens.PlateGap))
             } else {
                 now?.let { (suggestion, app) ->
+                    val musicArt by viewModel.musicArt.collectAsStateWithLifecycle()
+                    val resumesMusic = suggestion.rule == NowRule.MUSIC
                     NowCard(
                         suggestion = suggestion,
                         app = app,
-                        onOpen = { launch(app) },
+                        // Solo la carátula de esa app: la de otra diría que se reanuda otra cosa.
+                        art = musicArt[app.component.packageName]?.takeIf { resumesMusic },
+                        // «Reanudar» pone la música sin abrir la app; si no suena, la abre.
+                        onOpen = { if (resumesMusic) playMusic(app) else launch(app) },
                         onDismiss = {
                             val dismissal = viewModel.dismissNow(suggestion)
                             val message =
@@ -647,7 +679,14 @@ fun HomeScreen(
             }
             // También depende de las apps instaladas: instalar o quitar el asistente cambia el texto.
             val assistant = remember(prefs.assistantPackage, apps) { context.appLabel(prefs.assistantPackage) }
-            SearchPill(searchHint(assistant), onOpenSearch, Modifier.padding(horizontal = AlisioTokens.Outset))
+            SearchPill(
+                searchHint(assistant),
+                onOpenSearch,
+                Modifier
+                    .padding(horizontal = AlisioTokens.Outset)
+                    // La píldora sube con el dedo hasta el umbral: soltar ya abre la barra.
+                    .graphicsLayer { translationY = -feedback.of(Candidate.SEARCH) * AlisioMotion.Rise.toPx() }
+            )
         }
 
         // Una app oculta no sale en Trazo: solo se llega a ella buscando su nombre.
@@ -661,13 +700,17 @@ fun HomeScreen(
                 railBottom = footerHeight + AlisioTokens.PlateGap,
                 onLaunch = ::launch,
                 onOpenZones = onOpenZones,
+                pressedFingers = { fingers.pressed },
                 onTracing = {
                     if (it) TouchTrace.mark("trazo")
                     tracing = it
                 }
             )
         }
-        DrawTrail(trail)
+        // La persiana propia: la de verdad es del sistema y no se puede enseñar a medias.
+        NotificationsShade(progress = { feedback.of(Candidate.NOTIFICATIONS) })
+        // El rastro se ve según lo probable que sea letra: un deslizar recto no pinta nada.
+        DrawTrail(trail, Modifier.graphicsLayer { alpha = feedback.trail })
         InitialChooser(
             choice = initialChoice,
             photos = photos,
@@ -886,6 +929,7 @@ fun HomeScreen(
 private fun ClockAndDate(
     prefs: Prefs,
     glance: GlanceData,
+    music: MusicGlance?,
     notes: List<HomeNote>,
     onStrikeNote: (HomeNote) -> Unit,
     onOpenLink: (String) -> Unit,
@@ -897,7 +941,7 @@ private fun ClockAndDate(
     val date = formatHomeDate(now)
     val noRipple = remember { MutableInteractionSource() }
     val clock = AlisioTokens.Clock.scaled(AlisioTokens.clockScale(prefs.clockSize)).onWallpaper()
-    val pieces = glancePieces(prefs, glance, now.toInstant().toEpochMilli())
+    val pieces = glancePieces(prefs, glance, now.toInstant().toEpochMilli(), music = music)
     Column(modifier) {
         ClockText(
             text = time,
@@ -1066,34 +1110,58 @@ private fun DockItem(
                         Modifier
                     } else {
                         // Va en el propio icono para ganarle el arrastre al Inicio: al consumirlo aquí,
-                        // el detector de fuera (el que abre la barra) lo da por perdido.
+                        // el árbitro del Inicio lo da por perdido. Solo se lo queda hacia arriba: hacia
+                        // abajo, o de lado, sigue siendo del Inicio (bajar las notificaciones).
                         Modifier.pointerInput(Unit) {
                             val openAt = -SwipeOpenDrag.toPx()
                             val maxLift = SwipeMaxLift.toPx()
-                            var dragged = 0f
-                            detectVerticalDragGestures(
-                                onDragStart = { dragged = 0f },
-                                onVerticalDrag = { _, amount ->
-                                    val wasArmed = dragged <= openAt
-                                    dragged += amount
-                                    // Vibra al cruzar el umbral (soltar ya abre el destino) y al volver
-                                    // atrás (soltar ya no hace nada): el dedo sabe qué pasará sin mirar.
-                                    val armed = dragged <= openAt
-                                    if (armed != wasArmed) AlisioHaptics.threshold(view, armed)
-                                    // El icono acompaña al dedo a medio paso y con tope: se nota que
-                                    // responde sin que parezca que se puede arrastrar a otro sitio.
-                                    val target = (dragged * SWIPE_LIFT_RATIO).coerceIn(-maxLift, 0f)
-                                    scope.launch { lift.snapTo(target) }
-                                },
-                                onDragEnd = {
-                                    if (dragged <= openAt) {
-                                        AlisioHaptics.done(view)
-                                        currentSwipe?.open?.invoke()
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                var claimed = false
+                                // Hasta salir de la holgura no se decide; si no sale hacia arriba, no es suyo.
+                                while (!claimed) {
+                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                    if (change == null || !change.pressed || change.isConsumed) return@awaitEachGesture
+                                    val moved = change.position - down.position
+                                    if (moved.getDistance() <= viewConfiguration.touchSlop) continue
+                                    if (moved.y >= 0f || abs(moved.x) > abs(moved.y)) return@awaitEachGesture
+                                    claimed = true
+                                    change.consume()
+                                }
+                                var dragged = 0f
+                                var armed = false
+                                var released = false
+                                val start = down.position.y
+                                try {
+                                    while (true) {
+                                        val change =
+                                            awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                        // Llega ya consumido si el sistema cancela el gesto o si un segundo
+                                        // dedo lo ha vuelto pellizco (homeFingers): no se abre nada.
+                                        if (change.isConsumed) break
+                                        if (!change.pressed) {
+                                            released = true
+                                            change.consume()
+                                            break
+                                        }
+                                        change.consume()
+                                        dragged = change.position.y - start
+                                        // Una sola vibración por sentido: al cruzar el umbral (soltar ya
+                                        // abre el destino) y al volver atrás (soltar ya no hace nada).
+                                        val nowArmed = dragged <= openAt
+                                        if (nowArmed != armed) AlisioHaptics.threshold(view, nowArmed)
+                                        armed = nowArmed
+                                        // El icono acompaña al dedo a medio paso y con tope: se nota que
+                                        // responde sin que parezca que se puede arrastrar a otro sitio.
+                                        val target = (dragged * SWIPE_LIFT_RATIO).coerceIn(-maxLift, 0f)
+                                        scope.launch { lift.snapTo(target) }
                                     }
+                                } finally {
                                     scope.launch { lift.animateTo(0f, AlisioMotion.follow()) }
-                                },
-                                onDragCancel = { scope.launch { lift.animateTo(0f, AlisioMotion.follow()) } }
-                            )
+                                }
+                                // Ya vibró al armarse: abrir no vuelve a vibrar.
+                                if (released && armed) currentSwipe?.open?.invoke()
+                            }
                         }
                     }
                 )
@@ -1670,7 +1738,8 @@ internal fun NowCard(
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    onExplain: (() -> Unit)? = null
+    onExplain: (() -> Unit)? = null,
+    art: Bitmap? = null
 ) {
     val reason =
         when (suggestion.rule) {
@@ -1687,11 +1756,20 @@ internal fun NowCard(
 
             NowRule.BLUETOOTH -> stringResource(R.string.now_reason_bluetooth, suggestion.device.orEmpty())
 
+            NowRule.MUSIC -> stringResource(R.string.now_reason_music)
+
             NowRule.HABIT -> stringResource(R.string.now_reason_habit)
         }
     NowPlate(
-        icon = { AppIcon(app.icon, AlisioTokens.IconSlot) },
-        title = app.label,
+        // La carátula de lo último que sonó, como en el reproductor: se reconoce qué se va a reanudar.
+        icon = { AppIcon(art ?: app.icon, AlisioTokens.IconSlot) },
+        title = if (suggestion.rule ==
+            NowRule.MUSIC
+        ) {
+            stringResource(R.string.now_music_title, app.label)
+        } else {
+            app.label
+        },
         reason = reason,
         onOpen = onOpen,
         onLongPress = onExplain,
@@ -1834,6 +1912,8 @@ private fun NowWhySheet(suggestion: NowSuggestion, app: AppEntry, onForget: () -
                             suggestion.device.orEmpty(),
                             suggestion.evidence
                         )
+
+                    NowRule.MUSIC -> stringResource(R.string.now_why_music, suggestion.evidence, HABIT_DAYS)
 
                     else -> stringResource(R.string.now_why_habit, suggestion.evidence, HABIT_DAYS)
                 }

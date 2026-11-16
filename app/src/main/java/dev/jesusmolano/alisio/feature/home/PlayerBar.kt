@@ -5,7 +5,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -52,6 +55,9 @@ private val PlayerIconSize = 26.dp
 
 // Recorrido en horizontal a partir del cual soltar aparta el reproductor.
 private val HideDrag = 96.dp
+
+// Lo de lado que tiene que ser el arrastre, frente a lo vertical, para que la placa se lo quede.
+private const val SIDEWAYS_RATIO = 2f
 
 /**
  * Reproductor del Inicio: una placa con la carátula, el título, la app y dos botones. Tocar fuera de
@@ -83,17 +89,28 @@ internal fun PlayerBar(
                 // Deslizarla a un lado la aparta: una sesión en pausa puede quedarse horas en el Inicio.
                 .pointerInput(Unit) {
                     val hideAt = HideDrag.toPx()
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, amount ->
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        // Solo un arrastre claramente de lado es suyo: un pulgar que sube en diagonal
+                        // desde la placa quiere la barra, y ese gesto es del Inicio.
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed || change.isConsumed) return@awaitEachGesture
+                            val moved = change.position - down.position
+                            if (moved.getDistance() <= viewConfiguration.touchSlop) continue
+                            if (abs(moved.x) < SIDEWAYS_RATIO * abs(moved.y)) return@awaitEachGesture
                             change.consume()
-                            scope.launch { slide.snapTo(slide.value + amount) }
-                        },
-                        onDragEnd = {
-                            if (abs(slide.value) >= hideAt) hide()
-                            scope.launch { slide.animateTo(0f, AlisioMotion.follow()) }
-                        },
-                        onDragCancel = { scope.launch { slide.animateTo(0f, AlisioMotion.follow()) } }
-                    )
+                            break
+                        }
+                        // `horizontalDrag` da `false` si el gesto se cancela: entonces no se aparta.
+                        val finished =
+                            horizontalDrag(down.id) { change ->
+                                scope.launch { slide.snapTo(slide.value + change.positionChange().x) }
+                                change.consume()
+                            }
+                        if (finished && abs(slide.value) >= hideAt) hide()
+                        scope.launch { slide.animateTo(0f, AlisioMotion.follow()) }
+                    }
                 }
                 .graphicsLayer {
                     translationX = slide.value

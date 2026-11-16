@@ -16,11 +16,13 @@ import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.core.icons.customLabel
 import dev.jesusmolano.alisio.core.media.PlayerSeen
 import dev.jesusmolano.alisio.core.media.hiddenAfter
+import dev.jesusmolano.alisio.core.media.musicKey
 import dev.jesusmolano.alisio.core.now.ConnectedAudio
 import dev.jesusmolano.alisio.core.now.DISMISSALS_TO_SILENCE
 import dev.jesusmolano.alisio.core.now.NowApp
 import dev.jesusmolano.alisio.core.now.NowFeedback
 import dev.jesusmolano.alisio.core.now.NowInput
+import dev.jesusmolano.alisio.core.now.NowMusic
 import dev.jesusmolano.alisio.core.now.NowRule
 import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.now.bluetoothCases
@@ -58,6 +60,7 @@ import dev.jesusmolano.alisio.data.home.StackIcon
 import dev.jesusmolano.alisio.data.home.SwipeTarget
 import dev.jesusmolano.alisio.data.media.LiveNow
 import dev.jesusmolano.alisio.data.media.MediaSessions
+import dev.jesusmolano.alisio.data.media.MusicStarter
 import dev.jesusmolano.alisio.data.media.NotificationAccess
 import dev.jesusmolano.alisio.data.media.NowPlaying
 import dev.jesusmolano.alisio.data.notes.NotesRepository
@@ -68,6 +71,7 @@ import dev.jesusmolano.alisio.data.usage.UsageAccess
 import dev.jesusmolano.alisio.data.zones.ZonesRepository
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -137,8 +141,37 @@ class HomeViewModel(
     zones: ZonesRepository,
     private val forgotten: ForgottenRepository,
     private val contacts: ContactsRepository,
-    private val notesSource: NotesRepository
+    private val notesSource: NotesRepository,
+    private val music: MusicStarter
 ) : ViewModel() {
+    /** La app de música por defecto; la usan la pieza «Música» y la sugerencia «Reanudar». */
+    val musicApp: StateFlow<AppEntry?> = music.app
+
+    /** La última carátula guardada de cada app de música: la lleva la sugerencia «Reanudar». */
+    val musicArt: StateFlow<Map<String, Bitmap>> = music.lastArt
+
+    /** Si suena algo, de la app que sea: la pieza «Música» solo sale cuando no. */
+    val somethingPlaying: StateFlow<Boolean> =
+        mediaSessions.playingApps.map { it.isNotEmpty() }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * Pone la app de música sin abrirla ([MusicStarter.resume]); si en 1,5 s no suena, la abre como
+     * cualquier otra app (con su pausa y su apertura en el historial). [onFailed] avisa si ni eso.
+     *
+     * Mientras espera, otro toque no hace nada: si no, saldrían dos órdenes y dos aperturas. La app
+     * solo se abre si el Inicio sigue a la vista ([stillShown]): si el dueño se ha ido a otra app en
+     * ese tiempo, la de música no debe ponerse delante.
+     */
+    fun playMusic(app: AppEntry, stillShown: () -> Boolean, onFailed: () -> Unit) {
+        if (musicJob?.isActive == true) return
+        musicJob =
+            viewModelScope.launch {
+                if (!music.resume(app.component.packageName) && stillShown() && !launch(app)) onFailed()
+            }
+    }
+
+    private var musicJob: Job? = null
+
     /** Las notas del Inicio, la más reciente primero. */
     val notes: StateFlow<List<HomeNote>> = notesSource.notes
 
@@ -356,9 +389,29 @@ class HomeViewModel(
         val seenAt: Map<String, Long>
     )
 
+    // La app de música y lo que suena, para la regla de música; sus horas de empezar a sonar están
+    // en el historial y se leen con él.
+    private val musicInput =
+        combine(
+            musicApp,
+            mediaSessions.playingApps,
+            music.lastPlayedAt,
+            mediaSessions.watching
+        ) { app, playing, lastPlayed, watching ->
+            app?.let { MusicNow(it, playing.isNotEmpty(), lastPlayed, watching) }
+        }
+
+    private class MusicNow(val app: AppEntry, val playing: Boolean, val lastPlayedAt: Long?, val watching: Boolean)
+
     private val nowInputs =
-        combine(homeConfig.dock, nowFeedback.feedback, bluetoothInput, learnedInput) { slots, feedback, bt, extras ->
-            NowInputs(slots, feedback, bt.first, bt.second, extras)
+        combine(
+            homeConfig.dock,
+            nowFeedback.feedback,
+            bluetoothInput,
+            learnedInput,
+            musicInput
+        ) { slots, feedback, bt, extras, musicNow ->
+            NowInputs(slots, feedback, bt.first, bt.second, extras, musicNow)
         }
 
     private class NowInputs(
@@ -366,7 +419,8 @@ class HomeViewModel(
         val feedback: Map<Pair<NowRule, String>, NowFeedback>,
         val bluetooth: ConnectedAudio?,
         val bluetoothOpenings: Map<String, Map<String, Int>>,
-        val extras: NowExtras
+        val extras: NowExtras,
+        val music: MusicNow?
     )
 
     /**
@@ -402,7 +456,17 @@ class HomeViewModel(
                     feedback = inputs.feedback,
                     newVersionKeys = inputs.extras.devKeys,
                     seenAt = inputs.extras.seenAt,
-                    forgotten = inputs.extras.forgotten
+                    forgotten = inputs.extras.forgotten,
+                    music =
+                        inputs.music?.let {
+                            NowMusic(
+                                appKey = it.app.key.toString(),
+                                starts = openings[musicKey(it.app.component.packageName)].orEmpty(),
+                                playing = it.playing,
+                                lastPlayedAt = it.lastPlayedAt,
+                                watching = it.watching
+                            )
+                        }
                 )
             suggest(input)?.let { suggestion -> byKey[suggestion.appKey]?.let { suggestion to it } }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -588,7 +652,8 @@ class HomeViewModel(
                     container.zones,
                     container.forgotten,
                     container.contacts,
-                    container.notes
+                    container.notes,
+                    container.music
                 )
             }
         }

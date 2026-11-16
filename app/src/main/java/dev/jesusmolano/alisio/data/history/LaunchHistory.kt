@@ -86,5 +86,8 @@ class LaunchHistory(
         const val TYPE_SHORTCUT = "shortcut"
         const val TYPE_SETTING = "setting"
         const val TYPE_CONTACT = "contact"
+
+        /** Una app de música empezó a sonar; la clave es `musicKey` y alimenta la regla de música de Ahora. */
+        const val TYPE_MUSIC = "music"
     }
 }

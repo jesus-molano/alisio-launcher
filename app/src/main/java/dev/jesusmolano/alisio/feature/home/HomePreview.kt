@@ -88,6 +88,7 @@ private const val SAMPLE_LIVE_MILLIS = 12 * 60_000L
  *   puntos, y la miniatura tampoco los enseña aunque estén encendidos.
  * @param onContentHeight recibe el alto que necesita la miniatura para que nada se pise, medido;
  *   quien la pone le da ese alto (más la barra de estado).
+ * @param musicLabel el nombre de la app de música por defecto, para la pieza «Música».
  */
 @Composable
 fun HomePreview(
@@ -99,7 +100,8 @@ fun HomePreview(
     glance: GlanceData,
     modifier: Modifier = Modifier,
     notes: List<HomeNote> = emptyList(),
-    onContentHeight: ((Dp) -> Unit)? = null
+    onContentHeight: ((Dp) -> Unit)? = null,
+    musicLabel: String? = null
 ) {
     val context = LocalContext.current
     val description = stringResource(R.string.settings_preview)
@@ -158,7 +160,14 @@ fun HomePreview(
                     // La línea bajo la hora, con muestras para lo encendido que hoy no tiene nada que
                     // decir: se ve dónde y cómo queda cada pieza al elegirla.
                     if (prefs.glance.isNotEmpty()) {
-                        val pieces = glancePieces(prefs, glance, now.toInstant().toEpochMilli(), sample = true)
+                        val pieces =
+                            glancePieces(
+                                prefs,
+                                glance,
+                                now.toInstant().toEpochMilli(),
+                                sample = true,
+                                music = musicLabel?.let { MusicGlance(it) {} }
+                            )
                         val date = formatHomeDate(now)
                         val style = MaterialTheme.typography.bodyLarge.copy(
                             fontWeight = FontWeight.Medium

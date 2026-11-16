@@ -10,6 +10,7 @@ import dev.jesusmolano.alisio.AppContainer
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.calc.calculate
 import dev.jesusmolano.alisio.core.command.PhoneCommand
+import dev.jesusmolano.alisio.core.command.isMusicCommand
 import dev.jesusmolano.alisio.core.command.parsePhoneCommand
 import dev.jesusmolano.alisio.core.extras.ClockCommand
 import dev.jesusmolano.alisio.core.extras.parseClockCommand
@@ -39,6 +40,7 @@ import dev.jesusmolano.alisio.data.contacts.ContactsRepository
 import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.db.Forgotten
 import dev.jesusmolano.alisio.data.history.LaunchHistory
+import dev.jesusmolano.alisio.data.media.MusicStarter
 import dev.jesusmolano.alisio.data.notes.NotesRepository
 import dev.jesusmolano.alisio.data.now.ForgottenRepository
 import dev.jesusmolano.alisio.data.pause.LaunchPause
@@ -48,6 +50,7 @@ import dev.jesusmolano.alisio.data.system.PhoneControls
 import dev.jesusmolano.alisio.data.system.PhoneResult
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -99,6 +102,9 @@ sealed interface Quick {
 
     /** Una orden para el teléfono («linterna», «brillo 40»). */
     class Phone(val command: PhoneCommand) : Quick
+
+    /** Poner la app de música por defecto («música», «music»). */
+    class Music(val app: AppEntry) : Quick
 }
 
 /**
@@ -152,6 +158,7 @@ class SearchViewModel(
     private val forgotten: ForgottenRepository,
     private val notes: NotesRepository,
     private val phone: PhoneControls,
+    private val music: MusicStarter,
     private val text: (Int) -> String
 ) : ViewModel() {
     private val usage = MutableStateFlow(Usage.NONE)
@@ -296,6 +303,7 @@ class SearchViewModel(
             if (calculation == null) {
                 parseClockCommand(query)?.let(Quick::Clock)
                     ?: parsePhoneCommand(query)?.takeIf { options.phone }?.let(Quick::Phone)
+                    ?: music.app.value?.takeIf { isMusicCommand(query) }?.let(Quick::Music)
             } else {
                 null
             }
@@ -304,6 +312,23 @@ class SearchViewModel(
 
     /** Guarda una nota para el Inicio. */
     fun addNote(text: String) = notes.add(text)
+
+    /**
+     * Pone la app de música sin abrirla ([MusicStarter.resume]); si en 1,5 s no suena, la abre como
+     * un resultado más. [onFailed] avisa si ni eso. Sigue aunque la barra ya se haya cerrado.
+     *
+     * Como en `HomeViewModel.playMusic`: una orden a la vez, y la app solo se abre si Alisio sigue a
+     * la vista ([stillShown]).
+     */
+    fun playMusic(app: AppEntry, stillShown: () -> Boolean, onFailed: () -> Unit) {
+        if (musicJob?.isActive == true) return
+        musicJob =
+            viewModelScope.launch {
+                if (!music.resume(app.component.packageName) && stillShown() && !launch(Target.App(app))) onFailed()
+            }
+    }
+
+    private var musicJob: Job? = null
 
     /** Da una orden al teléfono y dice cómo ha ido. */
     suspend fun runPhone(command: PhoneCommand): PhoneResult = phone.run(command)
@@ -519,6 +544,7 @@ class SearchViewModel(
                     container.forgotten,
                     container.notes,
                     container.phoneControls,
+                    container.music,
                     // El contexto de la aplicación: sus recursos siguen el idioma actual del sistema.
                     context::getString
                 )

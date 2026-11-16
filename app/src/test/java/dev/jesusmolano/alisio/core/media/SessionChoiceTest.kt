@@ -13,6 +13,24 @@ class SessionChoiceTest {
         chooseSession(sessions.keys.toList(), last) { sessions.getValue(it) }
 
     @Test
+    fun `la app de musica elegida gana a otro audio que suena a la vez`() {
+        val sessions = mapOf("whatsapp" to playing, "spotify" to playing)
+        assertEquals(
+            "spotify",
+            chooseSession(sessions.keys.toList(), null, preferred = { it == "spotify" }) { sessions.getValue(it) }
+        )
+    }
+
+    @Test
+    fun `la elegida en pausa no tapa a la que suena`() {
+        val sessions = mapOf("spotify" to paused, "video" to playing)
+        assertEquals(
+            "video",
+            chooseSession(sessions.keys.toList(), "spotify", preferred = { it == "spotify" }) { sessions.getValue(it) }
+        )
+    }
+
+    @Test
     fun `sin sesiones no hay reproductor`() {
         assertNull(choose(emptyMap()))
     }

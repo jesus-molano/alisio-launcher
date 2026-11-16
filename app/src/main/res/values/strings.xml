@@ -620,4 +620,20 @@
     <string name="undo_favorite_removed">Removed from the search bar</string>
     <string name="favorite_open">Contact</string>
     <string name="favorite_channels">See their channels</string>
+    <string name="glance_music_sample">Spotify</string>
+    <string name="glance_music_spoken">Play music in %1$s</string>
+    <string name="glance_music_action">Resume %1$s</string>
+    <string name="now_music_title">Resume %1$s</string>
+    <string name="now_reason_music">You usually play music around now</string>
+    <string name="now_why_music">Days like today when you played music around this time: %1$d of the last %2$d.</string>
+    <string name="settings_glance_music">Music</string>
+    <string name="settings_music">Music</string>
+    <string name="settings_music_app">Music app</string>
+    <string name="settings_music_none">No music app yet</string>
+    <string name="settings_music_last">%1$s, the last one that played</string>
+    <string name="settings_music_auto">The last one that played</string>
+    <string name="settings_music_installed">%1$s, installed</string>
+    <string name="settings_music_missing">The chosen one is gone: %1$s for now</string>
+    <string name="search_music_title">Play %1$s</string>
+    <string name="search_music_hint">Picks up where you left off, without opening it</string>
 </resources>

@@ -17,6 +17,12 @@ enum class NowRule(val id: String) {
     /** La app que más se abre al poco de conectar el dispositivo de audio que se acaba de conectar. */
     BLUETOOTH("bluetooth"),
 
+    /**
+     * Reanudar la app de música por defecto: no suena nada y a esta hora, en días como hoy, se
+     * suele poner música (Música siempre a mano).
+     */
+    MUSIC("music"),
+
     /** App que se suele abrir a esta hora en días como hoy y que hoy aún no se ha abierto. */
     HABIT("habit");
 
@@ -47,6 +53,25 @@ data class NowSuggestion(
 /** App con icono de inicio y la hora de su última instalación o actualización. */
 class NowApp(val key: String, val updatedAt: Long)
 
+/**
+ * La app de música por defecto, para [NowRule.MUSIC].
+ *
+ * @param appKey la clave de la app, la misma de las aperturas y los descartes.
+ * @param starts cuándo empezó a sonar (desde los auriculares, la notificación o Alisio).
+ * @param playing si suena algo ahora, de cualquier app: entonces no hay nada que reanudar.
+ * @param lastPlayedAt la última vez que se la vio sonar; con ella, una pausa de hace un momento no
+ *   se toma por «aún no ha sonado».
+ * @param watching si se escuchan las sesiones. Sin ello [playing] y [lastPlayedAt] no dicen nada:
+ *   la regla callaría la costumbre de días anteriores y propondría reanudar lo que ya suena.
+ */
+class NowMusic(
+    val appKey: String,
+    val starts: List<Long>,
+    val playing: Boolean,
+    val lastPlayedAt: Long? = null,
+    val watching: Boolean = true
+)
+
 /** Descartes de una sugerencia concreta (regla y app). */
 class NowFeedback(val dismissals: Int, val lastDismissedAt: Long)
 
@@ -63,6 +88,7 @@ class NowFeedback(val dismissals: Int, val lastDismissedAt: Long)
  * @param seenAt por app, la última vez que estuvo en primer plano según el sistema, también abierta
  *   fuera de Alisio (desde recientes o una notificación). Solo en memoria.
  * @param forgotten por regla y app, desde cuándo cuenta lo aprendido: lo anterior se ha olvidado.
+ * @param music la app de música por defecto y cuándo sonó; `null` sin ninguna.
  */
 class NowInput(
     val now: Long,
@@ -75,7 +101,8 @@ class NowInput(
     val feedback: Map<Pair<NowRule, String>, NowFeedback> = emptyMap(),
     val newVersionKeys: Set<String>? = null,
     val seenAt: Map<String, Long> = emptyMap(),
-    val forgotten: Map<Pair<NowRule, String>, Long> = emptyMap()
+    val forgotten: Map<Pair<NowRule, String>, Long> = emptyMap(),
+    val music: NowMusic? = null
 ) {
     /** Abierta desde Alisio o vista por el sistema en [from] o después. */
     fun usedSince(key: String, from: Long): Boolean =
@@ -101,8 +128,35 @@ const val HABIT_DAYS = 5
 private const val HABIT_MIN_DAYS = 3
 private const val MINUTES_PER_DAY = 24 * 60
 
+/**
+ * Tras sonar, cuánto tarda en volver a proponerse la música. Una hora: más que la ventana de la
+ * costumbre (±30 min), así la pausa de las 8:05 no trae «Reanudar» a las 8:10.
+ */
+const val MUSIC_RECENT_MILLIS = HOUR_MILLIS
+
 /** La primera regla que tenga algo que proponer; `null` si ninguna (el hueco se queda vacío). */
-fun suggest(input: NowInput): NowSuggestion? = newVersion(input) ?: bluetooth(input) ?: habit(input)
+fun suggest(input: NowInput): NowSuggestion? = newVersion(input) ?: bluetooth(input) ?: music(input) ?: habit(input)
+
+/**
+ * La costumbre de poner música a esta hora, con la misma cuenta que [habit] (días del mismo tipo con
+ * algo a ±30 min), pero sobre las veces que empezó a sonar. A diferencia de [habit], vale aunque la
+ * app esté en el dock: lo que propone es reanudarla de un toque, no encontrarla.
+ */
+private fun music(input: NowInput): NowSuggestion? {
+    val music = input.music ?: return null
+    val key = music.appKey
+    if (!music.watching || music.playing || input.apps.none { it.key == key } ||
+        input.suppressed(NowRule.MUSIC, key)
+    ) {
+        return null
+    }
+    val since = input.forgotten[NowRule.MUSIC to key]
+    val starts = if (since == null) music.starts else music.starts.filter { it >= since }
+    val recent = listOfNotNull(music.lastPlayedAt) + starts
+    if (recent.any { input.now - it in 0 until MUSIC_RECENT_MILLIS }) return null
+    val days = matchingDays(starts, input)
+    return if (days >= HABIT_MIN_DAYS) NowSuggestion(NowRule.MUSIC, key, evidence = days) else null
+}
 
 private fun newVersion(input: NowInput): NowSuggestion? = input.apps
     .filter { app ->
@@ -134,10 +188,18 @@ private fun bluetooth(input: NowInput): NowSuggestion? {
         ?.let { NowSuggestion(NowRule.BLUETOOTH, it.key, device = connected.name, evidence = it.value) }
 }
 
+/** De los cinco días anteriores como hoy, en cuántos hay alguna hora de [times] a ±30 min de ahora. */
+private fun matchingDays(times: List<Long>, input: NowInput): Int {
+    val days = previousDaysLike(dateOf(input.now, input.zone))
+    val nowMinute = minuteOfDay(input.now, input.zone)
+    return times
+        .filter { nearMinute(minuteOfDay(it, input.zone), nowMinute) }
+        .mapTo(HashSet()) { dateOf(it, input.zone) }
+        .count { it in days }
+}
+
 private fun habit(input: NowInput): NowSuggestion? {
     val today = dateOf(input.now, input.zone)
-    val days = previousDaysLike(today)
-    val nowMinute = minuteOfDay(input.now, input.zone)
     val installed = input.apps.mapTo(HashSet()) { it.key }
     return input.openings
         .filter { (key, _) -> key in installed && key !in input.dockKeys && !input.suppressed(NowRule.HABIT, key) }
@@ -151,11 +213,7 @@ private fun habit(input: NowInput): NowSuggestion? {
             // Lo olvidado no cuenta para la costumbre: se vuelve a aprender con las aperturas de después.
             val since = input.forgotten[NowRule.HABIT to key]
             val openings = if (since == null) all else all.filter { it >= since }
-            val matchingDays =
-                openings
-                    .filter { nearMinute(minuteOfDay(it, input.zone), nowMinute) }
-                    .mapTo(HashSet()) { dateOf(it, input.zone) }
-                    .count { it in days }
+            val matchingDays = matchingDays(openings, input)
             if (matchingDays >= HABIT_MIN_DAYS) key to matchingDays else null
         }
         // En empate, la clave: el resultado no debe bailar entre dos apps igual de habituales.

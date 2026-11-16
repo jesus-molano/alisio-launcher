@@ -14,7 +14,10 @@ enum class GlanceItem(val id: String) {
     SUN("sun"),
 
     /** Cuánto se ha usado el teléfono hoy, con el acceso a uso que ya da el uso de cada app. */
-    SCREEN_TIME("screen");
+    SCREEN_TIME("screen"),
+
+    /** La app de música por defecto, solo cuando no suena nada: tocarla la pone sin abrirla. */
+    MUSIC("music");
 
     companion object {
         fun fromId(id: String): GlanceItem? = entries.firstOrNull { it.id == id }

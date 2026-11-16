@@ -51,14 +51,17 @@ data class NowPlaying(
  * No hay servicio propio: los avisos de sesiones solo llegan mientras el proceso vive. Todo ocurre en
  * el hilo principal.
  *
- * @param enabled si el reproductor está encendido en los ajustes. Apagado no se escucha nada: el
- *   servicio de notificaciones mantiene vivo el proceso y los avisos seguirían llegando sin uso.
+ * @param enabled si alguien usa las sesiones (el reproductor o la pieza «Música»). Apagado no se
+ *   escucha nada: el servicio de notificaciones mantiene vivo el proceso y los avisos seguirían
+ *   llegando sin uso.
+ * @param preferred la app de música elegida en los ajustes: si suena, el reproductor la enseña a ella.
  */
 class MediaSessions(
     context: Context,
     private val access: NotificationAccess,
     enabled: StateFlow<Boolean>,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    private val preferred: StateFlow<String?> = MutableStateFlow(null)
 ) {
     private val appContext = context.applicationContext
     private val manager = appContext.getSystemService(MediaSessionManager::class.java)
@@ -69,11 +72,27 @@ class MediaSessions(
     /** `null` sin sesiones (o sin acceso): el reproductor no ocupa sitio. */
     val playing: StateFlow<NowPlaying?> = _playing.asStateFlow()
 
+    private val _playingApps = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * Los paquetes con alguna sesión que suena, aunque el reproductor enseñe otra: con esto se sabe
+     * si «Música» ha conseguido reanudar su app.
+     */
+    val playingApps: StateFlow<Set<String>> = _playingApps.asStateFlow()
+
+    private val _watching = MutableStateFlow(false)
+
+    /**
+     * Si se están leyendo las sesiones; sin ello [playingApps] no dice nada. Al empezar cambia
+     * después de publicar las sesiones y al parar antes de vaciarlas: así quien combine los dos ve el
+     * vaciado ya sin escucha y no lo toma por música que se ha parado (core/media `playingChange`).
+     */
+    val watching: StateFlow<Boolean> = _watching.asStateFlow()
+
     // En el orden del sistema, que pone primero la sesión con más prioridad.
     private var watches = emptyList<Watch>()
     private var shown: Watch? = null
     private var lastShown: MediaSession.Token? = null
-    private var watching = false
     private var wanted = false
 
     private val sessionsListener =
@@ -86,7 +105,30 @@ class MediaSessions(
                 watch()
             }
         }
+        // Elegir otra app de música cambia qué se enseña aunque ninguna sesión haya dicho nada.
+        scope.launch { preferred.collect { publish() } }
     }
+
+    /**
+     * Pide reproducir a una sesión de [packageName] que siga abierta (en pausa), sin abrir la app.
+     * Devuelve `false` si no hay ninguna o no ha aceptado la orden.
+     */
+    fun play(packageName: String): Boolean {
+        val controller = sessionOf(packageName) ?: return false
+        return try {
+            controller.transportControls.play()
+            true
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "La sesión de $packageName no ha aceptado reproducir", e)
+            false
+        }
+    }
+
+    /** Si [packageName] tiene una sesión abierta, aunque esté en pausa. */
+    fun hasSession(packageName: String): Boolean = sessionOf(packageName) != null
+
+    private fun sessionOf(packageName: String): MediaController? =
+        watches.firstOrNull { it.controller.packageName == packageName }?.controller
 
     /**
      * El Inicio vuelve a verse. Si el sistema rechazó la escucha (el acceso puede constar como
@@ -94,7 +136,7 @@ class MediaSessions(
      * cambiado y por sí solo no volvería a avisar.
      */
     fun refresh() {
-        if (wanted && !watching) watch()
+        if (wanted && !_watching.value) watch()
     }
 
     /** Pausa lo que suena o reanuda lo que está en pausa. */
@@ -130,18 +172,19 @@ class MediaSessions(
 
     private fun watch() {
         if (!wanted) {
-            if (watching) {
+            if (_watching.value) {
                 manager.removeOnActiveSessionsChangedListener(sessionsListener)
-                watching = false
+                // Antes de vaciar las sesiones: ver [watching].
+                _watching.value = false
             }
             setControllers(emptyList())
             return
         }
-        if (watching) return
+        if (_watching.value) return
         try {
             manager.addOnActiveSessionsChangedListener(sessionsListener, access.component, mainHandler)
             setControllers(manager.getActiveSessions(access.component))
-            watching = true
+            _watching.value = true
         } catch (e: SecurityException) {
             // El acceso se ha retirado entre la comprobación y la llamada, o el sistema aún no lo
             // aplica: sin reproductor. Se quita la escucha a medias para que [refresh] reintente entera.
@@ -163,7 +206,12 @@ class MediaSessions(
 
     private fun publish() {
         val last = watches.firstOrNull { it.controller.sessionToken == lastShown }
-        val chosen = chooseSession(watches, last) { SessionFacts(it.state.isPlaying(), it.track.title != null) }
+        val wantedApp = preferred.value
+        val chosen =
+            chooseSession(watches, last, preferred = { it.controller.packageName == wantedApp }) {
+                SessionFacts(it.state.isPlaying(), it.track.title != null)
+            }
+        _playingApps.value = watches.filter { it.state.isPlaying() }.mapTo(HashSet()) { it.controller.packageName }
         shown = chosen
         if (chosen != null) lastShown = chosen.controller.sessionToken
         _playing.value =
@@ -251,11 +299,21 @@ class MediaSessions(
         packageName
     }
 
-    private fun PlaybackState?.isPlaying(): Boolean =
-        this?.state == PlaybackState.STATE_PLAYING || this?.state == PlaybackState.STATE_BUFFERING
+    // Pasar de canción o conectar con otro dispositivo es seguir sonando: si no, entre canciones la
+    // pieza «Música» parpadearía y cada canción se apuntaría como un inicio nuevo en el historial.
+    private fun PlaybackState?.isPlaying(): Boolean = this?.state in PLAYING_STATES
 
     private companion object {
         const val TAG = "MediaSessions"
         const val ART_SIZE_PX = 256
+        val PLAYING_STATES =
+            setOf(
+                PlaybackState.STATE_PLAYING,
+                PlaybackState.STATE_BUFFERING,
+                PlaybackState.STATE_SKIPPING_TO_NEXT,
+                PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+                PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM,
+                PlaybackState.STATE_CONNECTING
+            )
     }
 }

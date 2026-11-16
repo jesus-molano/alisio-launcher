@@ -44,6 +44,7 @@ import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.feature.home.DockSlot
 import dev.jesusmolano.alisio.feature.home.DockSlotIcon
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
+import dev.jesusmolano.alisio.feature.home.MusicGlance
 import dev.jesusmolano.alisio.feature.home.glancePieces
 import dev.jesusmolano.alisio.feature.home.scaled
 import dev.jesusmolano.alisio.ui.components.AlisioSheet
@@ -190,6 +191,7 @@ private fun GlanceItem.info(): GlanceInfo = when (this) {
     GlanceItem.BATTERY -> GlanceInfo(R.string.settings_glance_battery, R.drawable.ic_battery)
     GlanceItem.SUN -> GlanceInfo(R.string.settings_glance_sun, R.drawable.ic_twilight)
     GlanceItem.SCREEN_TIME -> GlanceInfo(R.string.settings_glance_screen, R.drawable.ic_smartphone)
+    GlanceItem.MUSIC -> GlanceInfo(R.string.settings_glance_music, R.drawable.ic_music_note)
 }
 
 /**
@@ -204,8 +206,17 @@ internal fun GlanceChoices(context: SettingsContext, home: HomeViewModel) {
     val access = context.access
     val data by home.glance.collectAsStateWithLifecycle()
     val now = rememberNow().toInstant().toEpochMilli()
-    // Lo que diría cada pieza hoy, sin muestras: es el secundario de su fila.
-    val live = glancePieces(prefs, data, now).associateBy { it.item }
+    val musicApp by home.musicApp.collectAsStateWithLifecycle()
+    // Lo que diría cada pieza hoy, sin muestras: es el secundario de su fila. La de música dice su
+    // app aunque ahora suene algo: es lo que saldrá cuando pare.
+    val live = glancePieces(
+        prefs,
+        data,
+        now,
+        music = musicApp?.let {
+            MusicGlance(it.label) {}
+        }
+    ).associateBy { it.item }
 
     if (GlanceItem.EVENT in prefs.glance && !access.calendar) {
         PermissionRow(R.string.settings_needs_calendar, access.onCalendar)
@@ -215,6 +226,10 @@ internal fun GlanceChoices(context: SettingsContext, home: HomeViewModel) {
     }
     if (GlanceItem.SCREEN_TIME in prefs.glance && !access.usage) {
         RequirementRow(R.string.settings_needs_usage, access.onUsage)
+    }
+    // Sin el acceso, Alisio no sabe si algo suena y la pieza sale también con la música puesta.
+    if (GlanceItem.MUSIC in prefs.glance && !access.notifications) {
+        RequirementRow(R.string.settings_needs_notifications, access.onNotifications)
     }
 
     val ordered = prefs.glance + GlanceOrder.filter { it !in prefs.glance }
@@ -254,6 +269,69 @@ internal fun GlanceChoices(context: SettingsContext, home: HomeViewModel) {
         SectionLabel(stringResource(R.string.settings_glance_weather))
         WeatherOptions(context, home)
     }
+    // Siempre a la vista, no solo con la pieza: la app de música también decide qué enseña el
+    // reproductor, qué reanuda Ahora y qué abre «música» en la barra.
+    SectionLabel(stringResource(R.string.settings_music))
+    MusicAppOption(context, musicApp)
+}
+
+/**
+ * La app de música por defecto, con el selector de apps de siempre. La primera opción es no elegir
+ * ninguna: entonces vale la última que sonó, y la fila dice cuál es.
+ *
+ * @param current la que se usa ahora (elegida, la última que sonó o una conocida instalada).
+ */
+@Composable
+private fun MusicAppOption(context: SettingsContext, current: AppEntry?) {
+    val prefs = context.prefs
+    var choosing by remember { mutableStateOf(false) }
+    ItemRow(
+        title = AnnotatedString(stringResource(R.string.settings_music_app)),
+        icon = current?.icon,
+        leadingIcon = R.drawable.ic_music_note.takeIf { current == null },
+        // `current` puede no ser la elegida ni la última que sonó: musicAppFor cae en una conocida
+        // instalada. El secundario dice de cuál de los tres casos viene.
+        subtitle =
+            when {
+                current == null -> stringResource(R.string.settings_music_none)
+
+                current.component.packageName == prefs.musicApp -> current.label
+
+                prefs.musicApp != null -> stringResource(R.string.settings_music_missing, current.label)
+
+                current.component.packageName == prefs.lastMusicApp ->
+                    stringResource(R.string.settings_music_last, current.label)
+
+                else -> stringResource(R.string.settings_music_installed, current.label)
+            },
+        trailing = stringResource(R.string.settings_change),
+        onClick = { choosing = true }
+    )
+    if (choosing) {
+        AppPickerSheet(
+            title = stringResource(R.string.settings_music_app),
+            items = context.apps,
+            key = { it.key.toString() },
+            label = AppEntry::label,
+            icon = { it.icon },
+            chosen = { it.component.packageName == prefs.musicApp },
+            onPick = {
+                context.settings.setMusicApp(it.component.packageName)
+                choosing = false
+            },
+            onDismiss = { choosing = false }
+        ) {
+            ItemRow(
+                title = AnnotatedString(stringResource(R.string.settings_music_auto)),
+                leadingIcon = R.drawable.ic_music_note,
+                selected = prefs.musicApp == null,
+                onClick = {
+                    context.settings.setMusicApp(null)
+                    choosing = false
+                }
+            )
+        }
+    }
 }
 
 /**
@@ -281,6 +359,8 @@ private fun glanceStatus(
             batteryPercent?.let {
                 stringResource(R.string.settings_glance_battery_hidden, stringResource(R.string.glance_battery, it))
             }
+
+        GlanceItem.MUSIC -> stringResource(R.string.settings_music_none)
 
         else -> stringResource(R.string.settings_glance_waiting)
     }

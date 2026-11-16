@@ -79,6 +79,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.TouchTrace
@@ -175,6 +177,7 @@ fun SearchScreen(
     val undo = LocalUndo.current
     val focusRequester = remember { FocusRequester() }
     val view = LocalView.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     // Nombre del asistente de IA elegido; `null` si no está instalado, y entonces se busca en la web.
     val assistant = remember(prefs.assistantPackage) { context.appLabel(prefs.assistantPackage) }
     val webLabel = stringResource(R.string.search_chip_web)
@@ -331,6 +334,22 @@ fun SearchScreen(
                 viewModel.addNote(quick.text)
                 // La nota se ve al cerrarse la barra, bajo la hora: el aviso solo confirma que se guardó.
                 Toast.makeText(context, resources.getString(R.string.note_saved), Toast.LENGTH_SHORT).show()
+                onClose()
+            }
+
+            // La barra se cierra en el acto: lo que suene se verá en el reproductor del Inicio.
+            is Quick.Music -> {
+                // La barra ya se ha cerrado cuando se mira: cuenta que Alisio siga delante.
+                viewModel.playMusic(
+                    quick.app,
+                    stillShown = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+                ) {
+                    Toast.makeText(
+                        context,
+                        resources.getString(R.string.app_launch_failed, quick.app.label),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
                 onClose()
             }
 
@@ -758,6 +777,15 @@ private fun LazyListScope.quickRow(quick: Quick, onQuick: (Quick) -> Unit) {
                     leadingIcon = R.drawable.ic_note,
                     // Lo que hará, porque el título es la nota misma.
                     subtitle = stringResource(R.string.note_add),
+                    enterTarget = true,
+                    onClick = { onQuick(quick) }
+                )
+
+            is Quick.Music ->
+                ItemRow(
+                    title = AnnotatedString(stringResource(R.string.search_music_title, quick.app.label)),
+                    icon = quick.app.icon,
+                    subtitle = stringResource(R.string.search_music_hint),
                     enterTarget = true,
                     onClick = { onQuick(quick) }
                 )

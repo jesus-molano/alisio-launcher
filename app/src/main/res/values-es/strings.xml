@@ -607,4 +607,20 @@
     <string name="undo_favorite_removed">Quitada de la barra</string>
     <string name="favorite_open">Contactar</string>
     <string name="favorite_channels">Ver sus canales</string>
+    <string name="glance_music_sample">Spotify</string>
+    <string name="glance_music_spoken">Poner música en %1$s</string>
+    <string name="glance_music_action">Reanudar %1$s</string>
+    <string name="now_music_title">Reanudar %1$s</string>
+    <string name="now_reason_music">Sueles poner música a esta hora</string>
+    <string name="now_why_music">Pones música hacia esta hora %1$d de los últimos %2$d días como hoy.</string>
+    <string name="settings_glance_music">Música</string>
+    <string name="settings_music">Música</string>
+    <string name="settings_music_app">App de música</string>
+    <string name="settings_music_none">Aún no hay app de música</string>
+    <string name="settings_music_last">%1$s, la última que sonó</string>
+    <string name="settings_music_auto">La última que sonó</string>
+    <string name="settings_music_installed">%1$s, instalada</string>
+    <string name="settings_music_missing">La elegida ya no está: de momento, %1$s</string>
+    <string name="search_music_title">Poner %1$s</string>
+    <string name="search_music_hint">Sigue donde lo dejaste, sin abrirla</string>
 </resources>

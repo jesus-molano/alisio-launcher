@@ -29,6 +29,7 @@ import dev.jesusmolano.alisio.data.history.LaunchHistory
 import dev.jesusmolano.alisio.data.home.HomeConfigRepository
 import dev.jesusmolano.alisio.data.home.IconGestureRepository
 import dev.jesusmolano.alisio.data.media.MediaSessions
+import dev.jesusmolano.alisio.data.media.MusicStarter
 import dev.jesusmolano.alisio.data.media.NotificationAccess
 import dev.jesusmolano.alisio.data.notes.NotesRepository
 import dev.jesusmolano.alisio.data.now.ForgottenRepository
@@ -112,7 +113,9 @@ class AppContainer(context: Context) {
     val forgotten = ForgottenRepository(database.forgotten(), clock, appScope)
     val backup = BackupRepository(context, database.backup(), settings, customImages, appsRepository)
     val notificationAccess = NotificationAccess(context)
-    val mediaSessions = MediaSessions(context, notificationAccess, settings.playerEnabled, appScope)
+    val mediaSessions =
+        MediaSessions(context, notificationAccess, settings.mediaWanted, appScope, settings.chosenMusicApp)
+    val music = MusicStarter(context, mediaSessions, settings, appsRepository.apps, launchHistory, clock, appScope)
     val zones = ZonesRepository(database.zones(), appScope)
     val systemApps = SystemApps(context)
     val launchPause = LaunchPause(settings.prefs)

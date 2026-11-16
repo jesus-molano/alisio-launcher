@@ -147,6 +147,8 @@ private data class TraceState(
  * @param railBottom dónde acaba el índice en reposo, medido desde abajo (el pie del Inicio).
  * @param railTopLimit hasta dónde puede subir si sus letras no caben entre [railTop] y el pie.
  * @param onOpenZones en el Inicio, el camino de TalkBack a todas las apps; `null` dentro de Zonas.
+ * @param pressedFingers cuántos dedos hay en toda la pantalla de quien lo contiene; Trazo solo ve los
+ *   que caen sobre él, y un segundo dedo fuera del índice es un pellizco, no un trazo.
  * @param onTracing avisa cuando empieza y cuando acaba un trazo.
  */
 @Composable
@@ -158,6 +160,7 @@ fun BoxScope.Trace(
     onLaunch: (AppEntry) -> Unit,
     railTopLimit: Dp = railTop,
     onOpenZones: (() -> Unit)? = null,
+    pressedFingers: () -> Int = { 0 },
     onTracing: (Boolean) -> Unit = {}
 ) {
     if (sections.isEmpty() || mode == TraceRail.NEVER) return
@@ -250,6 +253,9 @@ fun BoxScope.Trace(
 
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        // Un dedo que llega consumido (el Inicio ya lo cuenta como pellizco) o que
+                        // cae con otro ya apoyado fuera del índice no empieza un trazo.
+                        if (down.isConsumed || pressedFingers() > 1) return@awaitEachGesture
                         down.consume()
                         val startY = down.position.y + zoneTop
                         if (startY < rest.top || startY > rest.bottom) {
@@ -286,14 +292,18 @@ fun BoxScope.Trace(
                         var selectedAt = 0L
                         var open = false
                         publish(current)
-                        AlisioHaptics.step(view)
+                        // La primera vibración llega cuando el dedo se mueve o cambia de letra, no al
+                        // apoyarlo: un toque suelto en el borde no ha decidido aún nada.
+                        var felt = false
+                        val slop = viewConfiguration.touchSlop
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                // Un segundo dedo (pellizco) o alguien que se queda el gesto: el trazo
-                                // se cancela sin abrir nada.
-                                if (event.changes.count { it.pressed } > 1 || change.isConsumed) break
+                                // Un segundo dedo (pellizco), aunque caiga fuera del índice, o alguien
+                                // que se queda el gesto: el trazo se cancela sin abrir nada.
+                                val fingers = maxOf(event.changes.count { it.pressed }, pressedFingers())
+                                if (fingers > 1 || change.isConsumed) break
                                 if (!change.pressed) {
                                     open = current.locked && current.selected != null &&
                                         change.uptimeMillis - selectedAt >= ARM_MILLIS
@@ -308,7 +318,7 @@ fun BoxScope.Trace(
                                             // En el borde se elige letra. Si venía de la rejilla, la
                                             // app elegida se suelta: soltar aquí cancela.
                                             val letter = band.letterAt(y, current.letter)
-                                            if (letter != current.letter) AlisioHaptics.step(view)
+                                            if (letter != current.letter && felt) AlisioHaptics.step(view)
                                             current.copy(
                                                 letter = letter,
                                                 fingerY = y,
@@ -326,11 +336,16 @@ fun BoxScope.Trace(
                                             val selected = current.grid.indexAt(x, y, current.selected)
                                             if (selected != current.selected) {
                                                 selectedAt = change.uptimeMillis
-                                                if (selected != null) AlisioHaptics.step(view)
+                                                if (selected != null && felt) AlisioHaptics.step(view)
                                             }
                                             current.copy(fingerY = y, locked = true, selected = selected)
                                         }
                                     }
+                                val moved = (change.position - down.position).getDistance() > slop
+                                if (!felt && (moved || next.letter != current.letter)) {
+                                    felt = true
+                                    AlisioHaptics.step(view)
+                                }
                                 current = next
                                 publish(next)
                             }

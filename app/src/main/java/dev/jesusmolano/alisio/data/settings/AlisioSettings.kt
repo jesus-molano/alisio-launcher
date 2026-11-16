@@ -104,6 +104,8 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param wallpaperRotation si el fondo cambia cada día con una imagen de [wallpaperFolder].
  * @param wallpaperFolder la carpeta elegida (URI de árbol con permiso persistente); `null` sin elegir.
  * @param favoritePeople las personas que salen al abrir la barra, por su clave de persona y en su orden.
+ * @param musicApp la app de música elegida (paquete); `null` es «la última que sonó», [lastMusicApp].
+ * @param lastMusicApp la última app de música que sonó. No se elige: Alisio la apunta al verla sonar.
  */
 data class Prefs(
     val iconStyle: IconStyle = IconStyle.Color,
@@ -149,7 +151,9 @@ data class Prefs(
     val nightAccent: Int = DEFAULT_NIGHT_ACCENT,
     val wallpaperRotation: Boolean = false,
     val wallpaperFolder: String? = null,
-    val favoritePeople: List<String> = emptyList()
+    val favoritePeople: List<String> = emptyList(),
+    val musicApp: String? = null,
+    val lastMusicApp: String? = null
 ) {
     /** Si el dock enseña los nombres bajo los iconos ([dockLabelsShown]). */
     val dockLabels: Boolean get() = dockLabelsShown(dockLabelsChoice, dockSlots)
@@ -245,7 +249,9 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         nightAccent = stored[NIGHT_ACCENT] ?: DEFAULT_NIGHT_ACCENT,
         wallpaperRotation = stored[WALLPAPER_ROTATION] ?: false,
         wallpaperFolder = stored[WALLPAPER_FOLDER],
-        favoritePeople = parseFavorites(stored[FAVORITE_PEOPLE])
+        favoritePeople = parseFavorites(stored[FAVORITE_PEOPLE]),
+        musicApp = stored[MUSIC_APP],
+        lastMusicApp = stored[LAST_MUSIC_APP]
     )
 
     /** Borra las claves guardadas con un tipo distinto del que Alisio espera para ellas. */
@@ -269,9 +275,18 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_DOCK_SLOTS)
 
-    /** Aparte de [prefs] para quien solo necesita saber si hay reproductor; `false` hasta leer el disco. */
-    val playerEnabled: StateFlow<Boolean> =
-        prefs.map { it?.playerEnabled == true }.stateIn(scope, SharingStarted.Eagerly, false)
+    /**
+     * Aparte de [prefs] para las sesiones multimedia: si hay que escucharlas; `false` hasta leer el
+     * disco. Las escucha el reproductor y también la pieza «Música», que solo sale cuando no suena nada.
+     */
+    val mediaWanted: StateFlow<Boolean> =
+        prefs.map { it != null && (it.playerEnabled || GlanceItem.MUSIC in it.glance) }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** La app de música elegida a mano: solo esa gana a otros audios en el reproductor. */
+    val chosenMusicApp: StateFlow<String?> =
+        prefs.map { it?.musicApp }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, null)
 
     fun setIconStyle(style: IconStyle) = write { it[ICON_STYLE] = style.id }
 
@@ -334,6 +349,16 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
             it[WEATHER_LATITUDE] = place.latitude
             it[WEATHER_LONGITUDE] = place.longitude
         }
+    }
+
+    /** `null` vuelve a «la última que sonó». */
+    fun setMusicApp(packageName: String?) = write {
+        if (packageName == null) it.remove(MUSIC_APP) else it[MUSIC_APP] = packageName
+    }
+
+    /** Solo escribe si cambia: se llama cada vez que una app de música empieza a sonar. */
+    fun setLastMusicApp(packageName: String) = write {
+        if (it[LAST_MUSIC_APP] != packageName) it[LAST_MUSIC_APP] = packageName
     }
 
     fun setWeatherApp(packageName: String?) = write {
@@ -569,5 +594,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val WALLPAPER_ROTATION = bool("wallpaper_rotation")
         val WALLPAPER_FOLDER = text("wallpaper_folder")
         val FAVORITE_PEOPLE = text("favorite_people")
+        val MUSIC_APP = text("music_app")
+        val LAST_MUSIC_APP = text("last_music_app")
     }
 }

@@ -12,8 +12,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -39,11 +37,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -437,67 +433,6 @@ internal sealed interface InitialItem {
 
 /** La letra dibujada y lo que hay para elegir con ella; vacío si nada empieza así. */
 internal class InitialChoice(val letter: Char, val items: List<InitialItem>, val at: Offset)
-
-/**
- * Si algún gesto de los de siempre se ha quedado el trazo (deslizar para la barra o para las
- * notificaciones, mantener para los ajustes): entonces no se lee como letra. Gana lo que ya existía.
- */
-internal class DrawGate {
-    var taken = false
-}
-
-/**
- * Escucha un trazo de un dedo que empieza en una zona vacía ([canStart]) y lo pasa a [onStroke] al
- * soltar. Mira los toques al final de todo (`PointerEventPass.Final`), después de los gestos del
- * Inicio, y no consume nada: así los de siempre siguen igual y, si uno de ellos actúa, lo dice
- * [gate] y el trazo no cuenta. Un segundo dedo (pellizco) lo cancela.
- *
- * @param enabled la preferencia: solo cambia fuera de un gesto.
- * @param paused si ahora no se escucha (barra abierta, Trazo en curso). Se pregunta en cada toque en
- *   vez de quitar el modificador: quitarlo a mitad de gesto cancela también los gestos de los hijos
- *   del Inicio, y un Trazo que empieza se cortaría al instante.
- */
-internal fun Modifier.initialDrawing(
-    enabled: Boolean,
-    paused: () -> Boolean,
-    gate: DrawGate,
-    canStart: (Offset) -> Boolean,
-    trail: SnapshotStateList<Offset>,
-    onStroke: (List<Offset>) -> Unit
-): Modifier = if (!enabled) {
-    this
-} else {
-    pointerInput(gate) {
-        val slop = viewConfiguration.touchSlop
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
-            gate.taken = false
-            trail.clear()
-            if (paused() || !canStart(down.position)) return@awaitEachGesture
-            val points = arrayListOf(down.position)
-            var drawing = false
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Final)
-                if (event.changes.size > 1 || gate.taken || paused()) {
-                    trail.clear()
-                    return@awaitEachGesture
-                }
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!change.pressed) break
-                points += change.position
-                // Pasada la holgura del toque es un trazo: ya no puede ser un toque ni un mantener.
-                if (!drawing && (change.position - down.position).getDistance() > slop * 2) {
-                    drawing = true
-                    trail.addAll(points)
-                } else if (drawing) {
-                    trail.add(change.position)
-                }
-            }
-            trail.clear()
-            if (drawing && !gate.taken) onStroke(points)
-        }
-    }
-}
 
 /**
  * La elección tras dibujar una inicial: la letra reconocida, grande, y las dos o tres apps o

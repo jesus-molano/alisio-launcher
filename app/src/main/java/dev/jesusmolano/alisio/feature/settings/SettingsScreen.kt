@@ -218,6 +218,7 @@ fun SettingsScreen(
     val loadedDock by home.dock.collectAsStateWithLifecycle()
     val swipeTargets by home.swipeTargets.collectAsStateWithLifecycle()
     val glance by home.glance.collectAsStateWithLifecycle()
+    val musicApp by home.musicApp.collectAsStateWithLifecycle()
     val notes by home.notes.collectAsStateWithLifecycle()
     val apps = loadedApps.orEmpty()
     val dock = loadedDock.orEmpty()
@@ -268,7 +269,8 @@ fun SettingsScreen(
                 glance = glance,
                 modifier = Modifier.fillMaxWidth().height(window),
                 notes = notes,
-                onContentHeight = { measured = it }
+                onContentHeight = { measured = it },
+                musicLabel = musicApp?.label
             )
         }
         Column(

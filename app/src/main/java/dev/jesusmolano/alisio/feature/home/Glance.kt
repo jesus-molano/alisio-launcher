@@ -106,15 +106,28 @@ internal class GlancePiece(
 }
 
 /**
+ * La pieza «Música» con lo que necesita del Inicio: el nombre de la app de música por defecto y qué
+ * hacer al tocarla (reanudarla sin abrirla, `HomeViewModel.playMusic`).
+ */
+internal class MusicGlance(val appLabel: String, val onPlay: () -> Unit)
+
+/**
  * Las piezas que tienen algo que decir ahora, en el orden de [Prefs.glance]. Cada una se oculta sola
  * cuando no tiene nada (sin alarma en 12 h, sin permiso, sin datos guardados).
  *
  * @param now la hora de este minuto: decide qué alarma, evento y sol cuentan.
  * @param sample para la miniatura de los ajustes: una pieza encendida sin nada que decir se enseña
  *   con un valor de muestra, para ver dónde y cómo queda.
+ * @param music la app de música, solo cuando no suena nada; `null` deja la pieza fuera.
  */
 @Composable
-internal fun glancePieces(prefs: Prefs, data: GlanceData, now: Long, sample: Boolean = false): List<GlancePiece> {
+internal fun glancePieces(
+    prefs: Prefs,
+    data: GlanceData,
+    now: Long,
+    sample: Boolean = false,
+    music: MusicGlance? = null
+): List<GlancePiece> {
     val context = LocalContext.current
     return prefs.glance.mapNotNull { item ->
         when (item) {
@@ -124,8 +137,25 @@ internal fun glancePieces(prefs: Prefs, data: GlanceData, now: Long, sample: Boo
             GlanceItem.BATTERY -> batteryPiece(prefs, data, sample, context)
             GlanceItem.SUN -> sunPiece(prefs, data, now, sample, context)
             GlanceItem.SCREEN_TIME -> screenPiece(data, sample, context)
+            GlanceItem.MUSIC -> musicPiece(music, sample)
         }
     }
+}
+
+/**
+ * La pieza «Música»: la nota y el nombre de la app. Sale solo sin nada sonando; mientras suena, el
+ * reproductor ya está a la vista y la pieza estorbaría.
+ */
+@Composable
+private fun musicPiece(music: MusicGlance?, sample: Boolean): GlancePiece? {
+    val label = music?.appLabel ?: stringResource(R.string.glance_music_sample).takeIf { sample } ?: return null
+    return GlancePiece(
+        item = GlanceItem.MUSIC,
+        icon = R.drawable.ic_music_note,
+        text = label,
+        spoken = stringResource(R.string.glance_music_spoken, label),
+        action = stringResource(R.string.glance_music_action, label)
+    ) { music?.onPlay?.invoke() }
 }
 
 @Composable
