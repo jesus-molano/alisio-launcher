@@ -2,14 +2,20 @@ package dev.jesusmolano.alisio.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -130,4 +137,33 @@ fun PreviewChoice(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+// Con más opciones que estas, las teselas dejan de repartirse el ancho y miden ChoiceTileWidth.
+private const val EVEN_CHOICES = 3
+private val ChoiceTileWidth = 104.dp
+private val ChoiceGap = 8.dp
+
+/**
+ * Una fila de [PreviewChoice] alineada con las filas de la página o de la hoja (docs/DISENO.md
+ * §4.5): con hasta tres opciones se reparten el ancho a partes iguales; con más, miden
+ * [ChoiceTileWidth] y la fila se desplaza, para que ninguna quede tan estrecha que su muestra no se lea.
+ *
+ * @param count cuántas teselas lleva la fila.
+ * @param shown con desplazamiento, la tesela que se ve al entrar (la elegida).
+ * @param content recibe el modificador de ancho que debe llevar cada tesela.
+ */
+@Composable
+fun ChoiceRow(count: Int, shown: Int = 0, content: @Composable RowScope.(tile: Modifier) -> Unit) {
+    val scrolls = count > EVEN_CHOICES
+    // Con desplazamiento, la fila abre con la tesela [shown] (la elegida) a la vista, aunque quede
+    // lejos del principio: si no, lo elegido no se ve al entrar.
+    val start = with(LocalDensity.current) { ((ChoiceTileWidth + ChoiceGap) * shown).roundToPx() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (scrolls) Modifier.horizontalScroll(rememberScrollState(start)) else Modifier)
+            .padding(horizontal = AlisioTokens.Outset),
+        horizontalArrangement = Arrangement.spacedBy(ChoiceGap)
+    ) { content(if (scrolls) Modifier.width(ChoiceTileWidth) else Modifier.weight(1f)) }
 }

@@ -37,9 +37,13 @@ class IconPack private constructor(
     private val resources: Resources,
     private val drawableByComponent: Map<String, String>
 ) {
-    fun iconFor(component: ComponentName): Drawable? {
-        val name = drawableByComponent[component.flattenToString()] ?: return null
+    fun iconFor(component: ComponentName): Drawable? = drawableName(component)?.let(::drawable)
 
+    /** El nombre del dibujo que el paquete tiene para esa actividad, o `null` si no la cubre. */
+    fun drawableName(component: ComponentName): String? = drawableByComponent[component.flattenToString()]
+
+    /** Un dibujo del paquete por su nombre; `null` si no existe o no se deja leer. */
+    fun drawable(name: String): Drawable? {
         // Los paquetes nombran sus dibujos en el XML: no hay otra forma de llegar a ellos.
         @Suppress("DiscouragedApi")
         val id = resources.getIdentifier(name, "drawable", packageName)
@@ -50,6 +54,29 @@ class IconPack private constructor(
             Log.w(TAG, "El paquete $packageName no tiene el dibujo $name", e)
             null
         }
+    }
+
+    /**
+     * Todos los dibujos del paquete, para elegir cualquiera. Los paquetes de ADW los listan en
+     * `drawable.xml`; el que no lo trae ofrece al menos los que asigna en su `appfilter.xml`.
+     */
+    val names: List<String> by lazy {
+        val listed =
+            try {
+                readXml(resources, packageName, "drawable") { parser ->
+                    val result = LinkedHashSet<String>()
+                    while (parser.next() != XmlPullParser.END_DOCUMENT) {
+                        if (parser.eventType != XmlPullParser.START_TAG || parser.name != "item") continue
+                        parser.getAttributeValue(null, "drawable")?.takeIf { it.isNotBlank() }?.let(result::add)
+                    }
+                    result.toList()
+                }
+            } catch (e: Exception) {
+                // Sin lista o ilegible: quedan los dibujos del appfilter.
+                Log.w(TAG, "El paquete $packageName no lista sus dibujos", e)
+                emptyList()
+            }
+        listed.ifEmpty { drawableByComponent.values.distinct().sorted() }
     }
 
     companion object {
@@ -63,12 +90,21 @@ class IconPack private constructor(
         }
 
         /** El filtro puede venir como recurso XML o como archivo en `assets`. */
-        private fun readAppFilter(resources: Resources, packageName: String): Map<String, String> {
+        private fun readAppFilter(resources: Resources, packageName: String): Map<String, String> =
+            readXml(resources, packageName, "appfilter", ::parseAppFilter)
+
+        /** Un XML del paquete por su nombre, como recurso o como archivo en `assets`. */
+        private fun <T> readXml(
+            resources: Resources,
+            packageName: String,
+            name: String,
+            parse: (XmlPullParser) -> T
+        ): T {
             @Suppress("DiscouragedApi")
-            val id = resources.getIdentifier("appfilter", "xml", packageName)
-            if (id != 0) return resources.getXml(id).use(::parseAppFilter)
-            return resources.assets.open("appfilter.xml").use { stream ->
-                parseAppFilter(Xml.newPullParser().apply { setInput(stream, null) })
+            val id = resources.getIdentifier(name, "xml", packageName)
+            if (id != 0) return resources.getXml(id).use(parse)
+            return resources.assets.open("$name.xml").use { stream ->
+                parse(Xml.newPullParser().apply { setInput(stream, null) })
             }
         }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.icu.util.Calendar
+import android.os.SystemClock
 import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -22,11 +23,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -45,6 +48,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -61,6 +66,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -74,6 +81,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.TouchTrace
 import dev.jesusmolano.alisio.core.extras.ClipContent
 import dev.jesusmolano.alisio.core.extras.ClockCommand
 import dev.jesusmolano.alisio.core.people.Channel
@@ -84,6 +92,7 @@ import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.contacts.ContactPhotos
 import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.settings.Prefs
+import dev.jesusmolano.alisio.data.system.PhoneResult
 import dev.jesusmolano.alisio.feature.people.ChannelButton
 import dev.jesusmolano.alisio.feature.people.PersonCard
 import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
@@ -93,17 +102,25 @@ import dev.jesusmolano.alisio.feature.people.rememberContactPhoto
 import dev.jesusmolano.alisio.feature.settings.icon
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
+import dev.jesusmolano.alisio.ui.components.LocalUndo
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
+import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val CloseDrag = 64.dp
 
 private const val ROW_CHANNELS = 3
+
+// Lo que tarda en empezar a salir el teclado cuando la petición ha llegado (docs/IDEAS.md §3.1).
+private const val IME_RETRY_MILLIS = 150L
+private const val IME_WAIT_MILLIS = 2_000L
 
 /**
  * Barra de §5.3: resultados apilados desde abajo, junto al teclado, con el mejor pegado a la barra.
@@ -130,7 +147,6 @@ fun SearchScreen(
     val source by viewModel.source.collectAsStateWithLifecycle()
     // El texto vive aquí, no en un flujo: si volviera con retraso, el campo perdería letras y el cursor.
     var query by remember { mutableStateOf("") }
-    val state = remember(query, source) { viewModel.search(query, source) }
     val listState = rememberLazyListState()
     // Lo que había en el portapapeles al abrir la barra, si tiene acción. Vive solo mientras la barra
     // está abierta: no se guarda ni sobrevive a cerrarla (§5.8).
@@ -154,7 +170,9 @@ fun SearchScreen(
     val contactsGranted by viewModel.contactsGranted.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resources = LocalResources.current
+    val undo = LocalUndo.current
     val focusRequester = remember { FocusRequester() }
+    val view = LocalView.current
     // Nombre del asistente de IA elegido; `null` si no está instalado, y entonces se busca en la web.
     val assistant = remember(prefs.assistantPackage) { context.appLabel(prefs.assistantPackage) }
     val webLabel = stringResource(R.string.search_chip_web)
@@ -165,9 +183,22 @@ fun SearchScreen(
     // Las salidas llevan el icono de la app a la que mandan, para reconocerlas sin leer.
     val assistantIcon = remember(source, prefs.assistantPackage) { source.appIcon(prefs.assistantPackage) }
     val playIcon = remember(source) { source.appIcon(PLAY_STORE_PACKAGE) }
+    val quickOptions =
+        remember(prefs.homeNotes, prefs.phoneCommands) { QuickOptions(prefs.homeNotes, prefs.phoneCommands) }
+    val state =
+        remember(query, source, whatsappWithoutRows, quickOptions) {
+            viewModel.search(query, source, quickOptions) { person, channel ->
+                channel in person.channels(whatsappWithoutRows)
+            }
+        }
+    val scope = rememberCoroutineScope()
 
-    fun channelsOf(person: Person): List<Channel> =
-        viewModel.orderedChannels(person, person.channels(whatsappWithoutRows), source)
+    // Con un canal delante del nombre («wa laura»), ese canal es el primero: el del botón y el de Enter.
+    fun channelsOf(person: Person): List<Channel> {
+        val ordered = viewModel.orderedChannels(person, person.channels(whatsappWithoutRows), source)
+        val asked = state.channel?.takeIf { it in ordered } ?: return ordered
+        return listOf(asked) + (ordered - asked)
+    }
 
     // Apagadas en los ajustes, nadie pide fotos y todos los avatares son iniciales.
     val photos = viewModel.photos.takeIf { prefs.contactPhotos }
@@ -177,9 +208,27 @@ fun SearchScreen(
 
     BackHandler(enabled = selected != null) { selectedKey = null }
 
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible by rememberUpdatedState(WindowInsets.isImeVisible)
     LaunchedEffect(Unit) {
         viewModel.onOpened()
+        val openedAt = SystemClock.uptimeMillis()
+        TouchTrace.mark("barra abierta")
         focusRequester.requestFocus()
+        // Sin el foco de la ventana el sistema descarta la petición del teclado. Justo al volver al
+        // Inicio la barra puede abrirse antes de que la ventana lo recupere: se pide al tenerlo.
+        snapshotFlow { windowInfo.isWindowFocused }.first { it }
+        keyboard?.show()
+        // Si el teclado no empieza a salir enseguida, se vuelve a pedir el foco y el teclado, una vez.
+        if (withTimeoutOrNull(IME_RETRY_MILLIS) { snapshotFlow { imeVisible }.first { it } } == null) {
+            TouchTrace.mark("teclado pedido otra vez")
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
+        // Con un teclado físico no sale ninguno: la espera tiene tope para no quedarse colgada.
+        withTimeoutOrNull(IME_WAIT_MILLIS) { snapshotFlow { imeVisible }.first { it } }?.let {
+            TouchTrace.mark("teclado visible", took = SystemClock.uptimeMillis() - openedAt)
+        }
     }
     // Una sola lectura por apertura, porque Android avisa al usuario en cada una. Espera al foco de la
     // ventana: sin él, Android no deja leer el portapapeles y la lectura se perdería.
@@ -250,20 +299,54 @@ fun SearchScreen(
         onClose()
     }
 
-    fun runQuick(quick: Quick) = when (quick) {
-        is Quick.Clock -> {
-            val opened = context.setClock(quick.command)
-            // El reloj no enseña su pantalla (EXTRA_SKIP_UI): sin este aviso no se sabría si ha valido.
-            if (opened) {
-                val done =
-                    when (quick.command) {
-                        is ClockCommand.Alarm -> R.string.search_alarm_set
-                        is ClockCommand.Timer -> R.string.search_timer_set
-                    }
-                val message = resources.getString(done, context.clockValue(quick.command))
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    fun runQuick(quick: Quick) {
+        when (quick) {
+            is Quick.Clock -> {
+                val opened = context.setClock(quick.command)
+                // El reloj no enseña su pantalla (EXTRA_SKIP_UI): sin este aviso no se sabría si ha valido.
+                if (opened) {
+                    val done =
+                        when (quick.command) {
+                            is ClockCommand.Alarm -> R.string.search_alarm_set
+                            is ClockCommand.Timer -> R.string.search_timer_set
+                        }
+                    val message = resources.getString(done, context.clockValue(quick.command))
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                }
+                finish(opened, resources.getString(R.string.search_clock_app))
             }
-            finish(opened, resources.getString(R.string.search_clock_app))
+
+            is Quick.Note -> {
+                viewModel.addNote(quick.text)
+                // La nota se ve al cerrarse la barra, bajo la hora: el aviso solo confirma que se guardó.
+                Toast.makeText(context, resources.getString(R.string.note_saved), Toast.LENGTH_SHORT).show()
+                onClose()
+            }
+
+            is Quick.Phone -> {
+                scope.launch {
+                    when (val result = viewModel.runPhone(quick.command)) {
+                        // Hecho sin salir: se dice cómo ha quedado, porque la barra se cierra enseguida.
+                        is PhoneResult.Done -> {
+                            Toast.makeText(
+                                context,
+                                resources.phoneDone(quick.command, result.on),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            onClose()
+                        }
+
+                        PhoneResult.Opened -> onClose()
+
+                        PhoneResult.Failed ->
+                            Toast.makeText(
+                                context,
+                                resources.getString(R.string.phone_failed, resources.phoneTitle(quick.command)),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                    }
+                }
+            }
         }
     }
 
@@ -274,6 +357,13 @@ fun SearchScreen(
         val quick = state.quick
         val best = state.best
         val copied = clip
+        // Enter siempre responde al dedo: «hecho» si hay algo que hacer y «límite» con la barra vacía
+        // y sin nada copiado, donde no hace nada.
+        if (card == null && state.query.isBlank() && copied == null) {
+            AlisioHaptics.limit(view)
+        } else {
+            AlisioHaptics.done(view)
+        }
         when {
             // Enter usa el canal principal, pero nunca marca solo: una llamada se queda en el marcador.
             card != null -> contact(card, cardChannels.first(), direct = false)
@@ -346,10 +436,16 @@ fun SearchScreen(
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState(), reverseScrolling = true),
                 contentAlignment = Alignment.BottomCenter
             ) {
+                val learned =
+                    state.channel == null && viewModel.mainChannel(card, cardChannels.toSet(), source)?.learned == true
                 PersonCard(
                     name = card.name,
                     channels = cardChannels,
-                    learned = viewModel.mainChannel(card, cardChannels.toSet(), source)?.learned == true,
+                    learned = learned,
+                    onForget = {
+                        val restore = viewModel.forgetChannel(card)
+                        undo.show(resources.getString(R.string.undo_channel_forgotten, card.name), restore)
+                    },
                     onContact = { contact(card, it) },
                     onBack = { selectedKey = null },
                     onOpenContact = { finish(context.openContact(card), card.name) },
@@ -566,7 +662,17 @@ private fun LazyListScope.results(
                     },
                 subtitle =
                     when (target) {
-                        is Target.App -> null
+                        // Oculta: se dice, porque no sale en ningún otro sitio. Renombrada y encontrada por su
+                        // nombre de siempre: se dice ese nombre, que es lo que se ha escrito.
+                        is Target.App ->
+                            when {
+                                target.app.hidden -> stringResource(R.string.search_app_hidden)
+
+                                target.app.renamed && result.positions.isEmpty() ->
+                                    stringResource(R.string.name_original, target.app.originalLabel)
+
+                                else -> null
+                            }
 
                         is Target.Shortcut -> target.shortcut.app.label
 
@@ -619,6 +725,27 @@ private fun LazyListScope.quickRow(quick: Quick, onQuick: (Quick) -> Unit) {
                             )
                         ),
                     leadingIcon = if (alarm) R.drawable.ic_alarm else R.drawable.ic_timer,
+                    enterTarget = true,
+                    onClick = { onQuick(quick) }
+                )
+            }
+
+            is Quick.Note ->
+                ItemRow(
+                    title = AnnotatedString(quick.text),
+                    leadingIcon = R.drawable.ic_note,
+                    // Lo que hará, porque el título es la nota misma.
+                    subtitle = stringResource(R.string.note_add),
+                    enterTarget = true,
+                    onClick = { onQuick(quick) }
+                )
+
+            is Quick.Phone -> {
+                val resources = LocalResources.current
+                ItemRow(
+                    title = AnnotatedString(resources.phoneTitle(quick.command)),
+                    leadingIcon = phoneIcon(quick.command),
+                    subtitle = resources.phoneHint(quick.command),
                     enterTarget = true,
                     onClick = { onQuick(quick) }
                 )

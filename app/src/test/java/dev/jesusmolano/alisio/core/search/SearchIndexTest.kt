@@ -68,4 +68,19 @@ class SearchIndexTest {
             }
         assertTrue("La peor consulta tardó $worst ms", worst < 50.0)
     }
+
+    @Test
+    fun `lo oculto solo sale con su nombre entero o un sinonimo entero`() {
+        val hidden = IndexItem("h", "Banco", "oculta", synonyms = listOf("Mi Banco"), exactOnly = true)
+        val items = listOf(hidden, IndexItem("b", "Bandcamp", "app"))
+        assertEquals(listOf("app"), search(items, "ban", Usage.NONE).map { it.item.payload })
+        assertEquals(listOf("oculta"), search(items, "banco", Usage.NONE).map { it.item.payload })
+        assertEquals(listOf("oculta"), search(items, "mi banco", Usage.NONE).map { it.item.payload })
+    }
+
+    @Test
+    fun `el nombre original encuentra una app renombrada`() {
+        val renamed = IndexItem("w", "Chat", "app", synonyms = listOf("WhatsApp"))
+        assertEquals(listOf("app"), search(listOf(renamed), "whats", Usage.NONE).map { it.item.payload })
+    }
 }

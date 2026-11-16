@@ -1,11 +1,27 @@
 package dev.jesusmolano.alisio.data.media
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+/**
+ * Algo en curso para la placa de Ahora: un viaje, un temporizador, un pedido.
+ *
+ * @param countdownTo fin de la cuenta atrás (hora del reloj), si la notificación cuenta hacia abajo.
+ * @param open lo que abre la notificación al tocarla; `null` si no abre nada.
+ */
+class LiveNow(
+    val key: String,
+    val packageName: String,
+    val title: String,
+    val text: String?,
+    val countdownTo: Long?,
+    val open: PendingIntent?
+)
 
 /**
  * El acceso a notificaciones (§7) y lo que da para los puntos de no leído: cuántas notificaciones sin
@@ -40,8 +56,43 @@ class NotificationAccess(context: Context) {
         _unread.value = counts
     }
 
+    private val _live = MutableStateFlow<LiveNow?>(null)
+
+    /**
+     * Lo que está en curso ahora (docs/IDEAS.md §2.7), o `null`. Solo se lee con «En curso» encendido
+     * en los ajustes; apagado, el servicio no mira el texto de ninguna notificación.
+     */
+    val live: StateFlow<LiveNow?> = _live.asStateFlow()
+
+    // Lo pone el servicio mientras está enlazado: vuelve a mirar las notificaciones activas.
+    internal var liveScanner: (() -> Unit)? = null
+
+    internal fun setLive(value: LiveNow?) {
+        _live.value = value
+    }
+
+    private val _timers = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    /**
+     * Cuándo acaba cada cuenta atrás en curso, por paquete (el temporizador del reloj), para el icono
+     * vivo del dock. De la notificación solo se mira que cuente hacia abajo y su hora de fin.
+     */
+    val timers: StateFlow<Map<String, Long>> = _timers.asStateFlow()
+
+    internal fun setTimers(value: Map<String, Long>) {
+        _timers.value = value
+    }
+
+    /** Al encender «En curso» o al volver al Inicio: lo que ya estaba en curso sale sin esperar a otro aviso. */
+    fun refreshLive() {
+        liveScanner?.invoke()
+    }
+
     internal fun onListenerDisconnected() {
         _unread.value = emptyMap()
+        _live.value = null
+        _timers.value = emptyMap()
+        liveScanner = null
         refresh()
     }
 

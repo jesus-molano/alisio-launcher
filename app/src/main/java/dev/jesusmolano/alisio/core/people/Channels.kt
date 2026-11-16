@@ -49,6 +49,26 @@ fun openingsByPerson(openingsByKey: Map<String, List<Long>>): Map<String, List<L
 }
 
 /**
+ * Las aperturas sin lo que se ha pedido olvidar del canal aprendido de cada persona: en las claves de
+ * canal de una persona de [forgottenSince] (por [personKey]) solo quedan las aperturas desde esa hora.
+ * Lo demás no cambia: la persona sigue igual de arriba en la barra, solo pierde el «Sueles usar…».
+ */
+fun forgetChannels(openingsByKey: Map<String, List<Long>>, forgottenSince: Map<String, Long>): Map<String, List<Long>> {
+    if (forgottenSince.isEmpty()) return openingsByKey
+    return openingsByKey.mapValues { (key, openings) ->
+        val separator = key.lastIndexOf(CHANNEL_SEPARATOR)
+        val since = if (key.startsWith(PERSON_PREFIX) &&
+            separator > 0
+        ) {
+            forgottenSince[key.substring(0, separator)]
+        } else {
+            null
+        }
+        if (since == null) openings else openings.filter { it >= since }
+    }
+}
+
+/**
  * Canal del botón principal: el que más peso tiene de los disponibles. Sin historial, el chat de
  * WhatsApp si existe y, si no, la llamada; `null` si la persona no tiene ninguno.
  */

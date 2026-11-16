@@ -6,16 +6,26 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
 
-/** Las reglas del hueco Ahora, de mayor a menor prioridad (§5.5). */
-enum class NowRule {
-    /** App instalada o actualizada hace menos de 24 h y sin abrir desde entonces. */
-    NEW_VERSION,
+/**
+ * Las reglas del hueco Ahora, de mayor a menor prioridad (§5.5). [id] es lo que se guarda en
+ * `suggestion_feedback.rule`: cambiar el nombre de una entrada no debe perder sus descartes.
+ */
+enum class NowRule(val id: String) {
+    /** App de la isla Dev instalada o actualizada hace menos de 24 h y sin abrir desde entonces. */
+    NEW_VERSION("new-version"),
 
     /** La app que más se abre al poco de conectar el dispositivo de audio que se acaba de conectar. */
-    BLUETOOTH,
+    BLUETOOTH("bluetooth"),
 
     /** App que se suele abrir a esta hora en días como hoy y que hoy aún no se ha abierto. */
-    HABIT
+    HABIT("habit");
+
+    /** Lo aprende del historial y, por eso, se puede olvidar en el sitio (docs/IDEAS.md §2.6). */
+    val learned: Boolean get() = this != NEW_VERSION
+
+    companion object {
+        fun parse(id: String): NowRule? = entries.firstOrNull { it.id == id }
+    }
 }
 
 /**
@@ -23,8 +33,16 @@ enum class NowRule {
  *
  * @param since para [NowRule.NEW_VERSION], cuándo se instaló o actualizó; el motivo dice hace cuánto.
  * @param device para [NowRule.BLUETOOTH], el nombre del dispositivo conectado.
+ * @param evidence en qué se basa una regla aprendida: los días de los últimos cinco del mismo tipo
+ *   con apertura a esta hora ([NowRule.HABIT]) o las conexiones con apertura ([NowRule.BLUETOOTH]).
  */
-data class NowSuggestion(val rule: NowRule, val appKey: String, val since: Long = 0, val device: String? = null)
+data class NowSuggestion(
+    val rule: NowRule,
+    val appKey: String,
+    val since: Long = 0,
+    val device: String? = null,
+    val evidence: Int = 0
+)
 
 /** App con icono de inicio y la hora de su última instalación o actualización. */
 class NowApp(val key: String, val updatedAt: Long)
@@ -40,6 +58,11 @@ class NowFeedback(val dismissals: Int, val lastDismissedAt: Long)
  *   costumbre no las sugiere.
  * @param bluetooth dispositivo de audio conectado ahora, si lo hay, con su hora de conexión.
  * @param bluetoothOpenings por dispositivo, cuántas veces se abrió cada app al poco de conectarlo.
+ * @param newVersionKeys las apps a las que se aplica «versión nueva» (las de la isla Dev); `null`
+ *   las admite todas. Sin límite, las actualizaciones automáticas de Play tapaban la costumbre.
+ * @param seenAt por app, la última vez que estuvo en primer plano según el sistema, también abierta
+ *   fuera de Alisio (desde recientes o una notificación). Solo en memoria.
+ * @param forgotten por regla y app, desde cuándo cuenta lo aprendido: lo anterior se ha olvidado.
  */
 class NowInput(
     val now: Long,
@@ -49,8 +72,15 @@ class NowInput(
     val dockKeys: Set<String>,
     val bluetooth: ConnectedAudio? = null,
     val bluetoothOpenings: Map<String, Map<String, Int>> = emptyMap(),
-    val feedback: Map<Pair<NowRule, String>, NowFeedback> = emptyMap()
-)
+    val feedback: Map<Pair<NowRule, String>, NowFeedback> = emptyMap(),
+    val newVersionKeys: Set<String>? = null,
+    val seenAt: Map<String, Long> = emptyMap(),
+    val forgotten: Map<Pair<NowRule, String>, Long> = emptyMap()
+) {
+    /** Abierta desde Alisio o vista por el sistema en [from] o después. */
+    fun usedSince(key: String, from: Long): Boolean =
+        openings[key].orEmpty().any { it >= from } || (seenAt[key] ?: Long.MIN_VALUE) >= from
+}
 
 private const val HOUR_MILLIS = 60L * 60 * 1000
 const val NEW_VERSION_WINDOW_MILLIS = 24 * HOUR_MILLIS
@@ -65,7 +95,9 @@ private const val BLUETOOTH_MIN_CASES = 3
 const val BLUETOOTH_SUGGEST_MILLIS = 15 * 60 * 1000L
 private const val RECENT_USE_MILLIS = 6 * HOUR_MILLIS
 private const val HABIT_WINDOW_MINUTES = 30
-private const val HABIT_DAYS = 5
+
+/** Cuántos días del mismo tipo mira la costumbre; el motivo largo dice «N de los últimos 5». */
+const val HABIT_DAYS = 5
 private const val HABIT_MIN_DAYS = 3
 private const val MINUTES_PER_DAY = 24 * 60
 
@@ -75,9 +107,10 @@ fun suggest(input: NowInput): NowSuggestion? = newVersion(input) ?: bluetooth(in
 private fun newVersion(input: NowInput): NowSuggestion? = input.apps
     .filter { app ->
         val age = input.now - app.updatedAt
-        age in 0 until NEW_VERSION_WINDOW_MILLIS &&
-            // Una vez abierta la versión nueva, ya no hay nada que avisar.
-            input.openings[app.key].orEmpty().none { it >= app.updatedAt } &&
+        (input.newVersionKeys == null || app.key in input.newVersionKeys) &&
+            age in 0 until NEW_VERSION_WINDOW_MILLIS &&
+            // Una vez abierta la versión nueva, desde Alisio o desde fuera, ya no hay nada que avisar.
+            !input.usedSince(app.key, app.updatedAt) &&
             !input.suppressed(NowRule.NEW_VERSION, app.key)
     }
     .maxByOrNull { it.updatedAt }
@@ -93,12 +126,12 @@ private fun bluetooth(input: NowInput): NowSuggestion? {
         .filter { (key, cases) ->
             cases >= BLUETOOTH_MIN_CASES &&
                 key in installed &&
-                // Abierta ya en esta conexión, no hay nada que proponer.
-                input.openings[key].orEmpty().none { it >= connected.since } &&
+                // Abierta ya en esta conexión, desde Alisio o desde fuera, no hay nada que proponer.
+                !input.usedSince(key, connected.since) &&
                 !input.suppressed(NowRule.BLUETOOTH, key)
         }
         .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenByDescending { it.key })
-        ?.let { NowSuggestion(NowRule.BLUETOOTH, it.key, device = connected.name) }
+        ?.let { NowSuggestion(NowRule.BLUETOOTH, it.key, device = connected.name, evidence = it.value) }
 }
 
 private fun habit(input: NowInput): NowSuggestion? {
@@ -108,11 +141,16 @@ private fun habit(input: NowInput): NowSuggestion? {
     val installed = input.apps.mapTo(HashSet()) { it.key }
     return input.openings
         .filter { (key, _) -> key in installed && key !in input.dockKeys && !input.suppressed(NowRule.HABIT, key) }
-        .mapNotNull { (key, openings) ->
+        .mapNotNull { (key, all) ->
             // «Hoy» incluye las últimas horas: a las 00:10 no se sugiere lo que se abrió a las 23:50.
-            if (openings.any { dateOf(it, input.zone) == today || input.now - it in 0 until RECENT_USE_MILLIS }) {
+            // Lo abierto fuera de Alisio también cuenta como usado hoy.
+            val seen = all + listOfNotNull(input.seenAt[key])
+            if (seen.any { dateOf(it, input.zone) == today || input.now - it in 0 until RECENT_USE_MILLIS }) {
                 return@mapNotNull null
             }
+            // Lo olvidado no cuenta para la costumbre: se vuelve a aprender con las aperturas de después.
+            val since = input.forgotten[NowRule.HABIT to key]
+            val openings = if (since == null) all else all.filter { it >= since }
             val matchingDays =
                 openings
                     .filter { nearMinute(minuteOfDay(it, input.zone), nowMinute) }
@@ -122,7 +160,7 @@ private fun habit(input: NowInput): NowSuggestion? {
         }
         // En empate, la clave: el resultado no debe bailar entre dos apps igual de habituales.
         .maxWithOrNull(compareBy<Pair<String, Int>> { it.second }.thenByDescending { it.first })
-        ?.let { NowSuggestion(NowRule.HABIT, it.first) }
+        ?.let { NowSuggestion(NowRule.HABIT, it.first, evidence = it.second) }
 }
 
 /** Descartada hace menos de 6 h, o tres veces: en ese caso se silencia para siempre. */

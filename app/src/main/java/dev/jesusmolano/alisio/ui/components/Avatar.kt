@@ -19,15 +19,21 @@ import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 /**
  * Avatar de una persona, igual en las filas de la barra, en su cabecera y en los ajustes: su
  * [photo], que llega ya recortada en círculo, o sus iniciales. Decorativo: el nombre va siempre al lado.
+ *
+ * @param onWallpaper va directo sobre el fondo de pantalla (las favoritas del Inicio): las iniciales
+ *   van sobre la placa, porque el relleno de las filas no se vería sobre una foto.
  */
 @Composable
-fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier, photo: Bitmap? = null) {
+fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier, photo: Bitmap? = null, onWallpaper: Boolean = false) {
     if (photo != null) {
         AppIcon(photo, size, modifier)
         return
     }
     Box(
-        modifier.size(size).background(AlisioTokens.Fill, CircleShape).clearAndSetSemantics {},
+        modifier
+            .size(size)
+            .background(if (onWallpaper) AlisioTokens.Plate else AlisioTokens.Fill, CircleShape)
+            .clearAndSetSemantics {},
         contentAlignment = Alignment.Center
     ) {
         Text(

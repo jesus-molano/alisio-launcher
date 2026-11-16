@@ -1,11 +1,14 @@
 package dev.jesusmolano.alisio.data.apps
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.LauncherApps.ShortcutQuery
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
@@ -15,14 +18,20 @@ import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import dev.jesusmolano.alisio.StartupTrace
+import dev.jesusmolano.alisio.core.icons.CustomIcon
 import dev.jesusmolano.alisio.core.icons.IconStyle
+import dev.jesusmolano.alisio.data.db.AppCustom
+import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,19 +60,30 @@ fun shortcutKey(packageName: String, id: String, userSerial: Long): String = "sh
 class AppsRepository(
     context: Context,
     private val scope: CoroutineScope,
-    private val iconStyle: StateFlow<IconStyle?>
+    private val iconStyle: StateFlow<IconStyle?>,
+    private val custom: StateFlow<Map<String, AppCustom>?>,
+    private val images: CustomImages,
+    private val packs: IconPackCatalog
 ) {
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
     private val userManager = appContext.getSystemService(UserManager::class.java)
     private val iconSizePx = (ICON_SIZE_DP * appContext.resources.displayMetrics.density).toInt()
 
-    /** `null` mientras se carga la primera vez. */
+    /** `null` mientras se carga la primera vez. Con los nombres e iconos propios ya puestos. */
     private val _apps = MutableStateFlow<List<AppEntry>?>(null)
     val apps: StateFlow<List<AppEntry>?> = _apps.asStateFlow()
 
     private val _shortcuts = MutableStateFlow<List<ShortcutEntry>>(emptyList())
     val shortcuts: StateFlow<List<ShortcutEntry>> = _shortcuts.asStateFlow()
+
+    // Lo leído del sistema, tal cual (con el estilo de iconos elegido). Lo propio de cada app se pone
+    // encima en [applyCustom]: cambiar un nombre o un icono no vuelve a leer ni a dibujar todas las apps.
+    private val read = MutableStateFlow<Pair<List<AppEntry>, List<ShortcutEntry>>?>(null)
+
+    // Lo último publicado: si solo cambian los accesos directos, las apps siguen siendo la misma lista
+    // y nada que dependa de ella (un Trazo en curso) se reinicia.
+    private var applied: Triple<List<AppEntry>, Map<String, AppCustom>, List<AppEntry>>? = null
 
     // Iconos de las vistas previas de estilo, por estilo y app. Se leen y se escriben desde varios hilos.
     private val previewIcons = ConcurrentHashMap<String, Bitmap>()
@@ -87,12 +107,28 @@ class AppsRepository(
 
             override fun onShortcutsChanged(packageName: String, shortcuts: List<ShortcutInfo>, user: UserHandle) =
                 reloadShortcuts()
+
+            // Bienestar digital pone y quita la pausa de una app: su icono cambia de aspecto.
+            override fun onPackagesSuspended(packageNames: Array<String>, user: UserHandle) = reload()
+
+            override fun onPackagesUnsuspended(packageNames: Array<String>, user: UserHandle) = reload()
         }
 
     init {
         launcherApps.registerCallback(callback, Handler(Looper.getMainLooper()))
         // La primera carga espera al estilo guardado; cada cambio de estilo vuelve a dibujar los iconos.
         scope.launch { iconStyle.filterNotNull().collect { reload() } }
+        // Lo leído y lo propio de cada app se juntan aquí; un cambio nuevo cancela el que se estaba
+        // aplicando. La primera publicación espera también a lo propio: si no, saldrían un instante
+        // los nombres y los iconos sin cambiar.
+        scope.launch {
+            combine(read.filterNotNull(), custom.filterNotNull(), ::Pair).collectLatest { (loaded, own) ->
+                val (apps, shortcuts) = withContext(Dispatchers.IO) { applyCustom(loaded.first, loaded.second, own) }
+                if (_apps.value == null) StartupTrace.mark("apps e iconos listos (${apps.size})")
+                _apps.value = apps
+                _shortcuts.value = shortcuts
+            }
+        }
     }
 
     /** Vuelve a leer apps y accesos directos; una recarga nueva cancela la que esté en curso. */
@@ -101,16 +137,16 @@ class AppsRepository(
         reloadJob?.cancel()
         reloadJob =
             scope.launch {
-                val (apps, shortcuts) =
+                val loaded =
                     withContext(Dispatchers.IO) {
+                        // Un paquete de iconos instalado o quitado cambia lo que hay que ofrecer.
+                        packs.forget()
                         val apps = loadApps()
                         apps to loadShortcuts(apps)
                     }
-                if (_apps.value == null) StartupTrace.mark("apps e iconos listos (${apps.size})")
                 // Una app actualizada puede traer otro icono: las vistas previas se vuelven a dibujar.
                 previewIcons.clear()
-                _apps.value = apps
-                _shortcuts.value = shortcuts
+                read.value = loaded
             }
     }
 
@@ -121,9 +157,86 @@ class AppsRepository(
     private fun reloadShortcuts() {
         // Una recarga completa en curso ya traerá los accesos directos, y con los iconos nuevos.
         if (reloadJob?.isActive == true) return
-        val apps = _apps.value ?: return
+        val apps = read.value?.first ?: return
         shortcutsJob?.cancel()
-        shortcutsJob = scope.launch { _shortcuts.value = withContext(Dispatchers.IO) { loadShortcuts(apps) } }
+        shortcutsJob = scope.launch { read.value = apps to withContext(Dispatchers.IO) { loadShortcuts(apps) } }
+    }
+
+    /**
+     * Pone a cada app su nombre e icono propios y su ocultación, y la lista vuelve a ir por orden
+     * alfabético del nombre que se ve. Los accesos directos pasan a apuntar a esas apps, para que su
+     * secundario diga el nombre propio.
+     */
+    private fun applyCustom(
+        base: List<AppEntry>,
+        shortcuts: List<ShortcutEntry>,
+        own: Map<String, AppCustom>
+    ): Pair<List<AppEntry>, List<ShortcutEntry>> {
+        val previous = applied
+        val apps =
+            if (previous != null && previous.first === base && previous.second == own) {
+                previous.third
+            } else if (own.isEmpty()) {
+                base
+            } else {
+                base.map { app -> own[app.key.toString()]?.let { app.customized(it) } ?: app }
+                    .sortedAlphabetically(label = { it.label }, key = { it.key })
+            }
+        applied = Triple(base, own, apps)
+        if (apps === base) return apps to shortcuts
+        val byKey = apps.associateBy { it.key }
+        return apps to shortcuts.map { shortcut ->
+            val app = byKey[shortcut.app.key]
+            if (app == null || app === shortcut.app) {
+                shortcut
+            } else {
+                ShortcutEntry(shortcut.key, shortcut.label, app, shortcut.info, shortcut.isConversation)
+            }
+        }
+    }
+
+    private fun AppEntry.customized(own: AppCustom): AppEntry {
+        val chosen = CustomIcon.parse(own.icon)
+        // Un icono elegido que ya no está (paquete desinstalado, imagen borrada) deja el de la app.
+        val drawn =
+            when (chosen) {
+                null -> null
+                is CustomIcon.Pack -> packs.icon(chosen.packageName, chosen.drawable)
+                is CustomIcon.Image -> images.load(chosen.file)
+            }
+        return AppEntry(
+            key = key,
+            label = own.label ?: label,
+            component = component,
+            user = user,
+            icon = drawn?.let { if (suspended) dimmed(it) else it } ?: icon,
+            updatedAt = updatedAt,
+            originalLabel = label,
+            originalIcon = icon,
+            hidden = own.hidden,
+            customIcon = chosen.takeIf { drawn != null },
+            suspended = suspended,
+            hideFromSuggestions = hideFromSuggestions
+        )
+    }
+
+    /**
+     * El icono de una app en pausa, a α 0,38 como todo lo que no se puede usar (docs/DISENO.md §2.6).
+     * Va en el propio dibujo: así se ve igual en el dock, Zonas, Trazo, la barra y el Interior.
+     */
+    private fun dimmed(icon: Bitmap): Bitmap {
+        val out = createBitmap(icon.width, icon.height)
+        val paint = Paint().apply { alpha = (AlisioTokens.DISABLED_ALPHA * OPAQUE).roundToInt() }
+        Canvas(out).drawBitmap(icon, 0f, 0f, paint)
+        return out
+    }
+
+    // Cada app pregunta una vez por recarga: el sistema responde por paquete y usuario.
+    private fun hiddenFromSuggestions(packageName: String, user: UserHandle): Boolean = try {
+        launcherApps.shouldHideFromSuggestions(packageName, user)
+    } catch (e: RuntimeException) {
+        Log.w(TAG, "No se ha podido saber si $packageName se puede sugerir", e)
+        false
     }
 
     /** Abre la app. Devuelve `false` si ya no existe o el sistema no deja abrirla. */
@@ -146,6 +259,85 @@ class AppsRepository(
         Log.w(TAG, "No se ha podido abrir un acceso directo de ${shortcut.info.`package`}", e)
         reload()
         false
+    }
+
+    /**
+     * Acepta el acceso directo que otra app pide fijar («Añadir a inicio», docs/IDEAS.md §2.3) y
+     * devuelve su clave ([shortcutKey]), o `null` si el sistema ya no lo admite. Una vez fijado,
+     * sale en la barra como cualquier otro: `loadShortcuts` lee también los fijados.
+     */
+    fun acceptPin(request: LauncherApps.PinItemRequest): String? {
+        val info = request.shortcutInfo ?: return null
+        return try {
+            if (!request.isValid || !request.accept()) return null
+            shortcutKey(info.`package`, info.id, userManager.getSerialNumberForUser(info.userHandle))
+        } catch (e: RuntimeException) {
+            // Petición caducada o rol de inicio perdido entre medias.
+            Log.w(TAG, "No se ha podido fijar un acceso directo de ${info.`package`}", e)
+            null
+        }
+    }
+
+    /** Los accesos directos fijados a Alisio, para la copia de la configuración. */
+    fun pinnedShortcuts(): List<Triple<String, String, Long>> = _shortcuts.value
+        .filter { it.info.isPinned }
+        .map { Triple(it.info.`package`, it.info.id, it.app.key.userSerial) }
+
+    /**
+     * Vuelve a fijar accesos directos al cargar una copia. El sistema no los copia, y `pinShortcuts`
+     * sustituye los fijados de cada paquete: se suman a los que ya hubiera. El de una app que falta o
+     * que ya no lo publica se queda fuera sin más.
+     */
+    fun repin(pins: List<Triple<String, String, Long>>) {
+        if (!launcherApps.hasShortcutHostPermission()) return
+        pins.groupBy { it.first to it.third }.forEach { (owner, group) ->
+            val (packageName, serial) = owner
+            val user = userManager.getUserForSerialNumber(serial) ?: android.os.Process.myUserHandle()
+            try {
+                val query = ShortcutQuery().setPackage(packageName).setQueryFlags(ShortcutQuery.FLAG_MATCH_PINNED)
+                val current = launcherApps.getShortcuts(query, user).orEmpty().map { it.id }
+                launcherApps.pinShortcuts(packageName, (current + group.map { it.second }).distinct(), user)
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "No se han podido volver a fijar los accesos directos de $packageName", e)
+            }
+        }
+        reloadShortcuts()
+    }
+
+    /**
+     * Deja fijados justo [pins], para deshacer la carga de una copia: [repin] solo suma, y los que
+     * trajo la copia se quedarían en la barra. Cada paquete que tiene fijados ahora o en [pins] pasa
+     * a tener exactamente los suyos; una lista vacía los desfija todos.
+     */
+    fun setPinned(pins: List<Triple<String, String, Long>>) {
+        if (!launcherApps.hasShortcutHostPermission()) return
+        val wanted = pins.groupBy({ it.first to it.third }, { it.second })
+        val owners = wanted.keys + pinnedShortcuts().map { it.first to it.third }
+        owners.forEach { owner -> pinExactly(owner.first, owner.second, wanted[owner].orEmpty()) }
+        reloadShortcuts()
+    }
+
+    /**
+     * Quita un acceso fijado a Alisio («Añadir a inicio»): fuera de las pilas no hay otra forma de
+     * quitarlo, y `pinShortcuts` sustituye los fijados del paquete, así que se pasan los demás.
+     */
+    fun unpin(shortcut: ShortcutEntry) {
+        if (!launcherApps.hasShortcutHostPermission()) return
+        val packageName = shortcut.info.`package`
+        val serial = shortcut.app.key.userSerial
+        val others =
+            pinnedShortcuts().filter { it.first == packageName && it.third == serial && it.second != shortcut.info.id }
+        pinExactly(packageName, serial, others.map { it.second })
+        reloadShortcuts()
+    }
+
+    private fun pinExactly(packageName: String, serial: Long, ids: List<String>) {
+        val user = userManager.getUserForSerialNumber(serial) ?: android.os.Process.myUserHandle()
+        try {
+            launcherApps.pinShortcuts(packageName, ids.distinct(), user)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "No se han podido cambiar los accesos fijados de $packageName", e)
+        }
     }
 
     /** Abre la ficha de la app en los ajustes del sistema. Devuelve `false` si no se ha podido. */
@@ -212,14 +404,20 @@ class AppsRepository(
     private fun loadApps(style: IconStyle, pack: IconPack?): List<AppEntry> = launcherApps.profiles
         .flatMap { user ->
             val serial = userManager.getSerialNumberForUser(user)
+            val unsuggested = HashMap<String, Boolean>()
             launcherApps.getActivityList(null, user).map { info ->
+                val packageName = info.componentName.packageName
+                val suspended = info.applicationInfo.flags and ApplicationInfo.FLAG_SUSPENDED != 0
+                val icon = safeIcon(info.getIcon(0), pack?.iconFor(info.componentName), style)
                 AppEntry(
-                    key = AppKey(info.componentName.packageName, info.componentName.className, serial),
+                    key = AppKey(packageName, info.componentName.className, serial),
                     label = info.label.toString(),
                     component = info.componentName,
                     user = user,
-                    icon = safeIcon(info.getIcon(0), pack?.iconFor(info.componentName), style),
-                    updatedAt = updatedAt(info.componentName.packageName)
+                    icon = if (suspended) dimmed(icon) else icon,
+                    updatedAt = updatedAt(packageName),
+                    suspended = suspended,
+                    hideFromSuggestions = unsuggested.getOrPut(packageName) { hiddenFromSuggestions(packageName, user) }
                 )
             }
         }
@@ -295,9 +493,9 @@ class AppsRepository(
 
     private companion object {
         const val TAG = "AppsRepository"
+        const val OPAQUE = 255
         const val CONVERSATION_CATEGORY = "android.shortcut.conversation"
         const val SHARE_TARGET_MARK = "SHARE_TARGET"
-        const val ICON_SIZE_DP = 52
 
         // Tokens «Texto» y «Superficie elevada» de docs/PLAN.md §6.
         const val ICON_TINT = 0xFFF2F3F5.toInt()

@@ -51,6 +51,24 @@ private fun Access.row(): AccessRow = when (this) {
             leavesAlisio = false
         )
 
+    Access.CALENDAR ->
+        AccessRow(
+            R.string.settings_calendar,
+            R.drawable.ic_event,
+            R.string.settings_calendar_hint,
+            R.string.settings_calendar_on,
+            leavesAlisio = false
+        )
+
+    Access.LOCATION ->
+        AccessRow(
+            R.string.settings_location,
+            R.drawable.ic_place,
+            R.string.settings_location_hint,
+            R.string.settings_location_on,
+            leavesAlisio = false
+        )
+
     Access.BLUETOOTH ->
         AccessRow(
             R.string.settings_bluetooth,
@@ -84,6 +102,24 @@ private fun Access.row(): AccessRow = when (this) {
             R.drawable.ic_accessibility,
             R.string.settings_accessibility_hint,
             R.string.settings_accessibility_on,
+            leavesAlisio = true
+        )
+
+    Access.SYSTEM_SETTINGS ->
+        AccessRow(
+            R.string.settings_write_settings,
+            R.drawable.ic_brightness,
+            R.string.settings_write_settings_hint,
+            R.string.settings_write_settings_on,
+            leavesAlisio = true
+        )
+
+    Access.DO_NOT_DISTURB ->
+        AccessRow(
+            R.string.settings_dnd_access,
+            R.drawable.ic_do_not_disturb,
+            R.string.settings_dnd_access_hint,
+            R.string.settings_dnd_access_on,
             leavesAlisio = true
         )
 }
@@ -127,8 +163,12 @@ internal fun PermissionsPage(access: SettingsAccess) {
 private fun SettingsAccess.request(access: Access): () -> Unit = when (access) {
     Access.HOME_ROLE -> onHomeRole
     Access.CONTACTS -> onContacts
+    Access.CALENDAR -> onCalendar
+    Access.LOCATION -> onLocation
     Access.BLUETOOTH -> onBluetooth
     Access.NOTIFICATIONS -> onNotifications
     Access.USAGE -> onUsage
     Access.ACCESSIBILITY -> onAccessibility
+    Access.SYSTEM_SETTINGS -> onWriteSettings
+    Access.DO_NOT_DISTURB -> onDoNotDisturb
 }

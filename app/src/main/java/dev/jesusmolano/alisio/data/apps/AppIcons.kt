@@ -6,12 +6,17 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
 import dev.jesusmolano.alisio.core.icons.IconStyle
+import dev.jesusmolano.alisio.core.icons.centerSquare
+
+/** Lado de los iconos de app tal como se dibujan y se guardan: el del dock (`AlisioTokens.DockIconSize`). */
+internal const val ICON_SIZE_DP = 52
 
 /**
  * Dibuja el icono de una app según [style].
@@ -38,6 +43,32 @@ internal fun renderIcon(
         style == IconStyle.Monochrome -> drawMonochrome(canvas, drawable, sizePx, tint, surface)
 
         else -> drawUniform(canvas, drawable, sizePx, surface)
+    }
+    return bitmap
+}
+
+/** Un dibujo de un paquete de iconos elegido para una sola app: ya trae su forma y va tal cual. */
+internal fun renderPackIcon(packIcon: Drawable, sizePx: Int): Bitmap {
+    val bitmap = createBitmap(sizePx, sizePx)
+    drawWhole(Canvas(bitmap), packIcon, sizePx)
+    return bitmap
+}
+
+/**
+ * Una imagen de la galería como icono: su cuadrado central, a [sizePx] y recortado a la forma común
+ * de los iconos ([roundedSquare]), para que no desentone junto a los demás.
+ */
+internal fun renderImageIcon(image: Bitmap, sizePx: Int): Bitmap {
+    val square = centerSquare(image.width, image.height)
+    val bitmap = createBitmap(sizePx, sizePx)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    Canvas(bitmap).withClip(roundedSquare(sizePx)) {
+        drawBitmap(
+            image,
+            Rect(square.left, square.top, square.left + square.size, square.top + square.size),
+            Rect(0, 0, sizePx, sizePx),
+            paint
+        )
     }
     return bitmap
 }

@@ -53,7 +53,13 @@ class UndoState internal constructor(
      *
      * @param onUndo devuelve las cosas a como estaban; quien llama guarda lo que haga falta para ello.
      */
-    fun show(message: String, onUndo: () -> Unit) {
+    fun show(message: String, onUndo: () -> Unit) = show(message, actionLabel, onUndo)
+
+    /**
+     * La misma barra con otra acción en lugar de «Deshacer»: deshace algo que ha hecho el sistema,
+     * como quitarle a Alisio el papel de inicio.
+     */
+    fun show(message: String, action: String, onAction: () -> Unit) {
         showing?.cancel()
         showing =
             scope.launch {
@@ -66,9 +72,9 @@ class UndoState internal constructor(
                     ) ?: UNDO_MILLIS
                 val result =
                     withTimeoutOrNull(timeout) {
-                        host.showSnackbar(message, actionLabel, duration = SnackbarDuration.Indefinite)
+                        host.showSnackbar(message, action, duration = SnackbarDuration.Indefinite)
                     }
-                if (result == SnackbarResult.ActionPerformed) onUndo()
+                if (result == SnackbarResult.ActionPerformed) onAction()
             }
     }
 

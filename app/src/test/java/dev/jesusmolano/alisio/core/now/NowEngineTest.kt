@@ -62,7 +62,7 @@ class NowEngineTest {
     fun `con un dispositivo conectado gana la app que mas se abre con el`() {
         val cases = mapOf("Coche" to mapOf("music" to 5, "news" to 3, "gym" to 2), "Cascos" to mapOf("gym" to 9))
         val suggestion = suggest(input(bluetooth = justConnected, bluetoothOpenings = cases))
-        assertEquals(NowSuggestion(NowRule.BLUETOOTH, "music", device = "Coche"), suggestion)
+        assertEquals(NowSuggestion(NowRule.BLUETOOTH, "music", device = "Coche", evidence = 5), suggestion)
     }
 
     @Test
@@ -81,7 +81,7 @@ class NowEngineTest {
         )
         val longAgo = ConnectedAudio("Coche", now - BLUETOOTH_SUGGEST_MILLIS)
         assertEquals(
-            NowSuggestion(NowRule.HABIT, "gym"),
+            NowSuggestion(NowRule.HABIT, "gym", evidence = 3),
             suggest(input(openings = habit, bluetooth = longAgo, bluetoothOpenings = cases))
         )
     }
@@ -106,8 +106,50 @@ class NowEngineTest {
     fun `una app abierta a esta hora tres laborables de los ultimos cinco se sugiere`() {
         // Hoy es miércoles: los cinco laborables anteriores son martes, lunes, viernes, jueves y miércoles.
         val openings = mapOf("gym" to weekdayMornings(1, 2, 5))
-        assertEquals(NowSuggestion(NowRule.HABIT, "gym"), suggest(input(openings = openings)))
+        assertEquals(NowSuggestion(NowRule.HABIT, "gym", evidence = 3), suggest(input(openings = openings)))
     }
+
+    @Test
+    fun `version nueva solo para las apps elegidas`() {
+        val apps = listOf(NowApp("gym", now - hour), NowApp("news", now - 2 * hour))
+        val dev = NowInput(now, zone, apps, emptyMap(), emptySet(), newVersionKeys = setOf("news"))
+        assertEquals("news", suggest(dev)?.appKey)
+        val none = NowInput(now, zone, apps, emptyMap(), emptySet(), newVersionKeys = emptySet())
+        assertNull(suggest(none))
+    }
+
+    @Test
+    fun `lo abierto fuera de Alisio cuenta como visto`() {
+        val updated = now - 2 * hour
+        val apps = listOf(NowApp("gym", updated))
+        val seen = NowInput(now, zone, apps, emptyMap(), emptySet(), seenAt = mapOf("gym" to updated + 60_000))
+        assertNull(suggest(seen))
+        // La costumbre tampoco propone lo que ya se ha usado hoy desde recientes.
+        val habit = mapOf("gym" to weekdayMornings(1, 2, 5))
+        val today = NowInput(now, zone, apps, habit, emptySet(), seenAt = mapOf("gym" to now - 30 * 60_000))
+        assertNull(suggest(today))
+    }
+
+    @Test
+    fun `olvidar una costumbre deja fuera lo anterior y se vuelve a aprender`() {
+        val openings = mapOf("gym" to weekdayMornings(1, 2, 5))
+        val forgotten = mapOf((NowRule.HABIT to "gym") to at(2026, 11, 9, 0, 0))
+        assertNull(suggest(input(openings = openings).copyForgotten(forgotten)))
+        // Tres mañanas nuevas después de olvidarla vuelven a hacerla costumbre.
+        val again = mapOf("gym" to weekdayMornings(1, 2, 5) + at(2026, 11, 9, 9, 0))
+        val forgotLong = mapOf((NowRule.HABIT to "gym") to at(2026, 11, 4, 12, 0))
+        assertEquals("gym", suggest(input(openings = again).copyForgotten(forgotLong))?.appKey)
+    }
+
+    @Test
+    fun `las reglas se guardan por un id estable`() {
+        assertEquals(NowRule.NEW_VERSION, NowRule.parse("new-version"))
+        assertEquals(NowRule.HABIT, NowRule.parse("habit"))
+        assertNull(NowRule.parse("HABIT"))
+    }
+
+    private fun NowInput.copyForgotten(forgotten: Map<Pair<NowRule, String>, Long>) =
+        NowInput(now, zone, apps, openings, dockKeys, bluetooth, bluetoothOpenings, feedback, forgotten = forgotten)
 
     @Test
     fun `el fin de semana no cuenta para un laborable`() {

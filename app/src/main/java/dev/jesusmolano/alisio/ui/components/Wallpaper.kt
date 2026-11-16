@@ -62,6 +62,29 @@ fun rememberLightWallpaper(): Boolean {
     return light
 }
 
+/**
+ * Los colores principales del fondo de pantalla según el sistema (ARGB, del más al menos presente),
+ * para proponer un acento. No piden permiso. Vacía sin datos (fondo animado, lectura fallida).
+ */
+@Composable
+fun rememberWallpaperColors(): List<Int> {
+    val context = LocalContext.current
+    val manager = remember(context) { WallpaperManager.getInstance(context) }
+    var colors by remember { mutableStateOf(manager.systemColors().mainColors()) }
+    DisposableEffect(manager) {
+        val listener =
+            WallpaperManager.OnColorsChangedListener { changed, which ->
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) colors = changed.mainColors()
+            }
+        manager.addOnColorsChangedListener(listener, Handler(Looper.getMainLooper()))
+        onDispose { manager.removeOnColorsChangedListener(listener) }
+    }
+    return colors
+}
+
+private fun WallpaperColors?.mainColors(): List<Int> =
+    if (this == null) emptyList() else listOfNotNull(primaryColor, secondaryColor, tertiaryColor).map { it.toArgb() }
+
 private fun WallpaperManager.systemColors(): WallpaperColors? = try {
     getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
 } catch (_: RuntimeException) {

@@ -62,6 +62,13 @@ internal fun Context.searchPlayStore(text: String): Boolean {
         open(Intent(Intent.ACTION_VIEW, "https://play.google.com/store/search?q=$query&c=apps".toUri()))
 }
 
+/** La ficha de una app en Play Store, para instalar la que falta tras cargar una copia. */
+internal fun Context.openPlayStoreApp(packageName: String): Boolean {
+    val id = Uri.encode(packageName)
+    return open(Intent(Intent.ACTION_VIEW, "market://details?id=$id".toUri())) ||
+        open(Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=$id".toUri()))
+}
+
 internal fun Context.openSetting(action: String): Boolean = open(Intent(action))
 
 internal fun Context.copyToClipboard(text: String) {

@@ -37,9 +37,12 @@ import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.pause.pauseSecondsLeft
 import dev.jesusmolano.alisio.data.pause.PendingLaunch
+import dev.jesusmolano.alisio.data.usage.AppToday
+import dev.jesusmolano.alisio.feature.appmenu.usageText
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.PrimaryButton
 import dev.jesusmolano.alisio.ui.components.TextAction
+import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import kotlinx.coroutines.delay
 
@@ -49,12 +52,32 @@ private val PauseIconSize = 56.dp
 private const val TICK_MILLIS = 100L
 
 /**
+ * «3.ª vez hoy · 38 min». Cuenta las veces que el sistema la ha visto en primer plano hoy, también
+ * fuera de Alisio, más esta; sin uso que contar, solo la vez.
+ */
+@Composable
+internal fun pauseTodayText(today: AppToday): String {
+    val time = stringResource(R.string.pause_today_time, today.entries + 1)
+    return if (today.millis <= 0L) {
+        time
+    } else {
+        listOf(time, usageText(today.millis)).joinToString(stringResource(R.string.list_separator))
+    }
+}
+
+/**
  * La pausa antes de abrir una app elegida en los ajustes: su icono, una cuenta atrás y dos salidas.
  * «No abrir» vale desde el principio; «Abrir igualmente» solo cuando la cuenta llega a cero, que es
  * lo que hace de la pausa una pausa. Nada se abre solo.
  */
 @Composable
-fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+fun PauseScreen(
+    launch: PendingLaunch,
+    onOpen: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+    today: AppToday? = null
+) {
     var left by remember(launch) { mutableIntStateOf(launch.seconds) }
     LaunchedEffect(launch) {
         // Con el reloj y no contando esperas: una espera que se alarga no alarga la pausa.
@@ -66,7 +89,11 @@ fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit,
     }
     val counting = left > 0
     // Al acabar, el número se apaga en su sitio: quitarlo movería el título justo cuando se va a tocar.
-    val numberAlpha by animateFloatAsState(if (counting) 1f else 0f, label = "pause-number")
+    val numberAlpha by animateFloatAsState(
+        targetValue = if (counting) 1f else 0f,
+        animationSpec = if (counting) AlisioMotion.fast() else AlisioMotion.exit(),
+        label = "pause-number"
+    )
     val secondsLeft = pluralStringResource(R.plurals.pause_seconds_left, left, left)
     val ready = stringResource(R.string.pause_ready, launch.label)
 
@@ -112,6 +139,15 @@ fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit,
             color = AlisioTokens.Text,
             modifier = Modifier.semantics { heading() }
         )
+        // Un dato de hoy que haga pensar, sin gráficos ni rachas (docs/IDEAS.md §2.4).
+        today?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = pauseTodayText(it),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AlisioTokens.TextSecondary
+            )
+        }
         Spacer(Modifier.height(40.dp))
         // «No abrir» es el botón grande y el más cercano al pulgar: la salida fácil es no entrar.
         TextAction(

@@ -2,7 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Sin INTERNET: lo vigila el task checkNoInternetPermission (docs/PLAN.md §7). -->
+    <!--
+        Solo para el tiempo junto a la hora (docs/PLAN.md §7): una petición a Open-Meteo, sin clave
+        ni cuenta, con las coordenadas redondeadas a unos 1 km, y la búsqueda de una ciudad por su
+        nombre, que solo se hace cuando el dueño escribe una en «Lugar» (también para el sol). Sin
+        SDKs ni analítica. Con el tiempo apagado, Alisio no abre ninguna conexión por su cuenta.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Ubicación aproximada, nunca la precisa, para el tiempo y la salida del sol cuando no se ha
+        fijado una ciudad. Se lee al volver al Inicio, nunca en segundo plano.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- El próximo evento de las próximas 12 horas en la línea bajo la hora. Solo lectura. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
 
     <!-- Personas en la barra (docs/PLAN.md §5.4). Sin CALL_PHONE, llamar abre el marcador. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -26,12 +41,39 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!--
+        Fondos que rotan: poner como fondo del Inicio, una vez al día y al salir de él, una imagen de
+        la carpeta que el dueño elige. Permiso normal: se concede al instalar.
+    -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <!--
+        «brillo 40» y «rotación» en la barra. No se concede al instalar: el dueño lo da en los ajustes
+        del sistema desde Ajustes → Permisos. Sin él, la orden abre el ajuste de pantalla.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!--
+        «no molestar» en la barra. Declararlo es lo que hace que Alisio salga en la lista del sistema
+        donde se concede; sin el acceso, la orden abre el ajuste de No molestar.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
     <!-- CALL_PHONE da por hecho que hay telefonía; Alisio funciona igual sin ella. -->
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.bluetooth"
+        android:required="false" />
+    <!-- La ubicación aproximada da por hecho que la hay; sin ella el tiempo va por ciudad. -->
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.network"
         android:required="false" />
 
     <queries>
@@ -87,6 +129,43 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <!-- LAUNCHER solo mientras se desarrolla. -->
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            «Añadir a inicio» desde otra app (docs/IDEAS.md §2.3): el sistema se la abre al launcher
+            activo con la petición de fijar un acceso directo. Sin el filtro de widgets a propósito: el
+            sistema les diría a las apps que Alisio los acepta. Exportada porque la abre el sistema; una
+            app que la abra a mano no trae petición válida y la hoja se cierra sin hacer nada.
+        -->
+        <activity
+            android:name=".PinShortcutActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Alisio.Sheet">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Compartir un texto o un enlace con Alisio desde cualquier app lo guarda como nota del
+            Inicio. Sin ventana: guarda, avisa y se cierra. Con las notas apagadas en los ajustes se
+            deshabilita, y Alisio deja de salir en la hoja de compartir.
+        -->
+        <activity
+            android:name=".ShareNoteActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/note_share_label"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

@@ -102,7 +102,8 @@ class ZonesViewModel(
             val (custom, assignments) = stored
             val input =
                 ZoneInput(
-                    apps = apps.map { it.toZoneApp() },
+                    // Una app oculta no está en ninguna isla, tampoco en Diario: solo se llega a ella buscándola.
+                    apps = apps.filterNot { it.hidden }.map { it.toZoneApp() },
                     dockApps = dock.filterIsInstance<SlotConfig.App>().map { it.appKey },
                     stacks =
                         dock.mapIndexedNotNull { slot, config ->

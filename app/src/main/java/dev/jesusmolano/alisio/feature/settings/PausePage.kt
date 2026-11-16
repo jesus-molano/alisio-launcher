@@ -3,6 +3,8 @@ package dev.jesusmolano.alisio.feature.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,22 +26,30 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.pause.PAUSE_SECONDS
 import dev.jesusmolano.alisio.core.pause.pausedFirst
 import dev.jesusmolano.alisio.data.apps.AppEntry
+import dev.jesusmolano.alisio.data.usage.AppToday
+import dev.jesusmolano.alisio.feature.pause.pauseTodayText
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.AppPickerSheet
 import dev.jesusmolano.alisio.ui.components.Chip
+import dev.jesusmolano.alisio.ui.components.ChoiceRow
 import dev.jesusmolano.alisio.ui.components.LocalUndo
 import dev.jesusmolano.alisio.ui.components.Note
+import dev.jesusmolano.alisio.ui.components.PreviewChoice
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.VectorTileIcon
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 private val RemoveBadgeSize = 20.dp
+
+// Dos renglones de título y uno del dato de hoy.
+private val PauseSampleHeight = 96.dp
 private val RemoveBadgeOffset = 5.dp
 
 /**
@@ -114,6 +126,26 @@ internal fun PausePage(context: SettingsContext, onPreviewPause: (AppEntry) -> U
                 container = AlisioTokens.Fill
             )
         }
+
+        // Con o sin el dato de hoy bajo el título (docs/IDEAS.md §2.4): se elige viéndolo, y «Ver la
+        // pausa» lo enseña con el uso real de la app. Sin acceso a uso no hay dato que poner.
+        SectionLabel(stringResource(R.string.settings_pause_stats))
+        if (!context.access.usage) RequirementRow(R.string.settings_needs_usage, context.access.onUsage)
+        val sample = paused.first().label
+        ChoiceRow(count = 2) { tile ->
+            listOf(false, true).forEach { stats ->
+                PreviewChoice(
+                    label = stringResource(
+                        if (stats) R.string.settings_pause_stats_on else R.string.settings_pause_stats_off
+                    ),
+                    selected = prefs.pauseStats == stats,
+                    onClick = { settings.setPauseStats(stats) },
+                    enabled = !stats || context.access.usage,
+                    previewHeight = PauseSampleHeight,
+                    modifier = tile
+                ) { PauseSample(sample, stats) }
+            }
+        }
     }
 
     if (picking) {
@@ -131,6 +163,36 @@ internal fun PausePage(context: SettingsContext, onPreviewPause: (AppEntry) -> U
         )
     }
 }
+
+/**
+ * La pausa en pequeño: el título y, con [stats], el dato de hoy con unas cifras de muestra. Las
+ * mismas letras que la pantalla de verdad, a escala; la de verdad se ve con «Ver la pausa».
+ */
+@Composable
+private fun BoxScope.PauseSample(label: String, stats: Boolean) {
+    Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+        Text(
+            text = stringResource(R.string.pause_title, label),
+            style = MaterialTheme.typography.labelLarge,
+            color = AlisioTokens.Text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (stats) {
+            Text(
+                text = pauseTodayText(AppToday(entries = SAMPLE_ENTRIES, millis = SAMPLE_MILLIS)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AlisioTokens.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// «3.ª vez hoy · 38 min»: el ejemplo de docs/IDEAS.md §2.4.
+private const val SAMPLE_ENTRIES = 2
+private const val SAMPLE_MILLIS = 38 * 60_000L
 
 /**
  * La marca de «quitar» en la esquina de una app con pausa: sin ella, un icono con su nombre parece

@@ -119,6 +119,9 @@ internal fun SearchPage(context: SettingsContext, contacts: ContactsRepository) 
         onToggle = { settings.toggleContactPhotos() }
     )
 
+    SectionLabel(stringResource(R.string.settings_section_commands))
+    PhoneCommandsOption(context)
+
     when (picking) {
         SearchChoice.ASSISTANT -> {
             // Primero los asistentes conocidos que estén instalados; después, cualquier otra app.

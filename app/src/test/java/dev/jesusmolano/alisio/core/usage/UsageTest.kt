@@ -94,4 +94,44 @@ class UsageTest {
         val events = listOf(event(400, PAUSED), event(100, RESUMED))
         assertEquals(300, foregroundMillis(events, from = 0, until = 5_000))
     }
+
+    @Test
+    fun `el uso del teléfono suma las apps y no cuenta el Inicio`() {
+        val byPackage =
+            mapOf(
+                "mail" to listOf(event(100, RESUMED), event(400, PAUSED)),
+                "maps" to listOf(event(1_000, RESUMED)),
+                "launcher" to listOf(event(0, RESUMED), event(5_000, PAUSED))
+            )
+        assertEquals(300 + 1_000, screenMillis(byPackage, from = 0, until = 2_000, excluded = setOf("launcher")))
+        assertEquals(0, screenMillis(emptyMap(), from = 0, until = 2_000, excluded = emptySet()))
+    }
+
+    @Test
+    fun `cuenta las entradas en primer plano`() {
+        val three =
+            listOf(
+                event(0, RESUMED),
+                event(hour, PAUSED),
+                event(2 * hour, RESUMED),
+                event(3 * hour, PAUSED),
+                event(4 * hour, RESUMED)
+            )
+        assertEquals(3, foregroundEntries(three))
+        assertEquals(0, foregroundEntries(emptyList()))
+    }
+
+    @Test
+    fun `cambiar de actividad dentro de la app no es otra entrada`() {
+        val switching =
+            listOf(event(0, RESUMED, "A"), event(minute, PAUSED, "A"), event(minute + 300, RESUMED, "B"))
+        assertEquals(1, foregroundEntries(switching))
+    }
+
+    @Test
+    fun `abierta desde antes del tramo cuenta una vez`() {
+        assertEquals(2, foregroundEntries(listOf(event(hour, PAUSED), event(2 * hour, RESUMED))))
+        // Una parada suelta llega tras una pausa de antes de medianoche: no es una entrada.
+        assertEquals(1, foregroundEntries(listOf(event(hour, STOPPED), event(2 * hour, RESUMED))))
+    }
 }

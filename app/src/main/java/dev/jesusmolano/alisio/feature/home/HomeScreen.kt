@@ -1,11 +1,12 @@
 package dev.jesusmolano.alisio.feature.home
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.provider.AlarmClock
 import android.text.format.DateFormat
 import android.util.Log
-import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -39,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -56,7 +58,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -72,6 +76,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +85,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -88,16 +95,26 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.TouchTrace
+import dev.jesusmolano.alisio.core.dock.DOCK_ITEM_SPARE_DP
+import dev.jesusmolano.alisio.core.dock.dockIconSize
+import dev.jesusmolano.alisio.core.draw.InitialPick
+import dev.jesusmolano.alisio.core.draw.StrokePoint
+import dev.jesusmolano.alisio.core.draw.pickByInitial
+import dev.jesusmolano.alisio.core.draw.recognizeLetter
 import dev.jesusmolano.alisio.core.notify.packagesWithDot
+import dev.jesusmolano.alisio.core.now.HABIT_DAYS
 import dev.jesusmolano.alisio.core.now.NowRule
 import dev.jesusmolano.alisio.core.now.NowSuggestion
 import dev.jesusmolano.alisio.core.search.filterByName
@@ -105,14 +122,21 @@ import dev.jesusmolano.alisio.core.search.moved
 import dev.jesusmolano.alisio.core.text.takeGraphemes
 import dev.jesusmolano.alisio.core.zones.Pinch
 import dev.jesusmolano.alisio.data.apps.AppEntry
+import dev.jesusmolano.alisio.data.apps.ShortcutEntry
 import dev.jesusmolano.alisio.data.apps.toSections
+import dev.jesusmolano.alisio.data.contacts.Person
+import dev.jesusmolano.alisio.data.db.HomeNote
+import dev.jesusmolano.alisio.data.glance.GlanceData
 import dev.jesusmolano.alisio.data.home.StackIcon
 import dev.jesusmolano.alisio.data.home.SwipeTarget
+import dev.jesusmolano.alisio.data.media.LiveNow
 import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.feature.appmenu.AppMenuSheet
 import dev.jesusmolano.alisio.feature.appmenu.AppUsage
 import dev.jesusmolano.alisio.feature.appmenu.DockPlacement
 import dev.jesusmolano.alisio.feature.appmenu.SlotActions
+import dev.jesusmolano.alisio.feature.people.contact
+import dev.jesusmolano.alisio.feature.people.openContact
 import dev.jesusmolano.alisio.feature.search.appLabel
 import dev.jesusmolano.alisio.feature.search.searchHint
 import dev.jesusmolano.alisio.feature.zones.ZonesViewModel
@@ -120,11 +144,16 @@ import dev.jesusmolano.alisio.feature.zones.zoneMove
 import dev.jesusmolano.alisio.ui.components.AlisioSheet
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.AppPicker
+import dev.jesusmolano.alisio.ui.components.ClockText
 import dev.jesusmolano.alisio.ui.components.DockIcon
+import dev.jesusmolano.alisio.ui.components.DrawTrail
 import dev.jesusmolano.alisio.ui.components.FolderTileIcon
 import dev.jesusmolano.alisio.ui.components.IconLabel
+import dev.jesusmolano.alisio.ui.components.ImageTarget
 import dev.jesusmolano.alisio.ui.components.ItemRow
+import dev.jesusmolano.alisio.ui.components.LocalPickImage
 import dev.jesusmolano.alisio.ui.components.LocalUndo
+import dev.jesusmolano.alisio.ui.components.Note
 import dev.jesusmolano.alisio.ui.components.PillTextField
 import dev.jesusmolano.alisio.ui.components.PreviewChoice
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
@@ -138,20 +167,27 @@ import dev.jesusmolano.alisio.ui.components.UnreadDot
 import dev.jesusmolano.alisio.ui.components.VectorTileIcon
 import dev.jesusmolano.alisio.ui.components.clockAutoSize
 import dev.jesusmolano.alisio.ui.components.formatClock
+import dev.jesusmolano.alisio.ui.components.liveLookFor
 import dev.jesusmolano.alisio.ui.components.onPinch
 import dev.jesusmolano.alisio.ui.components.rememberLightWallpaper
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.components.wallpaperVeil
+import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import dev.jesusmolano.alisio.ui.theme.onWallpaper
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 private val DockIconSize = AlisioTokens.DockIconSize
 
 // Ancho de un hueco del dock: el icono y un poco de aire a cada lado para que el nombre respire.
-internal val DockItemWidth = DockIconSize + 8.dp
+internal val DockItemWidth = DockIconSize + DOCK_ITEM_SPARE_DP.dp
+
+// Lo que la hora, la fecha y su línea dejan libre a la derecha, además del filo: el ancho que toca
+// el índice de Trazo, centrado a 24 dp del borde.
+private val RailClearance = 28.dp
 private val PillMinHeight = 56.dp
 private val StackOrderRowMinHeight = 56.dp
 private val DockHeight = 86.dp
@@ -218,6 +254,10 @@ fun HomeScreen(
     val dock = loadedDock.orEmpty()
     val nowSuggestion by viewModel.now.collectAsStateWithLifecycle()
     val now = nowSuggestion?.takeIf { prefs.nowEnabled }
+    val liveNow by viewModel.live.collectAsStateWithLifecycle()
+    val live = liveNow?.takeIf { prefs.nowEnabled && prefs.liveNow }
+    // La sugerencia cuyo porqué se está leyendo, con la opción de olvidarla.
+    var explaining by remember { mutableStateOf<Pair<NowSuggestion, AppEntry>?>(null) }
     val nowPlaying by viewModel.player.collectAsStateWithLifecycle()
     val player = nowPlaying?.takeIf { prefs.playerEnabled }
     val unread by viewModel.unread.collectAsStateWithLifecycle()
@@ -248,11 +288,30 @@ fun HomeScreen(
     // La app cuyo Interior está abierto: una del dock o una de una pila.
     var appMenu by remember { mutableStateOf<MenuTarget?>(null) }
     val dockSuggestions by viewModel.dockSuggestions.collectAsStateWithLifecycle()
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val people by viewModel.people.collectAsStateWithLifecycle()
+    val timers by viewModel.timers.collectAsStateWithLifecycle()
+    val photos = viewModel.photos.takeIf { prefs.contactPhotos }
+    val favorites = remember(prefs.favoritePeople, people) { favoritePeople(prefs.favoritePeople, people) }
+    val liveApps = rememberLiveApps(apps, prefs.liveIcons)
+    val liveLook = liveLookFor(prefs.iconStyle)
+    // La persona favorita cuyos canales se enseñan, al mantener su cara.
+    var channelsOf by remember { mutableStateOf<Person?>(null) }
+    // Dibujar una inicial: el rastro del dedo, lo que hay que elegir y si otro gesto se quedó el trazo.
+    val drawGate = remember { DrawGate() }
+    val trail = remember { mutableStateListOf<Offset>() }
+    var initialChoice by remember { mutableStateOf<InitialChoice?>(null) }
+    // Dónde acaba la hora con su línea y sus notas: por encima de ahí no se dibuja.
+    var clockBottom by remember { mutableFloatStateOf(0f) }
+    var homeSize by remember { mutableStateOf(IntSize.Zero) }
+    val view = LocalView.current
 
     LaunchedEffect(homePresses) {
         editing = null
         openStack = null
         appMenu = null
+        channelsOf = null
+        initialChoice = null
     }
     // La barra pide el Interior de una app que no está en el dock: se abre aquí, donde ya están sus
     // datos y sus acciones, como el de una app de una pila.
@@ -296,6 +355,56 @@ fun HomeScreen(
         undo.show(message, viewModel.clearDockSlot(position))
     }
 
+    /**
+     * Contacta con una persona por su canal principal. Al dibujar su inicial ([direct] `false`) una
+     * llamada se queda en el marcador, como con Enter: un trazo mal leído no debe llamar a nadie.
+     */
+    fun contactPerson(person: Person, direct: Boolean) {
+        val channel = viewModel.channelsOf(person).firstOrNull()
+        if (channel != null && context.contact(person, channel, direct)) {
+            viewModel.recordContact(person, channel)
+        } else {
+            launchFailed(person.name)
+        }
+    }
+
+    fun openInitial(item: InitialItem) {
+        when (item) {
+            is InitialItem.App -> launch(item.app)
+            is InitialItem.Contact -> contactPerson(item.person, direct = false)
+        }
+    }
+
+    // Lo que hace un trazo al soltarlo: abre lo más usado con esa inicial o deja elegir si empatan.
+    fun onStroke(points: List<Offset>) {
+        val minSize = with(density) { MinLetterSize.toPx() }
+        val letter = recognizeLetter(points.map { StrokePoint(it.x, it.y) }, minSize)
+        if (letter == null) {
+            // Un trazo que no es ninguna letra no hace nada, pero lo dice al dedo.
+            AlisioHaptics.limit(view)
+            return
+        }
+        val center = Offset(points.sumOf { it.x.toDouble() }.toFloat() / points.size, points.minOf { it.y })
+        val items =
+            apps.orEmpty().filterNot { it.hidden }.map(InitialItem::App) + people.map(InitialItem::Contact)
+        when (val pick = pickByInitial(letter, items, { it.key }, { it.label }, viewModel.usageNow())) {
+            null -> {
+                AlisioHaptics.limit(view)
+                initialChoice = InitialChoice(letter, emptyList(), center)
+            }
+
+            is InitialPick.Open -> {
+                AlisioHaptics.done(view)
+                openInitial(pick.item)
+            }
+
+            is InitialPick.Choose -> {
+                AlisioHaptics.step(view)
+                initialChoice = InitialChoice(letter, pick.items, center)
+            }
+        }
+    }
+
     Box(
         modifier
             .fillMaxSize()
@@ -318,12 +427,19 @@ fun HomeScreen(
                         if (!pulledDown && dragged > ShowNotificationsDrag.toPx()) {
                             showNotifications?.let {
                                 pulledDown = true
+                                // Gana el gesto de siempre: el trazo ya no se lee como letra.
+                                drawGate.taken = true
                                 it()
                             }
                         }
                     },
                     // Un gesto que ya ha bajado las notificaciones no abre además la barra.
-                    onDragEnd = { if (!pulledDown && dragged < -OpenSearchDrag.toPx()) onOpenSearch() }
+                    onDragEnd = {
+                        if (!pulledDown && dragged < -OpenSearchDrag.toPx()) {
+                            drawGate.taken = true
+                            onOpenSearch()
+                        }
+                    }
                 )
             }
             // El detector de dos toques solo existe con el gesto disponible: sin él queda el de
@@ -331,20 +447,48 @@ fun HomeScreen(
             // esa espera no retrasa nada; los iconos y el reloj se quedan sus toques antes.
             .pointerInput(onOpenSettings, canLock) {
                 detectTapGestures(
-                    onLongPress = { onOpenSettings() },
+                    onLongPress = {
+                        drawGate.taken = true
+                        onOpenSettings()
+                    },
                     onDoubleTap = if (canLock) ({ lockScreen?.invoke() }) else null
                 )
             }
+            .onSizeChanged { homeSize = it }
+            // Dibujar una inicial, solo en el hueco libre entre la hora y el pie, y lejos del índice de
+            // Trazo: lo demás tiene sus propios toques.
+            .initialDrawing(
+                enabled = prefs.drawInitial && !searchOpen && !tracing,
+                gate = drawGate,
+                canStart = { at ->
+                    val footerTop = homeSize.height - with(density) { footerHeight.toPx() }
+                    val railStart = homeSize.width - with(density) { (AlisioTokens.Edge + RailClearance * 2).toPx() }
+                    at.y > clockBottom && at.y < footerTop && at.x < railStart
+                },
+                trail = trail,
+                onStroke = ::onStroke
+            )
     ) {
+        val glanceData by viewModel.glance.collectAsStateWithLifecycle()
         ClockAndDate(
-            Modifier
-                .align(Alignment.TopStart)
-                .graphicsLayer { alpha = contentAlpha }
-                .padding(
-                    top = bars.calculateTopPadding() + 40.dp,
-                    start = AlisioTokens.Edge,
-                    end = AlisioTokens.Edge
-                )
+            prefs = prefs,
+            glance = glanceData,
+            notes = if (prefs.homeNotes) notes else emptyList(),
+            onStrikeNote = { note ->
+                undo.show(resources.getString(R.string.undo_note_struck), viewModel.removeNote(note))
+            },
+            onOpenLink = { if (!context.openNoteLink(it)) launchFailed(it) },
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .onGloballyPositioned { clockBottom = it.boundsInParent().bottom }
+                    .graphicsLayer { alpha = contentAlpha }
+                    .padding(
+                        top = bars.calculateTopPadding() + 40.dp,
+                        start = AlisioTokens.Edge,
+                        // La línea bajo la hora no llega al índice de Trazo: sus toques serían de él.
+                        end = AlisioTokens.Edge + RailClearance
+                    )
         )
 
         Column(
@@ -354,22 +498,48 @@ fun HomeScreen(
                 .onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
                 .padding(bottom = bars.calculateBottomPadding() + 16.dp)
         ) {
-            now?.let { (suggestion, app) ->
-                NowCard(
-                    suggestion = suggestion,
-                    app = app,
-                    onOpen = { launch(app) },
-                    onDismiss = {
-                        val dismissal = viewModel.dismissNow(suggestion)
-                        val message =
-                            resources.getString(
-                                if (dismissal.silenced) R.string.undo_now_silenced else R.string.undo_now_hidden
-                            )
-                        undo.show(message, dismissal.undo)
+            // Lo que está en curso va antes que la sugerencia: es lo que importa en este momento.
+            val liveApp = live?.let { current ->
+                apps.orEmpty().firstOrNull {
+                    it.component.packageName ==
+                        current.packageName
+                }
+            }
+            if (live != null) {
+                val label = liveApp?.label ?: live.packageName
+                LiveCard(
+                    live = live,
+                    appLabel = label,
+                    icon = liveApp?.icon,
+                    onOpen = {
+                        val opened =
+                            viewModel.openLive(live, label, liveApp?.icon) {
+                                context.sendLive(live) || (liveApp != null && viewModel.launch(liveApp))
+                            }
+                        if (!opened) launchFailed(label)
                     },
                     modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
                 )
                 Spacer(Modifier.height(AlisioTokens.PlateGap))
+            } else {
+                now?.let { (suggestion, app) ->
+                    NowCard(
+                        suggestion = suggestion,
+                        app = app,
+                        onOpen = { launch(app) },
+                        onDismiss = {
+                            val dismissal = viewModel.dismissNow(suggestion)
+                            val message =
+                                resources.getString(
+                                    if (dismissal.silenced) R.string.undo_now_silenced else R.string.undo_now_hidden
+                                )
+                            undo.show(message, dismissal.undo)
+                        },
+                        onExplain = if (suggestion.rule.learned) ({ explaining = suggestion to app }) else null,
+                        modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
+                    )
+                    Spacer(Modifier.height(AlisioTokens.PlateGap))
+                }
             }
             player?.let { playing ->
                 val playingApp = apps.orEmpty().firstOrNull { it.component.packageName == playing.packageName }
@@ -385,72 +555,136 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(AlisioTokens.PlateGap))
             }
-            DockRow {
-                dock.forEachIndexed { position, slot ->
-                    val itemModifier = Modifier.width(DockItemWidth)
-                    val showLabel = prefs.dockLabels
-                    when (slot) {
-                        DockSlot.Empty ->
-                            DockItem(
-                                label = "",
-                                description = stringResource(R.string.dock_empty_description),
-                                onClick = { editing = position },
-                                onLongClick = { editing = position },
-                                clickLabel = stringResource(R.string.dock_empty_action),
-                                // Un hueco vacío no tiene nombre que enseñar.
-                                showLabel = false,
-                                modifier = itemModifier
-                            ) { VectorTileIcon(R.drawable.ic_add) }
+            // Las caras favoritas van encima del dock, que es donde está el pulgar.
+            if (favorites.isNotEmpty()) {
+                FavoritesRow(
+                    people = favorites,
+                    photos = photos,
+                    showLabels = prefs.dockLabels,
+                    // Como la inicial dibujada: la fila está donde se apoya el pulgar, y un roce no
+                    // debe llamar a nadie. Una llamada pasa por el marcador.
+                    onOpen = { contactPerson(it, direct = false) },
+                    onChannels = { channelsOf = it }
+                )
+                Spacer(Modifier.height(AlisioTokens.PlateGap))
+            }
+            // Con más huecos los iconos encogen para caber de filo a filo; sin huecos no hay dock.
+            val iconSize = rememberDockIconSize(dock.size)
+            if (dock.isNotEmpty()) {
+                DockRow {
+                    dock.forEachIndexed { position, slot ->
+                        val itemModifier = Modifier.width(iconSize + DOCK_ITEM_SPARE_DP.dp)
+                        val showLabel = prefs.dockLabels
+                        when (slot) {
+                            DockSlot.Empty ->
+                                DockItem(
+                                    label = "",
+                                    description = stringResource(R.string.dock_empty_description),
+                                    onClick = { editing = position },
+                                    onLongClick = { editing = position },
+                                    clickLabel = stringResource(R.string.dock_empty_action),
+                                    // Un hueco vacío no tiene nombre que enseñar.
+                                    showLabel = false,
+                                    iconSize = iconSize,
+                                    modifier = itemModifier
+                                ) { VectorTileIcon(R.drawable.ic_add, size = iconSize) }
 
-                        is DockSlot.App -> {
-                            // Con los gestos apagados el destino sigue guardado, pero el icono no lo anuncia.
-                            val target = swipeTargets[slot.app.key.toString()]?.takeIf { prefs.dockGestures }
-                            DockItem(
-                                label = slot.app.label,
-                                description = null,
-                                onClick = { launch(slot.app) },
-                                onLongClick = { appMenu = MenuTarget(slot.app.key.toString(), position) },
-                                longClickLabel = stringResource(R.string.dock_app_menu),
-                                showLabel = showLabel,
-                                unread = slot.app.component.packageName in dotted,
-                                swipe = target?.let { DockSwipe(it.label) { launch(it) } },
-                                modifier = itemModifier
-                            ) { AppIcon(slot.app.icon, DockIconSize) }
+                            is DockSlot.App -> {
+                                // Con los gestos apagados el destino sigue guardado, pero el icono no lo anuncia.
+                                val target = swipeTargets[slot.app.key.toString()]?.takeIf { prefs.dockGestures }
+                                DockItem(
+                                    label = slot.app.label,
+                                    description = null,
+                                    onClick = { launch(slot.app) },
+                                    onLongClick = { appMenu = MenuTarget(slot.app.key.toString(), position) },
+                                    longClickLabel = stringResource(R.string.dock_app_menu),
+                                    showLabel = showLabel,
+                                    unread = slot.app.component.packageName in dotted,
+                                    swipe = target?.let { DockSwipe(it.label) { launch(it) } },
+                                    iconSize = iconSize,
+                                    modifier = itemModifier
+                                ) {
+                                    if (prefs.liveIcons) {
+                                        LiveAppIcon(slot.app, iconSize, liveApps, liveLook, nowPlaying, timers)
+                                    } else {
+                                        AppIcon(slot.app.icon, iconSize)
+                                    }
+                                }
+                            }
+
+                            is DockSlot.Stack ->
+                                DockItem(
+                                    label = slot.name,
+                                    description = null,
+                                    onClick = { if (slot.isEmpty) editing = position else openStack = position },
+                                    onLongClick = { editing = position },
+                                    showLabel = showLabel,
+                                    unread = slot.apps.any { it.component.packageName in dotted },
+                                    iconSize = iconSize,
+                                    modifier = itemModifier
+                                ) { StackSlotIcon(slot, iconSize) }
                         }
-
-                        is DockSlot.Stack ->
-                            DockItem(
-                                label = slot.name,
-                                description = null,
-                                onClick = { if (slot.apps.isEmpty()) editing = position else openStack = position },
-                                onLongClick = { editing = position },
-                                showLabel = showLabel,
-                                unread = slot.apps.any { it.component.packageName in dotted },
-                                modifier = itemModifier
-                            ) { StackSlotIcon(slot) }
                     }
                 }
+                Spacer(Modifier.height(AlisioTokens.PlateGap))
             }
-            Spacer(Modifier.height(AlisioTokens.PlateGap))
             // También depende de las apps instaladas: instalar o quitar el asistente cambia el texto.
             val assistant = remember(prefs.assistantPackage, apps) { context.appLabel(prefs.assistantPackage) }
             SearchPill(searchHint(assistant), onOpenSearch, Modifier.padding(horizontal = AlisioTokens.Outset))
         }
 
-        val sections = remember(apps) { apps.orEmpty().toSections { it.label } }
+        // Una app oculta no sale en Trazo: solo se llega a ella buscando su nombre.
+        val sections = remember(apps) { apps.orEmpty().filterNot { it.hidden }.toSections { it.label } }
         if (!searchOpen) {
             Trace(
                 sections = sections,
-                railPadding =
-                    PaddingValues(
-                        top = bars.calculateTopPadding() + 16.dp,
-                        bottom = footerHeight + AlisioTokens.PlateGap
-                    ),
+                mode = prefs.traceRail,
+                railTop = bars.calculateTopPadding() + 16.dp,
+                // El índice en reposo acaba donde empieza el pie; durante el trazo baja sobre él.
+                railBottom = footerHeight + AlisioTokens.PlateGap,
                 onLaunch = ::launch,
                 onOpenZones = onOpenZones,
-                onTracing = { tracing = it }
+                onTracing = {
+                    if (it) TouchTrace.mark("trazo")
+                    tracing = it
+                }
             )
         }
+        DrawTrail(trail)
+        InitialChooser(
+            choice = initialChoice,
+            photos = photos,
+            onPick = {
+                initialChoice = null
+                AlisioHaptics.done(view)
+                openInitial(it)
+            },
+            onDismiss = { initialChoice = null }
+        )
+    }
+
+    channelsOf?.let { person ->
+        FavoriteChannelsSheet(
+            person = person,
+            channels = remember(person) { viewModel.channelsOf(person) },
+            onContact = { channel ->
+                channelsOf = null
+                if (context.contact(
+                        person,
+                        channel
+                    )
+                ) {
+                    viewModel.recordContact(person, channel)
+                } else {
+                    launchFailed(person.name)
+                }
+            },
+            onOpenContact = {
+                channelsOf = null
+                if (!context.openContact(person)) launchFailed(person.name)
+            },
+            onDismiss = { channelsOf = null }
+        )
     }
 
     openStack?.let { position ->
@@ -464,6 +698,11 @@ fun HomeScreen(
                     openStack = null
                     launch(it)
                 },
+                onLaunchShortcut = {
+                    openStack = null
+                    if (!viewModel.launch(it)) launchFailed(it.label)
+                },
+                shortcutIcon = viewModel::shortcutIcon,
                 // Nunca una hoja sobre otra: el Interior sustituye a la pila abierta.
                 onMenu = {
                     openStack = null
@@ -478,7 +717,21 @@ fun HomeScreen(
         }
     }
 
+    explaining?.let { (suggestion, app) ->
+        NowWhySheet(
+            suggestion = suggestion,
+            app = app,
+            onForget = {
+                explaining = null
+                undo.show(resources.getString(R.string.undo_now_forgotten, app.label), viewModel.forgetNow(suggestion))
+            },
+            onDismiss = { explaining = null }
+        )
+    }
+
     val defaultStackName = stringResource(R.string.stack_default_name)
+    val look = rememberAppLook(viewModel)
+    val pickImage = LocalPickImage.current
     appMenu?.let { menu ->
         val position = menu.slot
         val app =
@@ -553,9 +806,16 @@ fun HomeScreen(
                 onGrantHomeRole = onGrantHomeRole,
                 zones = zoneMove(zonesState, app) { zones.move(app, it) },
                 shortcutIcon = viewModel::shortcutIcon,
+                look = look,
                 onOpenShortcut = { shortcut ->
                     appMenu = null
                     launch(SwipeTarget.Shortcut(shortcut))
+                },
+                // La hoja se cierra: abierta taparía la barra de deshacer, que va en la ventana de abajo.
+                onUnpin = { shortcut ->
+                    appMenu = null
+                    val restore = viewModel.unpinShortcut(shortcut)
+                    undo.show(resources.getString(R.string.undo_unpinned, shortcut.label), restore)
                 },
                 onSetTarget = { viewModel.setSwipeTarget(app, it) },
                 onAppInfo = {
@@ -588,7 +848,10 @@ fun HomeScreen(
             onMakeStack = { viewModel.makeDockStack(position, defaultStackName) },
             onRenameStack = { viewModel.renameDockStack(position, it) },
             onSetStackIcon = { icon, glyph -> viewModel.setStackIcon(position, icon, glyph) },
+            // La actividad pone la imagen al volver del selector, con la hoja de la pila aún abierta.
+            onPickStackImage = { pickImage(ImageTarget.Stack(position)) {} },
             onReorderStack = { viewModel.reorderStack(position, it) },
+            onRemoveShortcut = { viewModel.removeFromStack(position, it) },
             onClear = {
                 clearSlot(position)
                 editing = null
@@ -598,23 +861,30 @@ fun HomeScreen(
     }
 }
 
+/**
+ * Arriba del Inicio: la hora con el formato y el tamaño elegidos, la fecha y, debajo, la línea con
+ * lo que tenga algo que decir ([glancePieces]). Las tres partes abren algo al tocarlas.
+ */
 @Composable
-private fun ClockAndDate(modifier: Modifier = Modifier) {
+private fun ClockAndDate(
+    prefs: Prefs,
+    glance: GlanceData,
+    notes: List<HomeNote>,
+    onStrikeNote: (HomeNote) -> Unit,
+    onOpenLink: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val now = rememberNow()
-    val time = formatClock(now)
-    val locale = LocalConfiguration.current.locales[0]
-    val date = remember(now, locale) {
-        val pattern = DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM")
-        now.format(DateTimeFormatter.ofPattern(pattern, locale)).replaceFirstChar { it.titlecase(locale) }
-    }
+    val time = formatClock(now, prefs.clockFormat)
+    val date = formatHomeDate(now)
     val noRipple = remember { MutableInteractionSource() }
-    val clock = AlisioTokens.Clock.onWallpaper()
+    val clock = AlisioTokens.Clock.scaled(AlisioTokens.clockScale(prefs.clockSize)).onWallpaper()
+    val pieces = glancePieces(prefs, glance, now.toInstant().toEpochMilli())
     Column(modifier) {
-        Text(
+        ClockText(
             text = time,
             style = clock,
-            maxLines = 1,
             autoSize = clockAutoSize(clock),
             modifier =
                 Modifier.clickable(
@@ -626,30 +896,59 @@ private fun ClockAndDate(modifier: Modifier = Modifier) {
                     context.openClockApp()
                 }
         )
-        Text(
-            text = date,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium).onWallpaper(),
-            modifier =
-                Modifier
-                    .clickable(
-                        interactionSource = noRipple,
-                        indication = null,
-                        onClickLabel = stringResource(R.string.home_open_calendar),
-                        role = Role.Button
-                    ) {
-                        context.open(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))
-                    }
-                    .heightIn(min = 48.dp)
-                    .padding(start = 6.dp, top = 4.dp, bottom = 12.dp, end = 12.dp)
-        )
+        val openCalendar = stringResource(R.string.home_open_calendar)
+        val dateText: @Composable (Modifier) -> Unit = { layout ->
+            Text(
+                text = date,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium).onWallpaper(),
+                modifier =
+                    Modifier
+                        .clickable(
+                            interactionSource = noRipple,
+                            indication = null,
+                            onClickLabel = openCalendar,
+                            role = Role.Button
+                        ) {
+                            context.open(
+                                Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)
+                            )
+                        }
+                        .heightIn(min = 48.dp)
+                        .then(layout)
+            )
+        }
+        if (pieces.isEmpty()) {
+            // Sin aire delante: su tinta cae en el filo, como la de la hora.
+            dateText(Modifier.padding(top = 4.dp, bottom = 12.dp, end = 12.dp))
+        } else {
+            // La fecha abre la línea y las piezas siguen detrás, con su misma letra: es una sola
+            // línea de datos que pasa a la siguiente si no cabe, no dos bloques apilados.
+            GlanceLine(pieces) { dateText(Modifier.wrapContentHeight().padding(start = PieceStart, end = PieceEnd)) }
+        }
+        // Las notas siguen a la línea, con su misma letra: son lo que el dueño se ha dejado dicho.
+        if (notes.isNotEmpty()) NotesLine(notes, onStrikeNote, onOpenLink)
     }
 }
+
+/** La fecha del Inicio («Lunes, 16 de noviembre»), igual en su miniatura. */
+@Composable
+internal fun formatHomeDate(now: ZonedDateTime): String {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(now.toLocalDate(), locale) {
+        val pattern = DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM")
+        now.format(DateTimeFormatter.ofPattern(pattern, locale)).replaceFirstChar { it.titlecase(locale) }
+    }
+}
+
+/** La hora a una fracción de su tamaño: el interlineado va con ella para no dejar aire de más. */
+internal fun TextStyle.scaled(scale: Float): TextStyle =
+    if (scale == 1f) this else copy(fontSize = fontSize * scale, lineHeight = lineHeight * scale)
 
 /**
  * Abre la app de Reloj. `ACTION_SHOW_ALARMS` exige el permiso `SET_ALARM` (en One UI falla sin él),
  * así que solo se usa para saber qué app es el reloj y se abre por su icono de inicio.
  */
-private fun Context.openClockApp() {
+internal fun Context.openClockApp() {
     // Con varias apps de reloj y ninguna predeterminada, `resolveActivity` devuelve el selector del
     // sistema (paquete «android»), que no tiene icono de inicio: se toma la primera app real.
     val clockPackage =
@@ -686,6 +985,19 @@ internal fun DockRow(modifier: Modifier = Modifier, content: @Composable RowScop
     )
 }
 
+/**
+ * El lado de los iconos del dock con [count] huecos ([dockIconSize]). Se mide con el ancho real de
+ * la pantalla, no con el de quien dibuja: la miniatura de los ajustes reduce la densidad y debe
+ * salir con el mismo tamaño relativo que el Inicio.
+ */
+@Composable
+internal fun rememberDockIconSize(count: Int): Dp {
+    // Las métricas de la pantalla, no `LocalDensity`: la miniatura la cambia y el ancho saldría mayor.
+    val metrics = LocalResources.current.displayMetrics
+    val width = metrics.widthPixels / metrics.density
+    return remember(count, width) { dockIconSize(count, width).dp }
+}
+
 /** Destino secundario de un icono del dock: [label] es lo que abre [open], para decirlo en voz alta. */
 private class DockSwipe(val label: String, val open: () -> Unit)
 
@@ -706,6 +1018,7 @@ private fun DockItem(
     longClickLabel: String? = null,
     unread: Boolean = false,
     swipe: DockSwipe? = null,
+    iconSize: Dp = DockIconSize,
     icon: @Composable () -> Unit
 ) {
     val name = description ?: label
@@ -720,6 +1033,7 @@ private fun DockItem(
     DockIcon(
         label = label,
         showLabel = showLabel,
+        size = iconSize,
         unread = unread,
         swipeMark = swipe != null,
         onWallpaper = true,
@@ -749,17 +1063,20 @@ private fun DockItem(
                                 onVerticalDrag = { _, amount ->
                                     val wasArmed = dragged <= openAt
                                     dragged += amount
-                                    // Un toque al cruzar el umbral: soltar a partir de aquí abre el destino.
-                                    if (!wasArmed && dragged <= openAt) {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                    }
+                                    // Vibra al cruzar el umbral (soltar ya abre el destino) y al volver
+                                    // atrás (soltar ya no hace nada): el dedo sabe qué pasará sin mirar.
+                                    val armed = dragged <= openAt
+                                    if (armed != wasArmed) AlisioHaptics.threshold(view, armed)
                                     // El icono acompaña al dedo a medio paso y con tope: se nota que
                                     // responde sin que parezca que se puede arrastrar a otro sitio.
                                     val target = (dragged * SWIPE_LIFT_RATIO).coerceIn(-maxLift, 0f)
                                     scope.launch { lift.snapTo(target) }
                                 },
                                 onDragEnd = {
-                                    if (dragged <= openAt) currentSwipe?.open?.invoke()
+                                    if (dragged <= openAt) {
+                                        AlisioHaptics.done(view)
+                                        currentSwipe?.open?.invoke()
+                                    }
                                     scope.launch { lift.animateTo(0f, AlisioMotion.follow()) }
                                 },
                                 onDragCancel = { scope.launch { lift.animateTo(0f, AlisioMotion.follow()) } }
@@ -822,10 +1139,22 @@ private fun DockSlot.holds(app: AppEntry): Boolean = when (this) {
 @Composable
 internal fun StackSlotIcon(stack: DockSlot.Stack, size: Dp = DockIconSize) {
     when {
+        stack.icon == StackIcon.IMAGE && stack.image != null -> AppIcon(stack.image, size)
+
+        // La imagen elegida ya no está en el disco: el dibujo de imagen dice qué falta por elegir.
+        stack.icon == StackIcon.IMAGE -> VectorTileIcon(R.drawable.ic_image, size = size)
+
         stack.icon == StackIcon.SYMBOL && stack.glyph.isNotBlank() -> SymbolTileIcon(stack.glyph, size = size)
-        stack.icon == StackIcon.SYMBOL || stack.apps.isEmpty() -> VectorTileIcon(R.drawable.ic_stacks, size = size)
-        stack.icon == StackIcon.FIRST_APP -> AppIcon(stack.apps.first().icon, size)
-        else -> FolderTileIcon(stack.apps.map { it.icon }, size = size)
+
+        stack.icon == StackIcon.SYMBOL || stack.isEmpty -> VectorTileIcon(R.drawable.ic_stacks, size = size)
+
+        // Un acceso fijado se ve con el icono de su app, como en la barra.
+        stack.icon == StackIcon.FIRST_APP -> AppIcon(
+            (stack.apps.firstOrNull() ?: stack.shortcuts.first().app).icon,
+            size
+        )
+
+        else -> FolderTileIcon(stack.apps.map { it.icon } + stack.shortcuts.map { it.app.icon }, size = size)
     }
 }
 
@@ -867,15 +1196,19 @@ internal fun SearchPill(hint: String, onClick: () -> Unit, modifier: Modifier = 
 private fun StackSheet(
     stack: DockSlot.Stack,
     onLaunch: (AppEntry) -> Unit,
+    onLaunchShortcut: (ShortcutEntry) -> Unit,
+    shortcutIcon: suspend (ShortcutEntry) -> Bitmap?,
     onMenu: (AppEntry) -> Unit,
     onEdit: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val menuLabel = stringResource(R.string.dock_app_menu)
+    // Las apps y después los accesos fijados desde otras apps, en la misma rejilla.
+    val cells: List<Any> = stack.apps + stack.shortcuts
     AlisioSheet(onDismiss = onDismiss, expanded = false) {
         SheetTitle(stack.name)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            stack.apps.chunked(STACK_COLUMNS).forEach { row ->
+            cells.chunked(STACK_COLUMNS).forEach { row ->
                 // De filo a filo, como el dock: el primer icono cae bajo el título.
                 Row(
                     Modifier
@@ -883,23 +1216,43 @@ private fun StackSheet(
                         .padding(horizontal = AlisioTokens.Edge - (StackCellWidth - DockIconSize) / 2),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    row.forEach { app ->
+                    row.forEach { cell ->
+                        val app = cell as? AppEntry
+                        val shortcut = cell as? ShortcutEntry
                         Column(
                             Modifier
                                 .width(StackCellWidth)
                                 .clip(AlisioTokens.RowShape)
                                 .combinedClickable(
                                     role = Role.Button,
-                                    onLongClickLabel = menuLabel,
-                                    onLongClick = { onMenu(app) },
-                                    onClick = { onLaunch(app) }
+                                    onLongClickLabel = if (app != null) menuLabel else null,
+                                    onLongClick = app?.let { { onMenu(it) } },
+                                    onClick = {
+                                        if (app !=
+                                            null
+                                        ) {
+                                            onLaunch(app)
+                                        } else if (shortcut != null) {
+                                            onLaunchShortcut(shortcut)
+                                        }
+                                    }
                                 )
                                 .padding(vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            AppIcon(app.icon, DockIconSize)
-                            Spacer(Modifier.height(6.dp))
-                            IconLabel(app.label)
+                            if (app != null) {
+                                AppIcon(app.icon, DockIconSize)
+                                Spacer(Modifier.height(6.dp))
+                                IconLabel(app.label)
+                            } else if (shortcut != null) {
+                                // Su icono propio, si se deja leer; mientras tanto, el de su app.
+                                val icon by produceState(shortcut.app.icon, shortcut.key) {
+                                    shortcutIcon(shortcut)?.let { value = it }
+                                }
+                                AppIcon(icon, DockIconSize)
+                                Spacer(Modifier.height(6.dp))
+                                IconLabel(shortcut.label)
+                            }
                         }
                     }
                     // Una fila incompleta guarda los huecos: sus iconos siguen en las mismas columnas.
@@ -932,7 +1285,9 @@ private fun SlotSheet(
     onMakeStack: () -> Unit,
     onRenameStack: (String) -> Unit,
     onSetStackIcon: (StackIcon, String) -> Unit,
+    onPickStackImage: () -> Unit,
     onReorderStack: (List<AppEntry>) -> Unit,
+    onRemoveShortcut: (ShortcutEntry) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -978,7 +1333,17 @@ private fun SlotSheet(
                 }
             }
         } else {
-            StackEditor(stack, apps, onToggleInStack, onRenameStack, onSetStackIcon, onReorderStack, onClear)
+            StackEditor(
+                stack,
+                apps,
+                onToggleInStack,
+                onRenameStack,
+                onSetStackIcon,
+                onPickStackImage,
+                onReorderStack,
+                onRemoveShortcut,
+                onClear
+            )
         }
     }
 }
@@ -995,7 +1360,9 @@ private fun ColumnScope.StackEditor(
     onToggleInStack: (AppEntry) -> Unit,
     onRenameStack: (String) -> Unit,
     onSetStackIcon: (StackIcon, String) -> Unit,
+    onPickImage: () -> Unit,
     onReorderStack: (List<AppEntry>) -> Unit,
+    onRemoveShortcut: (ShortcutEntry) -> Unit,
     onRemove: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -1039,11 +1406,19 @@ private fun ColumnScope.StackEditor(
                             StackIcon.FOLDER -> R.string.stack_icon_folder
                             StackIcon.FIRST_APP -> R.string.stack_icon_first
                             StackIcon.SYMBOL -> R.string.stack_icon_symbol
+                            StackIcon.IMAGE -> R.string.icon_image
                         }
                     ),
                 selected = stack.icon == mode,
                 onClick = {
-                    onSetStackIcon(mode, glyph)
+                    when {
+                        // Sin imagen, o ya elegida (para cambiarla), se abre el selector de fotos; si la pila ya
+                        // tuvo una, vuelve sin pedirla otra vez.
+                        mode == StackIcon.IMAGE && (stack.image == null || stack.icon == StackIcon.IMAGE) ->
+                            onPickImage()
+
+                        else -> onSetStackIcon(mode, glyph)
+                    }
                     if (mode == StackIcon.SYMBOL) focusSymbol = true
                 },
                 modifier = Modifier.weight(1f)
@@ -1061,7 +1436,7 @@ private fun ColumnScope.StackEditor(
                         focusRequester = symbolFocus
                     )
                 } else {
-                    StackSlotIcon(DockSlot.Stack(stack.name, stack.apps, mode, glyph))
+                    StackSlotIcon(DockSlot.Stack(stack.name, stack.apps, mode, glyph, stack.image, stack.shortcuts))
                 }
             }
         }
@@ -1074,6 +1449,27 @@ private fun ColumnScope.StackEditor(
         if (query.isBlank() && stack.apps.isNotEmpty()) {
             item { SectionLabel(stringResource(R.string.stack_order_title)) }
             item { StackOrder(stack.apps, onReorderStack, onRemove = onToggleInStack) }
+        }
+        // Los accesos fijados desde otras apps: se quitan de la pila, pero siguen saliendo en la barra.
+        if (query.isBlank() && stack.shortcuts.isNotEmpty()) {
+            item { SectionLabel(stringResource(R.string.stack_pinned_title)) }
+            items(stack.shortcuts, key = { it.key }) { shortcut ->
+                ItemRow(
+                    title = AnnotatedString(shortcut.label),
+                    icon = shortcut.app.icon,
+                    subtitle = shortcut.app.label,
+                    // Como en «Añadir», tocar la fila la cambia de lado: aquí, la quita.
+                    onClick = { onRemoveShortcut(shortcut) },
+                    actions = {
+                        RoundIconButton(
+                            R.drawable.ic_close,
+                            stringResource(R.string.stack_remove_app, shortcut.label),
+                            AlisioTokens.TextSecondary,
+                            onClick = { onRemoveShortcut(shortcut) }
+                        )
+                    }
+                )
+            }
         }
         if (addable.isNotEmpty()) item { SectionLabel(stringResource(R.string.stack_add_title)) }
         items(addable, key = { it.key.toString() }) { app ->
@@ -1128,6 +1524,7 @@ private fun StackOrder(apps: List<AppEntry>, onReorder: (List<AppEntry>) -> Unit
     var rowHeightPx by remember { mutableFloatStateOf(0f) }
     val moveUp = stringResource(R.string.stack_move_up)
     val moveDown = stringResource(R.string.stack_move_down)
+    val view = LocalView.current
 
     fun move(app: AppEntry, by: Int): Boolean {
         val index = order.indexOf(app)
@@ -1200,6 +1597,7 @@ private fun StackOrder(apps: List<AppEntry>, onReorder: (List<AppEntry>) -> Unit
                                 .pointerInput(app.key) {
                                     detectDragGestures(
                                         onDragStart = {
+                                            AlisioHaptics.dragStart(view)
                                             dragging = app
                                             offset = 0f
                                         },
@@ -1214,7 +1612,10 @@ private fun StackOrder(apps: List<AppEntry>, onReorder: (List<AppEntry>) -> Unit
                                                     offset < -rowHeightPx / 2 -> -1
                                                     else -> 0
                                                 }
-                                            if (step != 0 && move(app, step)) offset -= step * rowHeightPx
+                                            if (step != 0 && move(app, step)) {
+                                                offset -= step * rowHeightPx
+                                                AlisioHaptics.step(view)
+                                            }
                                         },
                                         onDragEnd = {
                                             dragging = null
@@ -1255,9 +1656,9 @@ internal fun NowCard(
     app: AppEntry,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onExplain: (() -> Unit)? = null
 ) {
-    val shape = AlisioTokens.CardShape
     val reason =
         when (suggestion.rule) {
             NowRule.NEW_VERSION -> {
@@ -1275,7 +1676,78 @@ internal fun NowCard(
 
             NowRule.HABIT -> stringResource(R.string.now_reason_habit)
         }
-    val spoken = stringResource(R.string.now_description, app.label, reason)
+    NowPlate(
+        icon = { AppIcon(app.icon, AlisioTokens.IconSlot) },
+        title = app.label,
+        reason = reason,
+        onOpen = onOpen,
+        onLongPress = onExplain,
+        modifier = modifier
+    ) {
+        RoundIconButton(
+            R.drawable.ic_close,
+            stringResource(R.string.now_dismiss),
+            AlisioTokens.TextSecondary,
+            onDismiss,
+            iconSize = 20.dp
+        )
+    }
+}
+
+/**
+ * Ahora en vivo (docs/IDEAS.md §2.7): lo que está en curso en otra app, con su título y su motivo
+ * («En curso · Maps»). La cuenta atrás avanza con el minuto compartido, sin un bucle propio.
+ */
+@Composable
+internal fun LiveCard(
+    live: LiveNow,
+    appLabel: String,
+    icon: Bitmap?,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val nowMillis = rememberNow().toInstant().toEpochMilli()
+    val detail =
+        live.countdownTo?.let { until ->
+            val minutes = ((until - nowMillis + 59_999L) / 60_000L).coerceAtLeast(0).toInt()
+            pluralStringResource(R.plurals.now_live_left, minutes, minutes)
+        } ?: live.text
+    val reason = listOfNotNull(stringResource(R.string.now_live_reason, appLabel), detail)
+        .joinToString(stringResource(R.string.list_separator))
+    NowPlate(
+        icon = {
+            if (icon !=
+                null
+            ) {
+                AppIcon(icon, AlisioTokens.IconSlot)
+            } else {
+                VectorTileIcon(R.drawable.ic_schedule, size = AlisioTokens.IconSlot)
+            }
+        },
+        title = live.title,
+        reason = reason,
+        onOpen = onOpen,
+        modifier = modifier
+    )
+}
+
+/**
+ * La placa de Ahora: icono, título y motivo, y al final lo que haga falta (descartar). Mantenerla
+ * explica por qué sale, si se puede ([onLongPress]); para TalkBack es una acción con nombre.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NowPlate(
+    icon: @Composable () -> Unit,
+    title: String,
+    reason: String,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+    trailing: @Composable () -> Unit = {}
+) {
+    val shape = AlisioTokens.CardShape
+    val spoken = stringResource(R.string.now_description, title, reason)
     Row(
         modifier =
             modifier
@@ -1283,15 +1755,20 @@ internal fun NowCard(
                 .heightIn(min = 68.dp)
                 .clip(shape)
                 .background(AlisioTokens.Plate, shape)
-                .clickable(role = Role.Button, onClick = onOpen)
+                .combinedClickable(
+                    role = Role.Button,
+                    onLongClickLabel = stringResource(R.string.now_why),
+                    onLongClick = onLongPress,
+                    onClick = onOpen
+                )
                 .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AppIcon(app.icon, AlisioTokens.IconSlot)
+        icon()
         Spacer(Modifier.width(AlisioTokens.IconGap))
         Column(Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken }) {
             Text(
-                text = app.label,
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = AlisioTokens.Text,
                 maxLines = 1,
@@ -1305,12 +1782,65 @@ internal fun NowCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        RoundIconButton(
-            R.drawable.ic_close,
-            stringResource(R.string.now_dismiss),
-            AlisioTokens.TextSecondary,
-            onDismiss,
-            iconSize = 20.dp
-        )
+        trailing()
+    }
+}
+
+/**
+ * Abre lo que está en curso por la pantalla que la propia notificación abre. Alisio cede su permiso
+ * de abrir actividades, como con la alarma (`pendingIntentOptions`); si el sistema no lo deja,
+ * devuelve `false` y quien llama abre la app por su icono.
+ */
+private fun Context.sendLive(live: LiveNow): Boolean {
+    val open = live.open ?: return false
+    return try {
+        open.send(this, 0, null, null, null, null, pendingIntentOptions())
+        true
+    } catch (e: PendingIntent.CanceledException) {
+        Log.w("HomeScreen", "Lo que estaba en curso ya no abre nada", e)
+        false
+    }
+}
+
+/**
+ * Por qué sale una sugerencia aprendida y cómo olvidarla en el sitio (docs/IDEAS.md §2.6). Olvidar
+ * no borra el historial: la costumbre deja de contar y se vuelve a aprender si se repite.
+ */
+@Composable
+private fun NowWhySheet(suggestion: NowSuggestion, app: AppEntry, onForget: () -> Unit, onDismiss: () -> Unit) {
+    AlisioSheet(onDismiss = onDismiss, expanded = false) {
+        SheetTitle(app.label)
+        // Las filas llevan su margen, como en las demás hojas: así su contenido cae en el filo.
+        Column(Modifier.padding(horizontal = AlisioTokens.Outset)) {
+            Note(
+                when (suggestion.rule) {
+                    NowRule.BLUETOOTH ->
+                        pluralStringResource(
+                            R.plurals.now_why_bluetooth,
+                            suggestion.evidence,
+                            suggestion.device.orEmpty(),
+                            suggestion.evidence
+                        )
+
+                    else -> stringResource(R.string.now_why_habit, suggestion.evidence, HABIT_DAYS)
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+            ItemRow(
+                title = AnnotatedString(
+                    stringResource(
+                        if (suggestion.rule == NowRule.BLUETOOTH) {
+                            R.string.now_forget_bluetooth
+                        } else {
+                            R.string.now_forget_habit
+                        }
+                    )
+                ),
+                leadingIcon = R.drawable.ic_restart,
+                subtitle = stringResource(R.string.now_forget_hint),
+                onClick = onForget
+            )
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }

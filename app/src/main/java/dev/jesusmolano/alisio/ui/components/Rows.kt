@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
 // Relleno interior de una fila: con el margen exterior `Outset`, su contenido empieza en el filo.
@@ -144,10 +146,14 @@ fun ItemRow(
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     val shape = AlisioTokens.RowShape
+    val view = LocalView.current
     val interaction =
         when {
             checked != null ->
-                Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch) { onClick() }
+                Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch) { on ->
+                    AlisioHaptics.toggle(view, on)
+                    onClick()
+                }
 
             selected != null && multiple ->
                 Modifier.toggleable(value = selected, enabled = enabled, role = Role.Checkbox) { onClick() }

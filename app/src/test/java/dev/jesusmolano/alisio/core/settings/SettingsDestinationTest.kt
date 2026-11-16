@@ -46,6 +46,14 @@ class SettingsDestinationTest {
     }
 
     @Test
+    fun `la línea bajo la hora pide calendario, ubicación y uso solo para lo encendido`() {
+        val granted = setOf(Access.HOME_ROLE)
+        assertEquals(setOf(Access.CALENDAR), blockingAccess(granted, nothingOn.copy(nextEvent = true)))
+        assertEquals(setOf(Access.LOCATION), blockingAccess(granted, nothingOn.copy(deviceLocation = true)))
+        assertEquals(setOf(Access.USAGE), blockingAccess(granted, nothingOn.copy(screenTime = true)))
+    }
+
+    @Test
     fun `un acceso concedido no falta aunque se use`() {
         val everythingOn =
             AccessUse(
@@ -65,14 +73,24 @@ class SettingsDestinationTest {
     }
 
     @Test
+    fun `los ajustes del sistema y no molestar nunca bloquean`() {
+        val granted = Access.entries.toSet() - Access.SYSTEM_SETTINGS - Access.DO_NOT_DISTURB
+        assertEquals(emptySet<Access>(), blockingAccess(granted, nothingOn.copy(player = true)))
+    }
+
+    @Test
     fun `los accesos que faltan van primero y cada grupo conserva su orden`() {
         val granted = setOf(Access.HOME_ROLE, Access.BLUETOOTH)
         assertEquals(
             listOf(
                 Access.CONTACTS,
+                Access.CALENDAR,
+                Access.LOCATION,
                 Access.NOTIFICATIONS,
                 Access.USAGE,
                 Access.ACCESSIBILITY,
+                Access.SYSTEM_SETTINGS,
+                Access.DO_NOT_DISTURB,
                 Access.HOME_ROLE,
                 Access.BLUETOOTH
             ),
@@ -81,10 +99,29 @@ class SettingsDestinationTest {
     }
 
     @Test
-    fun `solo la portada, Aspecto e Inicio llevan la vista previa`() {
+    fun `las caras sobre el dock piden los contactos`() {
         assertEquals(
-            setOf(SettingsDestination.COVER, SettingsDestination.LOOK, SettingsDestination.HOME),
+            setOf(Access.CONTACTS),
+            blockingAccess(setOf(Access.HOME_ROLE), nothingOn.copy(favoritePeople = true))
+        )
+    }
+
+    @Test
+    fun `solo la portada, Aspecto, Iconos e Inicio llevan la vista previa`() {
+        assertEquals(
+            setOf(
+                SettingsDestination.COVER,
+                SettingsDestination.LOOK,
+                SettingsDestination.ICONS,
+                SettingsDestination.HOME
+            ),
             SettingsDestination.entries.filter { it.hasPreview }.toSet()
         )
+    }
+
+    @Test
+    fun `cada página conserva un id distinto`() {
+        val ids = SettingsDestination.entries.map { it.id }
+        assertEquals(ids.size, ids.toSet().size)
     }
 }

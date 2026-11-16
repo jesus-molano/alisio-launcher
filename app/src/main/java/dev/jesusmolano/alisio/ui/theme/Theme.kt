@@ -19,13 +19,20 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import dev.jesusmolano.alisio.core.theme.CUSTOM_ACCENT
 import dev.jesusmolano.alisio.core.theme.FontChoice
+import dev.jesusmolano.alisio.core.theme.dayAccent
+import dev.jesusmolano.alisio.core.theme.daylight
+import dev.jesusmolano.alisio.core.theme.sunMinutes
+import dev.jesusmolano.alisio.core.time.ClockSize
+import java.time.ZonedDateTime
 
 /**
  * Tokens de docs/DISENO.md §2 que Material 3 no tiene con ese nombre. Ninguna pantalla define
@@ -118,6 +125,16 @@ object AlisioTokens {
     /** Lado del icono de una app en el dock, en Zonas y en las teselas. */
     val DockIconSize = 52.dp
 
+    /** Dibujo de cada pieza de la línea bajo la hora: a la altura de las mayúsculas de la fecha. */
+    val GlanceIconSize = 18.dp
+
+    /** Lo que mide la hora del Inicio en cada tamaño, como fracción de [Clock]. */
+    fun clockScale(size: ClockSize): Float = when (size) {
+        ClockSize.SMALL -> 0.6f
+        ClockSize.MEDIUM -> 0.8f
+        ClockSize.LARGE -> 1f
+    }
+
     // Radios (§2.3). No hay un quinto: los avatares van en círculo.
     val PillShape = RoundedCornerShape(28.dp)
     val CardShape = RoundedCornerShape(22.dp)
@@ -139,7 +156,10 @@ object AlisioTokens {
                 fontWeight = FontWeight.Light,
                 fontSize = 112.sp,
                 lineHeight = 112.sp,
-                letterSpacing = (-0.045).em
+                letterSpacing = (-0.045).em,
+                // Cifras de ancho fijo: la hora no baila al cambiar de minuto. Inter, Space Grotesk y
+                // Roboto traen «tnum» (comprobado en su tabla GSUB); Roboto ya las tiene así de serie.
+                fontFeatureSettings = "tnum"
             )
 
     /** Cifra: el resultado de un cálculo y la hora de una vista previa. */
@@ -294,13 +314,38 @@ private val Pressed =
     )
 
 /**
- * @param accent índice en [AlisioTokens.Accents]; uno fuera de rango usa el de por defecto.
+ * El acento elegido: uno de [AlisioTokens.Accents] por su índice o, con [CUSTOM_ACCENT], el color
+ * propio [custom]. Un índice fuera de rango, o el propio sin color guardado, es el de por defecto.
+ */
+fun accentColor(index: Int, custom: Int?): Color = when {
+    index == CUSTOM_ACCENT && custom != null -> Color(custom)
+    else -> AlisioTokens.Accents.getOrElse(index) { AlisioTokens.Accents.first() }
+}
+
+/**
+ * El color del día: el acento elegido de día y el de la paleta [nightIndex] de noche, con el paso
+ * suave de la salida y la puesta del sol de ese sitio ([daylight]). Sin coordenadas se calcula para
+ * la zona horaria. Siempre legible con el texto de los botones encima.
+ */
+fun dayAccentColor(day: Color, nightIndex: Int, now: ZonedDateTime, latitude: Double?, longitude: Double?): Color {
+    val sun = sunMinutes(now.toLocalDate(), now.zone, latitude, longitude)
+    val night = AlisioTokens.Accents.getOrElse(nightIndex) { AlisioTokens.Accents.first() }
+    val light = daylight(now.hour * 60 + now.minute, sun)
+    return Color(dayAccent(day.toArgb(), night.toArgb(), light, AlisioTokens.Background.toArgb()))
+}
+
+/**
+ * @param accent el acento de toda la app ([accentColor]).
  * @param font familias de toda la interfaz.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AlisioTheme(accent: Int = 0, font: FontChoice = FontChoice.PAIR, content: @Composable () -> Unit) {
-    val color = AlisioTokens.Accents.getOrElse(accent) { AlisioTokens.Accents.first() }
+fun AlisioTheme(
+    accent: Color = AlisioTokens.Accents.first(),
+    font: FontChoice = FontChoice.PAIR,
+    content: @Composable () -> Unit
+) {
+    val color = accent
     SideEffect { AlisioTokens.useAccent(color) }
     val fonts = remember(font) { fontsFor(font) }
     MaterialTheme(

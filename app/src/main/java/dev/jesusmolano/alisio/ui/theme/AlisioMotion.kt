@@ -1,5 +1,6 @@
 package dev.jesusmolano.alisio.ui.theme
 
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
@@ -10,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -52,4 +54,11 @@ object AlisioMotion {
 
     /** Salida de cualquier pantalla: solo se desvanece. */
     fun screenExit(): ExitTransition = fadeOut(exit())
+
+    /**
+     * Cambio de página dentro de una pantalla (las subpáginas de los ajustes): lo nuevo sube [rise]
+     * píxeles y aparece con Standard mientras lo viejo se desvanece con Exit.
+     */
+    fun pageChange(rise: Int): ContentTransform =
+        (fadeIn(standard()) + slideInVertically(standard()) { rise }) togetherWith fadeOut(exit())
 }

@@ -9,6 +9,10 @@
     <string name="trace_open_zones">Abrir Zonas</string>
     <string name="trace_hint_slide">Suelta sobre una app</string>
     <string name="trace_hint_cancel">Suelta para cancelar</string>
+    <string name="settings_trace">Índice de letras</string>
+    <string name="settings_trace_always">Siempre</string>
+    <string name="settings_trace_edge">Al tocar</string>
+    <string name="settings_trace_never">Nunca</string>
     <string name="app_launch_failed">No se ha podido abrir %1$s</string>
 
     <string name="undo">Deshacer</string>
@@ -112,6 +116,8 @@
     <string name="settings_home_role">Aplicación de inicio</string>
     <string name="settings_home_role_hint">Hace falta para los accesos directos y para que el botón de inicio traiga aquí</string>
     <string name="settings_home_role_on">Alisio es la app de inicio</string>
+    <string name="home_role_lost">Alisio ya no es la app de inicio</string>
+    <string name="home_role_back">Volver a ser el inicio</string>
 
     <string name="dock_unread">%1$s, notificaciones sin leer</string>
     <string name="player_open">Abrir %1$s</string>
@@ -135,10 +141,27 @@
     <string name="settings_preview">Vista previa del Inicio</string>
     <string name="settings_preview_track">Canción de ejemplo</string>
     <string name="settings_preview_artist">Artista</string>
+    <string name="settings_preview_live_title">Temporizador</string>
+    <string name="settings_preview_live_app">Reloj</string>
     <string name="settings_home">Inicio</string>
     <string name="settings_permissions">Permisos</string>
     <string name="settings_granted">Concedido</string>
-    <string name="settings_summary_home_none">Solo el reloj y el dock</string>
+    <string name="settings_summary_no_dock">Sin dock</string>
+    <plurals name="settings_summary_dock">
+        <item quantity="one">%1$d hueco</item>
+        <item quantity="many">%1$d huecos</item>
+        <item quantity="other">%1$d huecos</item>
+    </plurals>
+    <plurals name="settings_summary_custom_icons">
+        <item quantity="one">%1$d icono propio</item>
+        <item quantity="many">%1$d iconos propios</item>
+        <item quantity="other">%1$d iconos propios</item>
+    </plurals>
+    <string name="settings_summary_pinch">Pellizcar</string>
+    <string name="settings_summary_double_tap">Dos toques</string>
+    <string name="settings_summary_gestures_none">Sin gestos de más</string>
+    <string name="settings_summary_needed_granted">Lo que usas, permitido</string>
+    <string name="settings_icon_style">Estilo</string>
     <string name="settings_summary_no_islands">Sin islas propias</string>
     <plurals name="settings_summary_islands">
         <item quantity="one">%1$d isla propia</item>
@@ -300,4 +323,286 @@
     <string name="settings_pause_apps">Apps con pausa</string>
     <string name="settings_pause_duration">Duración</string>
     <string name="settings_pause_preview">Ver la pausa</string>
+
+    <!-- La línea bajo la hora del Inicio. -->
+    <string name="glance_alarm_spoken">Alarma a las %1$s</string>
+    <string name="glance_alarm_action">Abrir la alarma</string>
+    <string name="glance_sample_event">Dentista</string>
+    <string name="glance_event_untitled">Evento sin título</string>
+    <string name="glance_event_spoken">%1$s a las %2$s</string>
+    <string name="glance_event_action">Abrir el evento</string>
+    <string name="glance_weather_range">Máxima %1$d°, mínima %2$d°.</string>
+    <string name="glance_weather_spoken">Temperatura %1$d°, %2$s. %3$s</string>
+    <string name="glance_weather_query">tiempo %1$s</string>
+    <string name="glance_weather_action">Ver el tiempo</string>
+    <string name="glance_battery">%1$d %%</string>
+    <string name="glance_battery_spoken">Batería al %1$s</string>
+    <string name="glance_battery_charging_spoken">Batería al %1$s, cargando</string>
+    <string name="glance_battery_action">Ver el uso de la batería</string>
+    <string name="glance_sunset">Puesta %1$s</string>
+    <string name="glance_sunrise">Salida %1$s</string>
+    <string name="glance_screen_spoken">%1$s de uso del teléfono hoy</string>
+    <string name="glance_screen_action">Abrir Bienestar digital</string>
+    <string name="weather_clear">despejado</string>
+    <string name="weather_partly">nubes y claros</string>
+    <string name="weather_cloudy">cubierto</string>
+    <string name="weather_fog">niebla</string>
+    <string name="weather_drizzle">llovizna</string>
+    <string name="weather_rain">lluvia</string>
+    <string name="weather_snow">nieve</string>
+    <string name="weather_storm">tormenta</string>
+
+    <!-- Ajustes › Inicio: hora, línea bajo la hora y huecos del dock. -->
+    <string name="settings_clock">Hora</string>
+    <string name="settings_clock_size">Tamaño</string>
+    <string name="settings_clock_small">Pequeña</string>
+    <string name="settings_clock_medium">Mediana</string>
+    <string name="settings_clock_large">Grande</string>
+    <string name="settings_clock_format">Formato</string>
+    <string name="settings_clock_system">Del sistema</string>
+    <string name="settings_glance">Junto a la hora</string>
+    <string name="settings_glance_alarm">Próxima alarma</string>
+    <string name="settings_glance_event">Próximo evento</string>
+    <string name="settings_glance_weather">Tiempo</string>
+    <string name="settings_glance_battery">Batería</string>
+    <string name="settings_glance_sun">Salida y puesta del sol</string>
+    <string name="settings_glance_screen">Uso del teléfono hoy</string>
+    <string name="settings_glance_raise">Subir %1$s</string>
+    <string name="settings_glance_alarm_none">Sin alarma en las próximas 12 horas</string>
+    <string name="settings_glance_event_none">Sin eventos en las próximas 12 horas</string>
+    <string name="settings_glance_waiting">Aún no hay nada que enseñar</string>
+    <string name="settings_glance_weather_hint">Usa internet y solo envía el sitio aproximado</string>
+    <string name="settings_glance_battery_hidden">%1$s ahora · sale cuando importa</string>
+    <string name="settings_needs_calendar">Falta el permiso del calendario</string>
+    <string name="settings_needs_location">Falta la ubicación aproximada</string>
+    <string name="settings_needs_usage">Falta el acceso a uso</string>
+    <string name="settings_battery_always">Siempre</string>
+    <string name="settings_battery_low">Bajo 30 %</string>
+    <string name="settings_battery_charging">Cargando</string>
+    <string name="settings_weather_place">Lugar</string>
+    <string name="settings_weather_location">Ubicación aproximada</string>
+    <string name="settings_weather_open">Al tocar</string>
+    <string name="settings_weather_web">Buscar en la web</string>
+    <string name="settings_weather_place_title">Lugar del tiempo</string>
+    <string name="settings_weather_search">Busca una ciudad</string>
+    <string name="settings_weather_offline">Sin conexión: ahora no se puede buscar</string>
+    <string name="settings_weather_no_results">Ningún sitio con ese nombre</string>
+    <string name="settings_weather_app_title">App del tiempo</string>
+    <string name="settings_dock_none">Sin dock</string>
+    <plurals name="settings_dock_slots">
+        <item quantity="one">%1$d hueco</item>
+        <item quantity="many">%1$d huecos</item>
+        <item quantity="other">%1$d huecos</item>
+    </plurals>
+    <string name="settings_dock_slots_note">Los huecos que quitas guardan su app y vuelven al ampliar el dock.</string>
+    <string name="settings_calendar">Calendario</string>
+    <string name="settings_calendar_hint">Para ver tu próximo evento junto a la hora</string>
+    <string name="settings_calendar_on">Tu próximo evento sale junto a la hora</string>
+    <string name="settings_location">Ubicación aproximada</string>
+    <string name="settings_location_hint">Para el tiempo, el sol y el color del día sin una ciudad fijada. Nunca la precisa</string>
+    <string name="settings_location_on">El tiempo y el sol siguen dónde estás, a 1 km más o menos</string>
+
+    <!-- Fase 7: acento propio, iconos y nombres de las apps, apps ocultas. -->
+    <string name="accent_custom">Color propio</string>
+    <string name="accent_illegible">El texto oscuro apenas se lee sobre este color.</string>
+    <string name="accent_make_legible">Hacerlo legible</string>
+    <string name="accent_hue">Tono</string>
+    <string name="accent_saturation">Saturación</string>
+    <string name="accent_brightness">Brillo</string>
+    <string name="accent_degrees">%1$d°</string>
+    <string name="accent_percent">%1$d %%</string>
+    <string name="accent_sample">Abrir</string>
+    <string name="accent_sample_chip">Elegida</string>
+    <string name="accent_sample_switch">Encendido</string>
+    <string name="accent_code">%1$s · contraste %2$.1f:1</string>
+    <string name="accent_from_wallpaper">Del fondo de pantalla</string>
+    <string name="accent_proposal">Color del fondo %1$s</string>
+    <string name="appmenu_look">Personalizar</string>
+    <string name="icon_title">Icono</string>
+    <string name="icon_source_original">El suyo</string>
+    <string name="icon_source_pack">De un paquete de iconos</string>
+    <string name="icon_source_image">Imagen propia</string>
+    <string name="icon_original">Original</string>
+    <string name="icon_image">Imagen</string>
+    <string name="icon_no_packs">Instala un paquete de iconos para elegir cualquiera de sus dibujos.</string>
+    <string name="icon_any">Todos los de un paquete</string>
+    <string name="icon_search">Buscar iconos</string>
+    <string name="icon_image_failed">No se ha podido leer esa imagen</string>
+    <string name="name_title">Nombre</string>
+    <string name="name_original">Nombre original: %1$s</string>
+    <string name="name_search_hint">Al buscar «%1$s» también sale.</string>
+    <string name="name_save">Guardar el nombre</string>
+    <string name="name_restore">Volver a su nombre</string>
+    <string name="hide_title">Ocultar la app</string>
+    <string name="hide_hint">No sale en Zonas, el índice de letras ni Recientes. Se encuentra buscando su nombre entero.</string>
+    <string name="search_app_hidden">Oculta</string>
+    <string name="undo_icon_changed">Icono de %1$s cambiado</string>
+    <string name="undo_renamed">Ahora se llama %1$s</string>
+    <string name="undo_hidden">%1$s, oculta</string>
+    <string name="undo_shown">%1$s vuelve a verse</string>
+    <string name="undo_stack_image">Imagen de la pila cambiada</string>
+    <string name="settings_app_icons">Iconos de apps</string>
+    <string name="settings_app_icon_pick">Cambiar el icono de una app</string>
+    <string name="settings_hidden_apps">Apps ocultas</string>
+    <string name="settings_hidden_show">Mostrar</string>
+    <string name="settings_hidden_pick">Ocultar apps</string>
+
+    <!-- Fijar desde cualquier app (docs/IDEAS.md §2.3). -->
+    <string name="pin_title">Fijar «%1$s»</string>
+    <string name="pin_where">Dónde</string>
+    <string name="pin_to_search">En la barra</string>
+    <string name="pin_to_search_hint">Sale al buscar su nombre</string>
+    <string name="pin_to_stack">En la pila %1$s</string>
+    <string name="pin_no_stacks">Con una pila en el dock, también se puede poner en ella.</string>
+    <string name="pin_confirm">Fijar</string>
+    <string name="pin_done_search">Fijado: búscalo en la barra</string>
+    <string name="pin_done_stack">Fijado en %1$s</string>
+    <string name="pin_failed">La app ya no deja fijarlo</string>
+    <string name="stack_pinned_title">Accesos fijados</string>
+
+    <!-- La pausa que cuenta (docs/IDEAS.md §2.4). -->
+    <string name="pause_today_time">%1$d.ª vez hoy</string>
+    <string name="settings_pause_stats">Bajo el título</string>
+    <string name="settings_pause_stats_off">Solo la pausa</string>
+    <string name="settings_pause_stats_on">Con el uso de hoy</string>
+
+    <!-- Olvidar en el sitio (docs/IDEAS.md §2.6). -->
+    <string name="learned_forget">Olvidar</string>
+    <string name="undo_channel_forgotten">Olvidado el canal de siempre con %1$s</string>
+    <string name="now_why">Por qué sale</string>
+    <string name="now_why_habit">La abres hacia esta hora %1$d de los últimos %2$d días como hoy.</string>
+    <plurals name="now_why_bluetooth">
+        <item quantity="one">La has abierto %2$d vez al conectar «%1$s».</item>
+        <item quantity="many">La has abierto %2$d veces al conectar «%1$s».</item>
+        <item quantity="other">La has abierto %2$d veces al conectar «%1$s».</item>
+    </plurals>
+    <string name="now_forget_habit">Olvidar esta costumbre</string>
+    <string name="now_forget_bluetooth">Olvidar lo de este dispositivo</string>
+    <string name="now_forget_hint">No borra nada: se vuelve a aprender si la repites.</string>
+    <string name="undo_now_forgotten">Olvidada la costumbre de %1$s</string>
+
+    <!-- Ahora en vivo (docs/IDEAS.md §2.7). -->
+    <string name="now_live_reason">En curso · %1$s</string>
+    <plurals name="now_live_left">
+        <item quantity="one">queda %d min</item>
+        <item quantity="many">quedan %d min</item>
+        <item quantity="other">quedan %d min</item>
+    </plurals>
+    <string name="settings_live_now">En curso</string>
+    <string name="settings_live_now_hint">Un viaje o un temporizador en el sitio de la sugerencia. En prueba.</string>
+
+    <!-- El Inicio respeta al sistema (docs/IDEAS.md §2.8). -->
+    <string name="app_suspended">En pausa por Bienestar digital</string>
+
+    <!-- Alisio en un archivo (docs/IDEAS.md, A16). -->
+    <string name="backup_title">Copia de la configuración</string>
+    <string name="backup_save">Guardar en un archivo</string>
+    <string name="backup_load">Cargar de un archivo</string>
+    <string name="backup_load_hint">Sustituye la configuración de ahora. Se puede deshacer.</string>
+    <string name="backup_saved">Configuración guardada</string>
+    <string name="backup_save_failed">No se ha podido guardar el archivo</string>
+    <string name="backup_load_failed">Ese archivo no es una copia de Alisio</string>
+    <string name="backup_loaded">Configuración cargada</string>
+    <plurals name="backup_missing_title">
+        <item quantity="one">Falta %d app</item>
+        <item quantity="many">Faltan %d apps</item>
+        <item quantity="other">Faltan %d apps</item>
+    </plurals>
+    <string name="backup_missing_hint">Lo suyo queda guardado y vuelve a su sitio al instalar.</string>
+    <string name="backup_install">Instalar</string>
+    <string name="backup_undo_load">Deshacer la carga</string>
+    <string name="appmenu_unpin">Quitar %1$s de fijados</string>
+    <string name="undo_unpinned">%1$s, quitado de fijados</string>
+    <string name="backup_no_picker">No hay selector de archivos en este teléfono</string>
+
+    <!-- Notas en el Inicio -->
+    <string name="note_share_label">Nota en el Inicio</string>
+    <string name="note_shared">Guardado como nota en el Inicio</string>
+    <string name="note_shared_empty">No hay nada que guardar como nota</string>
+    <string name="note_saved">Nota guardada</string>
+    <string name="note_add">Guardar como nota en el Inicio</string>
+    <string name="note_strike">Tachar</string>
+    <string name="note_open_link">Abrir el enlace</string>
+    <string name="note_more">+%1$d</string>
+    <string name="note_show_all">Ver todas las notas</string>
+    <string name="undo_note_struck">Nota tachada</string>
+    <string name="settings_notes">Notas en el Inicio</string>
+    <string name="settings_notes_hint">Escribe «+ algo» en la barra o comparte un texto con Alisio</string>
+    <string name="settings_preview_note">Comprar pan</string>
+
+    <!-- Órdenes del teléfono -->
+    <string name="phone_failed">No se ha podido: %1$s</string>
+    <string name="phone_torch">Linterna</string>
+    <string name="phone_torch_on">Encender la linterna</string>
+    <string name="phone_torch_off">Apagar la linterna</string>
+    <string name="phone_torch_done_on">Linterna encendida</string>
+    <string name="phone_torch_done_off">Linterna apagada</string>
+    <string name="phone_wifi">Wi‑Fi</string>
+    <string name="phone_bluetooth">Bluetooth</string>
+    <string name="phone_mobile_data">Datos móviles</string>
+    <string name="phone_location">Ubicación</string>
+    <string name="phone_airplane">Modo avión</string>
+    <string name="phone_opens_panel">Abre su panel del sistema</string>
+    <string name="phone_dnd">No molestar</string>
+    <string name="phone_dnd_on">Activar No molestar</string>
+    <string name="phone_dnd_off">Desactivar No molestar</string>
+    <string name="phone_dnd_done_on">No molestar activado</string>
+    <string name="phone_dnd_done_off">No molestar desactivado</string>
+    <string name="phone_brightness">Brillo</string>
+    <string name="phone_brightness_to">Brillo al %1$d %%</string>
+    <string name="phone_opens_display">Abre los ajustes de pantalla</string>
+    <string name="phone_rotation">Giro automático</string>
+    <string name="phone_rotation_on">Activar el giro automático</string>
+    <string name="phone_rotation_off">Desactivar el giro automático</string>
+    <string name="phone_rotation_done_on">Giro automático activado</string>
+    <string name="phone_rotation_done_off">Giro automático desactivado</string>
+    <string name="settings_section_commands">Órdenes</string>
+    <string name="settings_phone_commands">Órdenes del teléfono</string>
+    <string name="settings_phone_commands_hint">Linterna, wifi, brillo, no molestar y más</string>
+    <string name="settings_write_settings">Cambiar ajustes del sistema</string>
+    <string name="settings_write_settings_hint">Para «brillo 40» y «rotación» en la barra</string>
+    <string name="settings_write_settings_on">La barra cambia el brillo y el giro</string>
+    <string name="settings_dnd_access">No molestar</string>
+    <string name="settings_dnd_access_hint">Para «no molestar» en la barra</string>
+    <string name="settings_dnd_access_on">La barra activa y desactiva No molestar</string>
+
+    <!-- Dibujar la inicial -->
+    <string name="draw_nothing">Nada empieza por %1$s</string>
+    <string name="settings_draw_initial">Dibujar la inicial</string>
+    <string name="settings_draw_initial_hint">Dibuja una letra en una zona vacía para abrir la app o la persona que más usas</string>
+
+    <!-- Iconos vivos -->
+    <string name="settings_live_icons">Iconos vivos</string>
+    <string name="settings_live_icons_on">Vivos</string>
+    <string name="settings_live_icons_off">Como son</string>
+
+    <!-- Color del día -->
+    <string name="settings_day_accent">Color del día</string>
+    <string name="settings_day_accent_hint">El acento pasa con el sol al tono de la noche y vuelve</string>
+    <string name="settings_day_accent_night">Tono de la noche</string>
+    <string name="settings_day_accent_sun">Sale a las %1$s · se pone a las %2$s</string>
+
+    <!-- Fondos que rotan -->
+    <string name="settings_wallpaper_rotation">Fondos que rotan</string>
+    <string name="settings_wallpaper_folder">Carpeta</string>
+    <string name="settings_wallpaper_folder_none">Sin elegir</string>
+    <string name="settings_wallpaper_rotate">Cambiar cada día</string>
+    <string name="settings_wallpaper_empty">Esta carpeta no tiene imágenes</string>
+    <string name="settings_wallpaper_today">Hoy</string>
+    <string name="settings_wallpaper_tomorrow">Mañana</string>
+    <string name="settings_wallpaper_after">Después</string>
+    <string name="settings_wallpaper_next">Pasar al siguiente</string>
+    <string name="settings_choose">Elegir</string>
+
+    <!-- Personas favoritas -->
+    <string name="settings_favorites">Personas sobre el dock</string>
+    <string name="settings_favorites_pick">Personas favoritas</string>
+    <string name="picker_search_people">Buscar personas</string>
+    <string name="settings_section_notes">Notas</string>
+    <string name="settings_favorites_count">%1$d de %2$d</string>
+    <string name="settings_favorite_remove">Quitar a %1$s</string>
+    <string name="settings_needs_contacts">Falta el acceso a los contactos</string>
+    <string name="undo_favorite_removed">Quitada de encima del dock</string>
+    <string name="favorite_open">Contactar</string>
+    <string name="favorite_channels">Ver sus canales</string>
 </resources>

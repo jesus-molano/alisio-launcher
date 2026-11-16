@@ -22,7 +22,7 @@ class NowFeedbackRepository(
             .map { rows ->
                 rows.mapNotNull { row ->
                     // Una regla que ya no exista (versión anterior) se ignora en vez de romper la lectura.
-                    val rule = NowRule.entries.firstOrNull { it.name == row.rule } ?: return@mapNotNull null
+                    val rule = NowRule.parse(row.rule) ?: return@mapNotNull null
                     (rule to row.key) to NowFeedback(row.dismissals, row.lastDismissedAt)
                 }.toMap()
             }
@@ -34,13 +34,13 @@ class NowFeedbackRepository(
      */
     fun dismiss(rule: NowRule, key: String): () -> Unit {
         val before = feedback.value[rule to key]
-        scope.launch { dao.addDismissal(rule.name, key, clock.now()) }
+        scope.launch { dao.addDismissal(rule.id, key, clock.now()) }
         return {
             scope.launch {
                 if (before == null) {
-                    dao.forget(rule.name, key)
+                    dao.forget(rule.id, key)
                 } else {
-                    dao.restore(rule.name, key, before.dismissals, before.lastDismissedAt)
+                    dao.restore(rule.id, key, before.dismissals, before.lastDismissedAt)
                 }
             }
         }
@@ -52,6 +52,6 @@ class NowFeedbackRepository(
      */
     fun restore(key: String) {
         val rules = feedback.value.keys.filter { it.second == key }.map { it.first }
-        scope.launch { rules.forEach { dao.forget(it.name, key) } }
+        scope.launch { rules.forEach { dao.forget(it.id, key) } }
     }
 }

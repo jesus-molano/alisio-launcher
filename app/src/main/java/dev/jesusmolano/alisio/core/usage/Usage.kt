@@ -57,6 +57,52 @@ fun foregroundMillis(events: List<ForegroundEvent>, from: Long, until: Long): Lo
 }
 
 /**
+ * Cuántas veces ha entrado la app en primer plano según sus eventos de actividad: cada vez que pasa de
+ * no tener ninguna actividad reanudada a tener una. Si lo primero que se ve es una pausa, ya estaba
+ * abierta al empezar el tramo y eso cuenta como una entrada. Pasar de una actividad suya a otra deja
+ * un instante sin ninguna reanudada; volver antes de [mergeMillis] no cuenta como otra entrada.
+ */
+fun foregroundEntries(events: List<ForegroundEvent>, mergeMillis: Long = ENTRY_MERGE_MILLIS): Int {
+    val resumed = HashSet<String>()
+    var entries = 0
+    var leftAt = Long.MIN_VALUE
+    var sawActivityChange = false
+    for (event in events.sortedBy { it.at }) {
+        when (event.change) {
+            ForegroundChange.RESUMED -> {
+                if (resumed.isEmpty() && (leftAt == Long.MIN_VALUE || event.at - leftAt > mergeMillis)) entries++
+                resumed += event.activity
+            }
+
+            ForegroundChange.PAUSED, ForegroundChange.STOPPED -> {
+                if (!sawActivityChange && event.change == ForegroundChange.PAUSED) entries++
+                if (resumed.remove(event.activity) && resumed.isEmpty()) leftAt = event.at
+                if (!sawActivityChange && resumed.isEmpty()) leftAt = event.at
+            }
+        }
+        sawActivityChange = true
+    }
+    return entries
+}
+
+private const val ENTRY_MERGE_MILLIS = 2_000L
+
+/**
+ * Uso del teléfono entre [from] y [until]: la suma de lo que cada app ha estado en primer plano,
+ * contada con [foregroundMillis]. Las apps de [excluded] no cuentan: estar en el Inicio no es «usar
+ * el teléfono», como tampoco lo cuenta Bienestar digital.
+ */
+fun screenMillis(
+    eventsByPackage: Map<String, List<ForegroundEvent>>,
+    from: Long,
+    until: Long,
+    excluded: Set<String>
+): Long = eventsByPackage
+    .filterKeys { it !in excluded }
+    .values
+    .sumOf { foregroundMillis(it, from, until) }
+
+/**
  * Un tiempo de uso partido en lo que se enseña: horas y minutos enteros. El texto lo pone la
  * interfaz con sus recursos.
  *

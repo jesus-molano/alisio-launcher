@@ -32,6 +32,7 @@ import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.ui.components.Avatar
 import dev.jesusmolano.alisio.ui.components.PrimaryButton
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
+import dev.jesusmolano.alisio.ui.components.TextAction
 import dev.jesusmolano.alisio.ui.components.TonalButton
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
@@ -67,6 +68,7 @@ fun rememberContactPhoto(person: Person, photos: ContactPhotos?): Bitmap? {
  *
  * @param channels en orden de uso; el primero es el principal.
  * @param learned el canal principal sale del historial: la tarjeta lo dice.
+ * @param onForget olvida el canal aprendido; solo se ofrece cuando [learned].
  * @param onBack vuelve a los resultados sin contactar.
  * @param onOpenContact abre su ficha en la app de Contactos.
  * @param photo su foto para el avatar; sin ella van las iniciales.
@@ -77,6 +79,7 @@ fun PersonCard(
     name: String,
     channels: List<Channel>,
     learned: Boolean,
+    onForget: () -> Unit,
     onContact: (Channel) -> Unit,
     onBack: () -> Unit,
     onOpenContact: () -> Unit,
@@ -105,11 +108,16 @@ fun PersonCard(
                     modifier = Modifier.semantics { heading() }
                 )
                 if (learned && main != null) {
-                    Text(
-                        text = stringResource(R.string.person_reason, stringResource(channelLabel(main))),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AlisioTokens.TextSecondary
-                    )
+                    // Lo aprendido se corrige donde se ve (docs/IDEAS.md §2.6): «Olvidar» va junto al motivo.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.person_reason, stringResource(channelLabel(main))),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AlisioTokens.TextSecondary,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        TextAction(stringResource(R.string.learned_forget), onClick = onForget, secondary = true)
+                    }
                 }
             }
             RoundIconButton(

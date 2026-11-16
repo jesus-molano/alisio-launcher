@@ -1,6 +1,5 @@
 package dev.jesusmolano.alisio.feature.zones
 
-import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -77,6 +76,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.trace.TraceRail
 import dev.jesusmolano.alisio.core.zones.AssignmentChange
 import dev.jesusmolano.alisio.core.zones.Pinch
 import dev.jesusmolano.alisio.core.zones.ZoneId
@@ -88,9 +88,9 @@ import dev.jesusmolano.alisio.data.apps.toSections
 import dev.jesusmolano.alisio.data.settings.Prefs
 import dev.jesusmolano.alisio.feature.appmenu.AppMenuSheet
 import dev.jesusmolano.alisio.feature.appmenu.AppUsage
+import dev.jesusmolano.alisio.feature.home.RestMinPitch
 import dev.jesusmolano.alisio.feature.home.Trace
 import dev.jesusmolano.alisio.feature.home.TraceRailWidth
-import dev.jesusmolano.alisio.feature.home.traceRailHeight
 import dev.jesusmolano.alisio.ui.components.AppIcon
 import dev.jesusmolano.alisio.ui.components.IconLabel
 import dev.jesusmolano.alisio.ui.components.LocalUndo
@@ -98,6 +98,7 @@ import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.onPinch
 import dev.jesusmolano.alisio.ui.components.selectedTile
 import dev.jesusmolano.alisio.ui.components.selectedTileSegment
+import dev.jesusmolano.alisio.ui.theme.AlisioHaptics
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import dev.jesusmolano.alisio.ui.theme.onWallpaper
 import kotlin.math.roundToInt
@@ -109,7 +110,10 @@ private val RestRailGap = TraceRailWidth - StartMargin
 
 // El índice no sube más allá de la cabecera de Zonas ni baja hasta el borde de la pantalla.
 private val RailMinTop = 104.dp
-private val RailEdgeGap = 24.dp
+
+// Abajo deja sitio para que, al tocar las últimas letras, se abran hacia abajo sin pisar la zona
+// del gesto de inicio del sistema.
+private val RailEdgeGap = 72.dp
 
 // Claves de Resto en la lista: de ellas sale si Resto está a la vista y dónde empieza.
 private const val REST_TITLE_KEY = "rest-title"
@@ -274,7 +278,7 @@ fun ZonesScreen(
                     if (released != null) return@awaitEachGesture
                     val current = state ?: return@awaitEachGesture
                     val picked = DragState(cell.app, cell.zone, current.defaultZone(cell.app), down.position)
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    AlisioHaptics.dragStart(view)
                     drag = picked
                     var dropped = false
                     try {
@@ -297,7 +301,7 @@ fun ZonesScreen(
                             if (over != picked.over) {
                                 picked.over = over
                                 if (over != null && picked.accepts(over)) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    AlisioHaptics.step(view)
                                 }
                             }
                         }
@@ -305,9 +309,12 @@ fun ZonesScreen(
                             val target = picked.over
                             when {
                                 target != null && picked.accepts(target) -> {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    AlisioHaptics.done(view)
                                     viewModel.move(picked.app, target)
                                 }
+
+                                // Soltada sobre una isla que no la admite: no se mueve, y se nota.
+                                target != null && target != picked.from -> AlisioHaptics.limit(view)
 
                                 !picked.moved -> openMenu(picked.app)
                             }
@@ -414,11 +421,10 @@ fun ZonesScreen(
             }
         }
 
-        // El índice es de Resto: solo sale con Resto a la vista y empieza a su altura, para no quedar
-        // junto a islas que no indexa. Si Resto asoma muy abajo, sube lo justo para no aplastar las letras.
+        // El índice es de Resto: solo sale con Resto a la vista y no sube de su altura, para no quedar
+        // junto a islas que no indexa.
         val railBottom = bars.calculateBottomPadding() + RailEdgeGap
         val railMinTop = bars.calculateTopPadding() + RailMinTop
-        val railMaxTop = (maxHeight - railBottom - traceRailHeight(restSections.size)).coerceAtLeast(railMinTop)
         val restTop by remember(listState) {
             derivedStateOf {
                 val info = listState.layoutInfo
@@ -432,11 +438,20 @@ fun ZonesScreen(
             }
         }
         // Con una app cogida el índice se retira: el borde derecho es entonces sitio para soltar.
-        val railTop = restTop?.let { (bars.calculateTopPadding() + it).coerceIn(railMinTop, railMaxTop) }
+        // Si Resto aún asoma tan abajo que sus letras no caben a su altura, el índice espera a que se
+        // desplace: subirlo lo dejaba encima de las islas de arriba, que no indexa.
+        val railTop =
+            restTop
+                ?.let { (bars.calculateTopPadding() + it).coerceAtLeast(railMinTop) }
+                ?.takeIf { maxHeight - railBottom - it >= RestMinPitch * restSections.size }
         if (dragging == null && railTop != null) {
             Trace(
                 sections = restSections,
-                railPadding = PaddingValues(top = railTop, bottom = railBottom),
+                // La preferencia es del Inicio: aquí el índice es la forma de recorrer Resto y se ve siempre.
+                mode = TraceRail.ALWAYS,
+                railTop = railTop,
+                railBottom = railBottom,
+                railTopLimit = railTop,
                 onLaunch = ::launch,
                 onTracing = { tracing = it }
             )

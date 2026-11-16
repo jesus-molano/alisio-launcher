@@ -39,6 +39,8 @@ private const val PINNED_LABEL_KEY = "picker:pinned-label"
  * @param multiple se pueden marcar varios.
  * @param pinned grupo fijo encima de la lista, separado de ella por la etiqueta «Apps» (por ejemplo
  *   «Crear una pila» o «Que elija el sistema»). Se retira al escribir: entonces solo se ve lo que se busca.
+ * @param avatar los elementos son personas: van con su avatar ([icon] es su foto, si la hay) en
+ *   vez del dibujo de buscar. Es el selector de personas.
  */
 @Composable
 fun <T> AppPicker(
@@ -50,6 +52,7 @@ fun <T> AppPicker(
     onPick: (T) -> Unit,
     modifier: Modifier = Modifier,
     multiple: Boolean = false,
+    avatar: Boolean = false,
     searchHint: String = stringResource(R.string.picker_search),
     pinned: (@Composable ColumnScope.() -> Unit)? = null
 ) {
@@ -66,7 +69,8 @@ fun <T> AppPicker(
                 ItemRow(
                     title = AnnotatedString(label(item)),
                     icon = icon(item),
-                    leadingIcon = R.drawable.ic_search.takeIf { icon(item) == null },
+                    avatarName = label(item).takeIf { avatar },
+                    leadingIcon = R.drawable.ic_search.takeIf { icon(item) == null && !avatar },
                     selected = chosen(item),
                     multiple = multiple,
                     onClick = { onPick(item) }
@@ -105,6 +109,8 @@ fun <T> AppPickerSheet(
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
     multiple: Boolean = false,
+    avatar: Boolean = false,
+    searchHint: String = stringResource(R.string.picker_search),
     pinned: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     AlisioSheet(onDismiss = onDismiss) {
@@ -118,6 +124,8 @@ fun <T> AppPickerSheet(
             onPick = onPick,
             modifier = Modifier.weight(1f),
             multiple = multiple,
+            avatar = avatar,
+            searchHint = searchHint,
             pinned = pinned
         )
     }

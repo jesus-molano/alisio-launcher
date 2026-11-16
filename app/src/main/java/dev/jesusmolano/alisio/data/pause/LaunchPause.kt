@@ -12,10 +12,17 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Una apertura que espera a que pase la pausa.
  *
+ * @param packageName de qué app es: la pausa dice cuánto se ha usado hoy.
  * @param icon el de la app; `null` si no tiene icono de inicio.
  * @param open abre de verdad y apunta la apertura en el historial; devuelve `false` si no ha podido.
  */
-class PendingLaunch(val label: String, val icon: Bitmap?, val seconds: Int, private val open: () -> Boolean) {
+class PendingLaunch(
+    val packageName: String,
+    val label: String,
+    val icon: Bitmap?,
+    val seconds: Int,
+    private val open: () -> Boolean
+) {
     internal fun run(): Boolean = open()
 }
 
@@ -40,7 +47,7 @@ class LaunchPause(private val prefs: StateFlow<Prefs?>) {
         // Sin preferencias leídas aún no se frena nada: no se sabe qué ha elegido el usuario.
         val current = prefs.value ?: return action()
         val seconds = pauseBeforeOpening(packageName, current.pausedApps, current.pauseSeconds) ?: return action()
-        _pending.value = PendingLaunch(label, icon, seconds, action)
+        _pending.value = PendingLaunch(packageName, label, icon, seconds, action)
         return true
     }
 
@@ -53,7 +60,7 @@ class LaunchPause(private val prefs: StateFlow<Prefs?>) {
 
     /** Enseña la pausa de [app] tal como saldría, sin abrir nada al final: para verla desde los ajustes. */
     fun preview(app: AppEntry, seconds: Int) {
-        _pending.value = PendingLaunch(app.label, app.icon, seconds) { true }
+        _pending.value = PendingLaunch(app.component.packageName, app.label, app.icon, seconds) { true }
     }
 
     /** «Abrir igualmente». Devuelve `false` si la app no se ha podido abrir. */

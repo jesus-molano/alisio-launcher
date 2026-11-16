@@ -10,6 +10,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
@@ -36,12 +37,50 @@ data class DockSlot(
     @ColumnInfo(name = "stack_name") val stackName: String? = null,
     // Cómo se dibuja el icono de la pila (`StackIcon.id`) y su símbolo propio; `null` es el valor por defecto.
     @ColumnInfo(name = "stack_icon") val stackIcon: String? = null,
-    @ColumnInfo(name = "stack_glyph") val stackGlyph: String? = null
+    @ColumnInfo(name = "stack_glyph") val stackGlyph: String? = null,
+    // Nombre del archivo de la imagen elegida para la pila (en `CustomImages`). Se conserva al cambiar
+    // a otro modo, para que volver a «Imagen» no obligue a elegirla otra vez.
+    @ColumnInfo(name = "stack_image") val stackImage: String? = null
 )
+
+/**
+ * Lo que el dueño ha cambiado de una app: su nombre ([label]), su icono ([icon], un `CustomIcon.id`)
+ * y si está oculta. Una app sin nada cambiado no tiene fila.
+ */
+@Entity(tableName = "app_custom")
+data class AppCustom(
+    @PrimaryKey @ColumnInfo(name = "app_key") val appKey: String,
+    val label: String? = null,
+    val icon: String? = null,
+    val hidden: Boolean = false
+) {
+    /** Sin nada que la distinga de la app tal cual: no hace falta guardarla. */
+    val isEmpty: Boolean get() = label == null && icon == null && !hidden
+}
 
 /** App de la pila que ocupa el hueco [slot]. */
 @Entity(tableName = "stack_item", primaryKeys = ["slot", "app_key"])
 data class StackItem(val slot: Int, @ColumnInfo(name = "app_key") val appKey: String, val position: Int)
+
+/**
+ * Algo aprendido que el dueño ha pedido olvidar en el sitio donde se ve (docs/IDEAS.md §2.6): lo
+ * anterior a [since] deja de contar para esa decisión, sin borrar el historial. [kind] es la regla de
+ * Ahora (`NowRule.id`) o [KIND_CHANNEL] para el canal aprendido de una persona; [key], su app o persona.
+ */
+@Entity(tableName = "forgotten", primaryKeys = ["kind", "key"])
+data class Forgotten(val kind: String, val key: String, val since: Long) {
+    companion object {
+        const val KIND_CHANNEL = "channel"
+    }
+}
+
+/** Una nota del Inicio: sale bajo la hora hasta que se tacha. [text] puede llevar un enlace. */
+@Entity(tableName = "home_note")
+data class HomeNote(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long
+)
 
 /** Cuántas veces se ha descartado una sugerencia de Ahora (regla y app) y cuándo fue la última. */
 @Entity(tableName = "suggestion_feedback", primaryKeys = ["rule", "key"])
@@ -125,6 +164,185 @@ val MIGRATION_5_6 =
             )
         }
     }
+
+/**
+ * De la 6 a la 7: el nombre, el icono y la ocultación de cada app, y la imagen de una pila. Las
+ * columnas y la tabla nacen vacías: nada de lo ya guardado cambia.
+ */
+val MIGRATION_6_7 =
+    object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE dock_slot ADD COLUMN stack_image TEXT")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `app_custom` (" +
+                    "`app_key` TEXT NOT NULL, `label` TEXT, `icon` TEXT, `hidden` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`app_key`))"
+            )
+        }
+    }
+
+/**
+ * De la 7 a la 8: lo olvidado a mano, y las reglas de Ahora pasan a guardarse por su id estable en
+ * vez del nombre de la entrada del enum. Los descartes ya guardados se traducen, no se pierden.
+ */
+val MIGRATION_7_8 =
+    object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `forgotten` (" +
+                    "`kind` TEXT NOT NULL, `key` TEXT NOT NULL, `since` INTEGER NOT NULL, PRIMARY KEY(`kind`, `key`))"
+            )
+            db.execSQL("UPDATE suggestion_feedback SET rule = 'new-version' WHERE rule = 'NEW_VERSION'")
+            db.execSQL("UPDATE suggestion_feedback SET rule = 'bluetooth' WHERE rule = 'BLUETOOTH'")
+            db.execSQL("UPDATE suggestion_feedback SET rule = 'habit' WHERE rule = 'HABIT'")
+        }
+    }
+
+/** De la 8 a la 9: las notas del Inicio. La tabla nace vacía: nada de lo ya guardado cambia. */
+val MIGRATION_8_9 =
+    object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `home_note` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL)"
+            )
+        }
+    }
+
+@Dao
+interface HomeNoteDao {
+    @Query("SELECT * FROM home_note ORDER BY created_at DESC, id DESC")
+    fun all(): Flow<List<HomeNote>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(note: HomeNote): Long
+
+    @Query("DELETE FROM home_note WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface ForgottenDao {
+    @Query("SELECT * FROM forgotten")
+    fun all(): Flow<List<Forgotten>>
+
+    @Query("SELECT * FROM forgotten WHERE kind = :kind AND `key` = :key")
+    suspend fun find(kind: String, key: String): Forgotten?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun set(row: Forgotten)
+
+    @Query("DELETE FROM forgotten WHERE kind = :kind AND `key` = :key")
+    suspend fun clear(kind: String, key: String)
+}
+
+/**
+ * Lo que va en la copia de la configuración (docs/IDEAS.md, A16): leerlo todo de una vez y
+ * sustituirlo todo en una sola transacción, para que una copia a medias no deje un dock sin sus pilas.
+ */
+@Dao
+abstract class BackupDao {
+    @Query("SELECT * FROM dock_slot")
+    abstract suspend fun slots(): List<DockSlot>
+
+    @Query("SELECT * FROM stack_item")
+    abstract suspend fun stackItems(): List<StackItem>
+
+    @Query("SELECT * FROM icon_gesture")
+    abstract suspend fun gestures(): List<IconGesture>
+
+    @Query("SELECT * FROM zone")
+    abstract suspend fun zones(): List<ZoneRow>
+
+    @Query("SELECT * FROM zone_assignment")
+    abstract suspend fun assignments(): List<ZoneAssignment>
+
+    @Query("SELECT * FROM app_custom")
+    abstract suspend fun custom(): List<AppCustom>
+
+    @Query("DELETE FROM dock_slot")
+    protected abstract suspend fun clearSlots()
+
+    @Query("DELETE FROM stack_item")
+    protected abstract suspend fun clearStackItems()
+
+    @Query("DELETE FROM icon_gesture")
+    protected abstract suspend fun clearGestures()
+
+    @Query("DELETE FROM zone")
+    protected abstract suspend fun clearZones()
+
+    @Query("DELETE FROM zone_assignment")
+    protected abstract suspend fun clearAssignments()
+
+    @Query("DELETE FROM app_custom")
+    protected abstract suspend fun clearCustom()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertSlots(rows: List<DockSlot>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertStackItems(rows: List<StackItem>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertGestures(rows: List<IconGesture>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertZones(rows: List<ZoneRow>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertAssignments(rows: List<ZoneAssignment>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertCustom(rows: List<AppCustom>)
+
+    /** Sustituye toda la configuración. El historial, los descartes y lo olvidado no se tocan. */
+    @Transaction
+    open suspend fun replaceAll(
+        slots: List<DockSlot>,
+        stackItems: List<StackItem>,
+        gestures: List<IconGesture>,
+        zones: List<ZoneRow>,
+        assignments: List<ZoneAssignment>,
+        custom: List<AppCustom>
+    ) {
+        clearSlots()
+        clearStackItems()
+        clearGestures()
+        clearZones()
+        clearAssignments()
+        clearCustom()
+        insertSlots(slots)
+        insertStackItems(stackItems)
+        insertGestures(gestures)
+        insertZones(zones)
+        insertAssignments(assignments)
+        insertCustom(custom)
+    }
+}
+
+@Dao
+interface AppCustomDao {
+    @Query("SELECT * FROM app_custom")
+    fun all(): Flow<List<AppCustom>>
+
+    @Query("SELECT * FROM app_custom WHERE app_key = :appKey")
+    suspend fun find(appKey: String): AppCustom?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun set(custom: AppCustom)
+
+    @Query("DELETE FROM app_custom WHERE app_key = :appKey")
+    suspend fun clear(appKey: String)
+
+    /** Las imágenes que aún usa alguna app o pila: las demás se pueden borrar del disco. */
+    @Query(
+        "SELECT icon FROM app_custom WHERE icon IS NOT NULL " +
+            "UNION SELECT 'image:' || stack_image FROM dock_slot WHERE stack_image IS NOT NULL"
+    )
+    suspend fun usedIcons(): List<String>
+}
 
 @Dao
 interface ZoneDao {
@@ -237,6 +455,12 @@ interface HomeConfigDao {
     )
     suspend fun setStackIcon(position: Int, icon: String, glyph: String?)
 
+    @Query(
+        "UPDATE dock_slot SET stack_icon = :icon, stack_image = :image " +
+            "WHERE position = :position AND stack_name IS NOT NULL"
+    )
+    suspend fun setStackImage(position: Int, icon: String, image: String?)
+
     @Query("DELETE FROM dock_slot WHERE position = :position")
     suspend fun clearSlot(position: Int)
 
@@ -276,9 +500,12 @@ interface HomeConfigDao {
         SuggestionFeedback::class,
         IconGesture::class,
         ZoneRow::class,
-        ZoneAssignment::class
+        ZoneAssignment::class,
+        AppCustom::class,
+        Forgotten::class,
+        HomeNote::class
     ],
-    version = 6,
+    version = 9,
     exportSchema = false
 )
 abstract class AlisioDatabase : RoomDatabase() {
@@ -291,4 +518,12 @@ abstract class AlisioDatabase : RoomDatabase() {
     abstract fun iconGestures(): IconGestureDao
 
     abstract fun zones(): ZoneDao
+
+    abstract fun appCustom(): AppCustomDao
+
+    abstract fun forgotten(): ForgottenDao
+
+    abstract fun backup(): BackupDao
+
+    abstract fun homeNotes(): HomeNoteDao
 }

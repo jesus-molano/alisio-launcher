@@ -121,10 +121,12 @@ Fuera de esos cuatro usos no hay acento: ni en iconos de fila, ni en etiquetas, 
 | `Exit` | 160 ms, `CubicBezierEasing(0.3f, 0f, 1f, 1f)` | Toda salida |
 | `Follow` | `spring(dampingRatio = 0.9f, stiffness = 500f)` | Lo que sigue al dedo |
 
-- Solo se animan la alfa y un desplazamiento de 12 dp como máximo: lo que entra sube 12 dp y aparece; lo que sale se desvanece.
+- Solo se animan la alfa y un desplazamiento de 12 dp como máximo: lo que entra sube 12 dp y aparece; lo que sale se desvanece. Única excepción: las letras de Trazo, que se abren desde el dedo y llevan la lupa (crecen y se apartan del pulgar) porque siguen al dedo, no son una transición.
 - Sin rebotes, sin escalonados, sin nada en bucle.
-- Las hojas usan la animación de `ModalBottomSheet` sin tocar.
-- La respuesta háptica actual (Trazo, reordenar, arrastre) se conserva.
+- Las hojas usan la animación de `ModalBottomSheet` para abrir y cerrar. El gesto atrás no: el de Material escala la hoja, y `AlisioSheet` lo sustituye por el de abajo.
+- La vibración se pide por su significado con `AlisioHaptics` (`ui/theme`), nunca con una constante suelta: `step` (paso: cambiar de letra o de app en Trazo, pasar sobre una isla que acepta, cambiar de puesto al reordenar), `done` (hecho: el gesto acaba en una acción, Enter, poner en el dock, soltar en una isla), `limit` (límite: lo pedido no se puede hacer), `threshold` (cruzar o deshacer el umbral de un deslizar), `dragStart` (algo se despega para arrastrarlo) y `toggle` (un interruptor, distinto al encender y al apagar).
+- Atrás sigue al dedo (`FollowingBackHandler`, `ui/components/BackFollow.kt`): la capa que se va a cerrar baja hasta 12 dp y pierde alfa con el progreso (0,4 una pantalla; 0,1 una hoja, que es opaca); soltar antes la devuelve con `Follow` y acabar la cierra con `Exit`. Toda pantalla que tapa el Inicio va en un `BackFollowLayer`, y toda hoja es un `AlisioSheet`, que ya lo trae.
+- La hora grande va con `ClockText`: cifras tabulares (`tnum` en `AlisioTokens.Clock`) y la tinta de la primera cifra en el filo.
 - Con las animaciones del sistema desactivadas, las duraciones son 0.
 
 ## 3. Legibilidad sobre cualquier fondo
@@ -225,8 +227,8 @@ Sale de `StackIconOption`, que desaparece.
 - Bordes de contorno, sombras de elevación, divisores.
 - Caracteres como icono: «‹», «›», «✕», «+», «≡», «⋮», «•», flechas Unicode, emojis.
 - Etiquetas en mayúsculas, versalitas o con interletrado.
-- Acento como decoración. Degradados de color, brillos, desenfoque o vidrio.
-- Color tomado del fondo de pantalla (Material You). Fondos animados. Iconos 3D.
+- Acento como decoración. Degradados de color, brillos, desenfoque o vidrio. Excepciones (fase 7): la pista de `ColorSlider`, donde el degradado es lo que se elige, y la franja de 24 h del color del día, que es la vista previa de lo elegido. El anillo de progreso de la app que suena y el arco del temporizador en el dock son acento como señal viva (§2.5, uso 4).
+- Color tomado del fondo de pantalla (Material You) sin que se elija. Desde la fase 7 el editor del acento propone los colores del fondo, ya legibles; solo se usan si el dueño toca uno. Fondos animados. Iconos 3D.
 - Filas «Sí/No» y cualquier estado escrito como texto al final de una fila.
 - Textos que explican lo que ya se ve.
 - Chips con desplazamiento horizontal para acciones.
@@ -247,6 +249,8 @@ Arriba:
 - Reloj en el filo, 40 dp bajo la barra de estado, `Clock`, con sombra. `maxLines = 1`; si no cabe (12 h o fuente grande), se reduce el tamaño.
 - Fecha 4 dp debajo, `bodyLarge` Medium, `Text` opaco con sombra.
 - Los dos son botones (`role = Button`) con `onClickLabel` «Abrir el reloj» y «Abrir el calendario».
+- **Línea bajo la hora** (fase 7): con alguna pieza que decir, la fecha abre una línea de texto con su misma letra y las piezas detrás (`GlanceLine`, `feature/home/Glance.kt`): vector de `GlanceIconSize` (18 dp) en `Text`, 6 dp y el texto; 16 dp entre piezas; toque de 48 dp de alto; hasta tres renglones. Sin caja, sin acento. La hora se escala con `AlisioTokens.clockScale` (tamaño elegido) y sigue el formato elegido.
+- **Dock** (fase 7): de 0 a 8 huecos; con 7 u 8 el icono encoge (`dockIconSize`) y, si el dueño no ha elegido, los nombres se ocultan.
 - Índice de Trazo a la derecha, centrado a 24 dp del borde, `RailLetter` con sombra. Para TalkBack: nombre «Índice alfabético de apps» y acción «Abrir Zonas».
 
 Abajo, de abajo arriba, con `PlateGap` entre piezas:
@@ -355,30 +359,37 @@ Gestos, sin cambio: deslizar arriba o tocar la píldora abre la barra; pellizcar
 
 **Requisito del dueño, no negociable:** los ajustes son una portada con su menú de secciones y una subpágina por sección. Nunca un único listado largo con todas las opciones. Si algo de esta sección choca con eso, gana el requisito.
 
-**Estructura.** Una portada y seis subpáginas dentro de `SettingsScreen`, con `AnimatedContent` (`Standard`). Atrás vuelve de la subpágina a la portada y de la portada al Inicio. Cada opción queda a dos toques. La barra indexa la portada y cada subpágina (`Target.AlisioSettings(destino)`, enum `SettingsDestination`) con sinónimos en los dos idiomas.
+**Estructura.** Una portada y ocho subpáginas dentro de `SettingsScreen`, con `AnimatedContent` (`Standard`). Desde la fase 7, Iconos sale de Aspecto y Gestos sale de Inicio: con lo añadido, las dos páginas se habían vuelto listados largos. Atrás vuelve de la subpágina a la portada y de la portada al Inicio. Cada opción queda a dos toques. La barra indexa la portada y cada subpágina (`Target.AlisioSettings(destino)`, enum `SettingsDestination`) con sinónimos en los dos idiomas.
 
 **Marco común.**
 
 - Cabecera fija: `RoundIconButton(ic_arrow_back)` («Cerrar» en la portada, «Volver» en las subpáginas) y título en `headlineLarge`.
 - **Vista previa viva** en la portada, en Aspecto y en Inicio: una ventana fija de 220 dp, sin fondo propio, arriba del todo. El Inicio real está oculto (§3, punto 6) y ahí se pinta el Inicio en miniatura con las mismas piezas: `WallpaperVeil`, reloj a 48 sp, Ahora de muestra, reproductor de muestra, dock real y píldora. Cambia en el acto con cada opción. Para ello, `DockItem`, `DockLabel` y `StackSlotIcon` salen de `HomeScreen.kt` a `ui/components` con un parámetro de escala; no se copian.
-- Debajo de la ventana, el cuerpo: `Background` opaco con esquinas superiores `PillShape`, desplazable.
-- En Búsqueda, Zonas, Pausa y Permisos no hay ventana: el cuerpo ocupa toda la pantalla.
+- Debajo de la ventana, el cuerpo: `Background` opaco con esquinas superiores `PillShape`, desplazable. Al desplazar, el cuerpo sube primero sobre la miniatura (como una hoja) hasta dejar a la vista la hora y su primera línea, y baja al volver arriba (`SheetCollapse`).
+- En Gestos, Búsqueda, Zonas, Pausa y Permisos no hay ventana: el cuerpo ocupa toda la pantalla.
+- Se abran desde donde se abran (barra, mantener el Inicio, Zonas, una sección buscada), debajo de la miniatura solo está el Inicio oculto: Zonas se retira mientras los ajustes están encima y vuelve con atrás.
 - Si la ventana transparente no sale limpia, plan B: la misma miniatura sobre `Surface`, sin foto.
 
-**Portada.** Seis filas de 68 dp con vector, título y un resumen de lo elegido como secundario:
+**Portada.** Ocho filas de 68 dp con vector, título y un resumen de lo elegido como secundario (hasta cuatro cosas), y al pie la copia de la configuración:
 
 | Fila | Vector | Resumen de ejemplo |
 | --- | --- | --- |
-| Aspecto | `ic_palette` | «Turquesa · velo medio · a color» |
-| Inicio | `ic_home` | «Sugerencia · reproductor · puntos» |
-| Búsqueda | `ic_search` | «Gemini · portapapeles» |
-| Zonas | `ic_zones` | «5 islas» |
-| Pausa | `ic_pause` | «2 apps · 5 s» |
-| Permisos | `ic_lock` | «Falta 1» o «Todo permitido» |
+| Aspecto | `ic_palette` | «Turquesa · Original · Fondos que rotan» (o «Color del día») |
+| Iconos | `ic_apps` | «A color · Iconos vivos · 2 iconos propios» |
+| Inicio | `ic_home` | «6 huecos · Sugerencia · Notas · Reproductor» |
+| Gestos | `ic_gesture` | «Dibujar la inicial · Pellizcar · Deslizar sobre el dock» |
+| Búsqueda | `ic_search` | «Gemini · Portapapeles · Personas · Órdenes» |
+| Zonas | `ic_zones` | «1 isla propia» |
+| Pausa | `ic_hourglass` | «2 apps · 5 s» |
+| Permisos | `ic_lock` | «Falta 1», «Lo que usas, permitido» o «Todo permitido» |
 
-Si falta algún permiso que una opción encendida necesita, la fila Permisos sube al primer lugar.
+Si falta algún permiso que una opción encendida necesita, la fila Permisos sube al primer lugar. «Falta N» cuenta solo esos (`blockingAccess`); un acceso opcional sin conceder (Bluetooth, brillo, no molestar) no es un aviso.
 
-**Aspecto** (con vista previa):
+**Iconos** (con vista previa): «Estilo» (A color, Monocromo, Del sistema y cada paquete), «Iconos vivos», «Iconos de apps», «Nombres en el dock» y «Nombres en Zonas».
+
+**Gestos** (sin vista previa): «Dibujar la inicial» con su muestra, «Pellizcar para abrir Zonas», los dos gestos del servicio de accesibilidad con la fila que lo pide, «Dock» (deslizar sobre el dock y sus destinos) e «Índice de letras».
+
+**Aspecto** (con vista previa). Desde la fase 7: fondo de pantalla, fondos que rotan, velo, acento (con el propio y el color del día) y tipografía; lo de iconos y nombres pasa a Iconos.
 
 - Fila `ic_wallpaper` «Fondo de pantalla», con `ic_open_in_new` al final: abre `Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER))`.
 - «Velo»: tres `PreviewChoice` de 96 × 120 dp. Cada una es una ventana al fondo real con su `WallpaperVeil` y «9:41» en `Numeral`. Nombres: Poco, Medio, Mucho.
@@ -387,7 +398,7 @@ Si falta algún permiso que una opción encendida necesita, la fila Permisos sub
 - «Nombres en el dock»: dos `PreviewChoice` (tres iconos reales del dock con nombre y sin nombre).
 - «Nombres en Zonas»: dos `PreviewChoice` (mini isla con nombre y sin nombre).
 
-**Inicio** (con vista previa):
+**Inicio** (con vista previa). Desde la fase 7, en este orden: Sugerencia, En curso y Audio Bluetooth; Hora; Junto a la hora (con Batería y Tiempo); Notas; Notificaciones; Personas sobre el dock; Dock (huecos). «Deslizar sobre el dock» y «Gestos» pasan a la página Gestos.
 
 - Fila con interruptor «Sugerencia» (`ic_auto_awesome`). Debajo, fila «Audio Bluetooth» (`ic_bluetooth`): con permiso, el dispositivo conectado como secundario; sin él, acción «Permitir».
 - Fila «Sugerencias silenciadas», solo si hay alguna: los iconos de esas apps en una fila; un toque devuelve una.
@@ -418,7 +429,7 @@ Si falta algún permiso que una opción encendida necesita, la fila Permisos sub
 
 **Permisos:**
 
-- Una fila por acceso, con su vector y una línea sobre para qué sirve: Aplicación de inicio, Contactos, Audio Bluetooth, Acceso a notificaciones, Acceso a uso y Servicio de accesibilidad.
+- Una fila por acceso, con su vector y una línea sobre para qué sirve: Aplicación de inicio, Contactos, Calendario, Ubicación aproximada, Audio Bluetooth, Acceso a notificaciones, Acceso a uso, Servicio de accesibilidad, Cambiar ajustes del sistema y No molestar.
 - Concedido: `ic_check` en `TextSecondary`, sin acento. Tocar la fila abre el sistema.
 - Pendiente: acción «Permitir». Los que se conceden en una pantalla del sistema llevan `ic_open_in_new` de 16 dp junto al título.
 - Los pendientes van primero.
@@ -432,7 +443,8 @@ Si falta algún permiso que una opción encendida necesita, la fila Permisos sub
 
 ## 8. Fuera de esta guía
 
-- Elegir tipografía, icono por app e imagen para una pila: es alcance nuevo y lo decide el dueño.
+- Elegir tipografía, icono por app e imagen para una pila: hecho en las fases 6 y 7 (ver `docs/PLAN.md` §11). El icono elegido y la imagen van recortados a la forma de `DockIconShape`, sin caja alrededor.
+- Acento propio (fase 7): un quinto círculo junto a los cuatro de la paleta abre el editor bajo ellos. Texto sobre el acento: `Background`, con aviso por debajo de 4,5:1.
 - `error += "UnusedResources"` en lint: lo decide el dueño.
 
 ## 9. Orden de aplicación
@@ -518,4 +530,4 @@ Añadidos en `res/drawable`: `ic_close`, `ic_search`, `ic_settings`, `ic_check`,
 - Con escala de fuente 1,3 los nombres del dock se cortan («YouT…»): el hueco mide 60 dp para que el primer icono caiga en el filo.
 - Pausa (§6.9): cada app elegida conserva la insignia pequeña con `ic_close` en su esquina. Sin ella, un icono con su nombre parece que abre la app y no que la quita. La ayuda queda en una línea, como pide la guía.
 - Interior de app (§6.5): con un acceso directo como destino, la fila enseña el icono propio del acceso si está cargado y, si no, `ic_swipe_up`; nunca el de su app, que repetiría el de la cabecera.
-- Zonas (§6.4): las islas usan `Outset` a los dos lados; solo Resto deja a su derecha el ancho del índice. El índice sale solo con Resto a la vista y empieza a su altura; si Resto asoma muy abajo, sube lo justo para que las letras no se aprieten.
+- Zonas (§6.4): las islas usan `Outset` a los dos lados; solo Resto deja a su derecha el ancho del índice. El índice sale solo con Resto a la vista y empieza a su altura; si Resto asoma tan abajo que sus letras no caben a 9 dp, el índice espera a que se desplace (fase 7: antes subía y quedaba encima de las islas de arriba).

@@ -9,14 +9,19 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.jesusmolano.alisio.AppContainer
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.calc.calculate
+import dev.jesusmolano.alisio.core.command.PhoneCommand
+import dev.jesusmolano.alisio.core.command.parsePhoneCommand
 import dev.jesusmolano.alisio.core.extras.ClockCommand
 import dev.jesusmolano.alisio.core.extras.parseClockCommand
+import dev.jesusmolano.alisio.core.notes.parseNoteCommand
 import dev.jesusmolano.alisio.core.people.Channel
 import dev.jesusmolano.alisio.core.people.MainChannel
 import dev.jesusmolano.alisio.core.people.channelKey
+import dev.jesusmolano.alisio.core.people.forgetChannels
 import dev.jesusmolano.alisio.core.people.mainChannel
 import dev.jesusmolano.alisio.core.people.openingsByPerson
 import dev.jesusmolano.alisio.core.people.orderedChannels
+import dev.jesusmolano.alisio.core.people.parseChannelPrefix
 import dev.jesusmolano.alisio.core.people.personKey
 import dev.jesusmolano.alisio.core.people.withoutContacts
 import dev.jesusmolano.alisio.core.search.IndexItem
@@ -32,19 +37,26 @@ import dev.jesusmolano.alisio.data.apps.ShortcutEntry
 import dev.jesusmolano.alisio.data.contacts.ContactPhotos
 import dev.jesusmolano.alisio.data.contacts.ContactsRepository
 import dev.jesusmolano.alisio.data.contacts.Person
+import dev.jesusmolano.alisio.data.db.Forgotten
 import dev.jesusmolano.alisio.data.history.LaunchHistory
+import dev.jesusmolano.alisio.data.notes.NotesRepository
+import dev.jesusmolano.alisio.data.now.ForgottenRepository
 import dev.jesusmolano.alisio.data.pause.LaunchPause
 import dev.jesusmolano.alisio.data.settings.SYSTEM_SETTINGS
 import dev.jesusmolano.alisio.data.settings.SystemSetting
+import dev.jesusmolano.alisio.data.system.PhoneControls
+import dev.jesusmolano.alisio.data.system.PhoneResult
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** Lo que un resultado abre. */
 sealed interface Target {
@@ -81,6 +93,12 @@ class Result(val target: Target, val positions: IntArray)
 sealed interface Quick {
     /** Poner una alarma o un temporizador. */
     class Clock(val command: ClockCommand) : Quick
+
+    /** Guardar una nota en el Inicio («+ comprar pan»). */
+    class Note(val text: String) : Quick
+
+    /** Una orden para el teléfono («linterna», «brillo 40»). */
+    class Phone(val command: PhoneCommand) : Quick
 }
 
 /**
@@ -92,6 +110,7 @@ sealed interface Quick {
  * @param quick alarma o temporizador que lo escrito pide, si no es una operación.
  * @param recents apps abiertas hace menos; solo se enseñan con la barra vacía.
  * @param recentPeople personas contactadas hace menos; también solo con la barra vacía.
+ * @param channel el canal pedido delante del nombre («wa laura»): va primero en cada persona.
  */
 class SearchState(
     val query: String = "",
@@ -99,15 +118,22 @@ class SearchState(
     val calculation: String? = null,
     val quick: Quick? = null,
     val recents: List<AppEntry> = emptyList(),
-    val recentPeople: List<Person> = emptyList()
+    val recentPeople: List<Person> = emptyList(),
+    val channel: Channel? = null
 ) {
-    /** Si [quick] es lo que abre Enter: la alarma y el temporizador empiezan por su palabra y son inequívocos. */
-    val quickFirst: Boolean get() = quick is Quick.Clock
+    /**
+     * Si [quick] es lo que abre Enter: la alarma y el temporizador empiezan por su palabra, la nota
+     * por «+» y las órdenes del teléfono son la frase entera; las tres son inequívocas.
+     */
+    val quickFirst: Boolean get() = quick != null
 
     /** El resultado que abre Enter, si no hay cálculo ni manda [quick]. */
     val best: Result?
         get() = if (calculation == null && !quickFirst) sections.firstOrNull()?.second?.firstOrNull() else null
 }
+
+/** Qué entiende la barra además de buscar, según los ajustes: notas y órdenes para el teléfono. */
+class QuickOptions(val notes: Boolean, val phone: Boolean)
 
 class SearchSource(
     val index: List<IndexItem<Target>>,
@@ -123,6 +149,9 @@ class SearchViewModel(
     private val pause: LaunchPause,
     private val clock: Clock,
     locales: StateFlow<String>,
+    private val forgotten: ForgottenRepository,
+    private val notes: NotesRepository,
+    private val phone: PhoneControls,
     private val text: (Int) -> String
 ) : ViewModel() {
     private val usage = MutableStateFlow(Usage.NONE)
@@ -175,14 +204,27 @@ class SearchViewModel(
                 conversations
                     .withoutContacts(people.map { it.name }) { it.label }
                     .map { IndexItem<Target>(it.key, it.label, Target.Shortcut(it), weight = CONVERSATION_WEIGHT) } +
-                apps.orEmpty().map { IndexItem<Target>(it.key.toString(), it.label, Target.App(it)) } +
+                apps.orEmpty().map { app ->
+                    // El nombre de la app sigue encontrándola aunque se vea con otro. Una oculta solo sale con
+                    // uno de los dos nombres entero.
+                    IndexItem<Target>(
+                        key = app.key.toString(),
+                        label = app.label,
+                        payload = Target.App(app),
+                        synonyms = if (app.renamed) listOf(app.originalLabel) else emptyList(),
+                        exactOnly = app.hidden
+                    )
+                } +
                 actions.map { IndexItem<Target>(it.key, it.label, Target.Shortcut(it), weight = SHORTCUT_WEIGHT) } +
                 settingItems
         }
 
     private val recents =
         combine(appsRepository.apps, history.openings) { apps, openings ->
-            val byKey = apps.orEmpty().associateBy { it.key.toString() }
+            // Una app oculta no sale en Recientes aunque se haya abierto, ni una que el sistema pide no
+            // sugerir (docs/IDEAS.md §2.8).
+            val byKey =
+                apps.orEmpty().filterNot { it.hidden || it.hideFromSuggestions }.associateBy { it.key.toString() }
             openings.mostRecentKeys().mapNotNull(byKey::get).take(RECENT_APPS)
         }
 
@@ -212,25 +254,85 @@ class SearchViewModel(
      * que tiene el campo, así Enter y los resultados nunca van una letra por detrás (§5.3: cada
      * tecla recorre el índice entero).
      */
-    fun search(query: String, source: SearchSource): SearchState {
+    fun search(
+        query: String,
+        source: SearchSource,
+        options: QuickOptions,
+        hasChannel: (Person, Channel) -> Boolean
+    ): SearchState {
+        // «+ texto» es una nota antes que cualquier otra cosa: el «+» del principio no busca nada.
+        if (options.notes) {
+            parseNoteCommand(query)?.let { note ->
+                return SearchState(query, quick = Quick.Note(note), recents = source.recents)
+            }
+        }
+        // «wa laura»: solo las personas que tienen ese canal, buscadas por lo que va detrás del verbo.
+        // Si nadie lo tiene, lo escrito se busca tal cual (puede ser una app que empieza así).
+        parseChannelPrefix(query)?.let { prefix ->
+            val people =
+                search(source.index, prefix.name, source.usage)
+                    .filter { hit ->
+                        val person = (hit.item.payload as? Target.Contact)?.person
+                        person != null && hasChannel(person, prefix.channel)
+                    }
+                    .take(Section.PEOPLE.limit)
+                    .map { Result(it.item.payload, it.positions) }
+            if (people.isNotEmpty()) {
+                return SearchState(
+                    query,
+                    listOf(Section.PEOPLE to people),
+                    recents = source.recents,
+                    channel = prefix.channel
+                )
+            }
+        }
         val sections =
             search(source.index, query, source.usage)
                 .toSections(sectionOf = { sectionOf(it.item.payload) }, limitOf = Section::limit)
                 .map { (section, hits) -> section to hits.map { Result(it.item.payload, it.positions) } }
         val calculation = calculate(query)
         // Una operación gana a todo: lo que se lee como cuenta no se interpreta además como orden.
-        val quick = if (calculation == null) parseClockCommand(query)?.let(Quick::Clock) else null
+        val quick =
+            if (calculation == null) {
+                parseClockCommand(query)?.let(Quick::Clock)
+                    ?: parsePhoneCommand(query)?.takeIf { options.phone }?.let(Quick::Phone)
+            } else {
+                null
+            }
         return SearchState(query, sections, calculation, quick, source.recents, source.recentPeople)
     }
 
+    /** Guarda una nota para el Inicio. */
+    fun addNote(text: String) = notes.add(text)
+
+    /** Da una orden al teléfono y dice cómo ha ido. */
+    suspend fun runPhone(command: PhoneCommand): PhoneResult = phone.run(command)
+
     /**
      * Al abrir la barra: la frecencia se calcula para este momento. Cada persona lleva además la
-     * suma de sus canales, que es lo que la ordena entre los resultados.
+     * suma de sus canales, que es lo que la ordena entre los resultados. Del canal aprendido de cada
+     * persona se deja fuera lo olvidado ([forgetChannels]); su puesto en la barra no cambia.
      */
     fun onOpened() {
+        opened = true
         val openings = history.openings.value
-        usage.value = Usage.from(openings + openingsByPerson(openings), clock.now(), ZoneId.systemDefault())
+        val channels = forgetChannels(openings, forgotten.marksOf(Forgotten.KIND_CHANNEL))
+        usage.value = Usage.from(channels + openingsByPerson(openings), clock.now(), ZoneId.systemDefault())
     }
+
+    // Olvidar un canal con la barra abierta tiene que verse en el acto: se recalcula al guardarse.
+    private var opened = false
+
+    init {
+        viewModelScope.launch { forgotten.marks.drop(1).collect { if (opened) onOpened() } }
+    }
+
+    /**
+     * Olvida el canal aprendido de [person] (docs/IDEAS.md §2.6): el botón principal vuelve al de por
+     * defecto hasta que se aprenda otro. Devuelve cómo deshacerlo.
+     */
+    fun forgetChannel(person: Person): () -> Unit =
+        forgotten.forget(Forgotten.KIND_CHANNEL, personKey(person.lookupKey))
 
     /** Ningún contacto tiene filas de WhatsApp: señal de que WhatsApp ya no las escribe (riesgo de §9). */
     fun noWhatsappRows(): Boolean = contacts.people.value.none { it.whatsappRows.isNotEmpty() }
@@ -318,24 +420,51 @@ class SearchViewModel(
                 AlisioPage(
                     SettingsDestination.COVER,
                     R.string.settings_title,
-                    listOf("ajustes de alisio", "alisio settings", "launcher", "configuración", "preferences")
+                    listOf(
+                        "ajustes de alisio", "alisio settings", "launcher", "configuración", "preferences",
+                        "copia", "backup", "exportar", "importar", "export", "import"
+                    )
                 ),
                 AlisioPage(
                     SettingsDestination.LOOK,
                     R.string.settings_appearance,
                     listOf(
-                        "aspecto", "apariencia", "look", "appearance", "acento", "accent", "velo", "veil",
-                        "fondo de pantalla", "wallpaper", "iconos", "icons", "paquete de iconos", "icon pack",
-                        "tipografía", "letra", "fuente", "font", "nombres", "labels"
+                        "aspecto", "apariencia", "look", "appearance", "acento", "accent", "color propio",
+                        "custom color", "color del día", "day color", "velo", "veil", "fondo de pantalla",
+                        "wallpaper", "fondos que rotan", "rotating wallpapers", "tipografía", "letra", "fuente", "font"
+                    )
+                ),
+                AlisioPage(
+                    SettingsDestination.ICONS,
+                    R.string.settings_icons,
+                    listOf(
+                        "iconos", "icons", "estilo de iconos", "icon style", "monocromo", "monochrome",
+                        "paquete de iconos", "icon pack", "iconos vivos", "live icons", "icono propio", "custom icon",
+                        "cambiar icono", "change icon", "nombres en el dock", "dock labels", "nombres en zonas",
+                        "zones labels", "nombres", "labels"
                     )
                 ),
                 AlisioPage(
                     SettingsDestination.HOME,
                     R.string.settings_home,
                     listOf(
-                        "inicio", "home screen", "dock", "sugerencia", "ahora", "suggestion", "reproductor", "player",
-                        "puntos", "no leído", "unread", "dots", "gestos", "gestures", "deslizar", "swipe", "pellizcar",
-                        "pinch", "bloquear", "lock", "bluetooth"
+                        "inicio", "home screen", "dock", "huecos del dock", "dock slots", "hora", "reloj",
+                        "clock", "formato de la hora", "time format", "12 h", "24 h", "junto a la hora",
+                        "next to the time", "alarma", "batería", "battery", "tiempo", "weather", "salida del sol",
+                        "puesta del sol", "sunrise", "sunset", "evento", "event", "uso del teléfono", "screen time",
+                        "notas", "notes", "sugerencia", "ahora", "suggestion", "en curso", "reproductor", "player",
+                        "puntos", "no leído", "unread", "dots", "personas sobre el dock", "favoritos", "favorites",
+                        "bluetooth"
+                    )
+                ),
+                AlisioPage(
+                    SettingsDestination.GESTURES,
+                    R.string.settings_gestures,
+                    listOf(
+                        "gestos", "gestures", "índice de letras", "letter index", "trazo", "trace",
+                        "dibujar la inicial", "draw the initial", "deslizar sobre el dock", "swipe on the dock",
+                        "deslizar", "swipe", "pellizcar", "pinch", "dos toques", "double tap", "bloquear", "lock",
+                        "bajar las notificaciones", "pull down notifications"
                     )
                 ),
                 AlisioPage(
@@ -343,18 +472,22 @@ class SearchViewModel(
                     R.string.settings_search,
                     listOf(
                         "búsqueda", "barra", "search", "asistente", "assistant", "búsqueda web", "web search",
-                        "portapapeles", "clipboard", "personas", "people"
+                        "portapapeles", "clipboard", "personas", "people", "fotos de contacto", "contact photos",
+                        "órdenes", "commands", "órdenes del teléfono", "phone commands"
                     )
                 ),
                 AlisioPage(
                     SettingsDestination.ZONES,
                     R.string.settings_islands,
-                    listOf("islas propias", "nueva isla", "your islands", "new island", "ajustes de zonas")
+                    listOf(
+                        "islas propias", "nueva isla", "your islands", "new island", "ajustes de zonas",
+                        "apps ocultas", "hidden apps", "ocultar apps", "hide apps"
+                    )
                 ),
                 AlisioPage(
                     SettingsDestination.PAUSE,
                     R.string.settings_pause,
-                    listOf("pausa", "pause", "esperar", "delay", "apps con pausa")
+                    listOf("pausa", "pause", "esperar", "delay", "apps con pausa", "veces hoy", "times today")
                 ),
                 AlisioPage(
                     SettingsDestination.PERMISSIONS,
@@ -362,7 +495,9 @@ class SearchViewModel(
                     listOf(
                         "permisos", "permissions", "accesos", "access", "accesibilidad", "accessibility",
                         "notificaciones", "notifications", "acceso a uso", "usage access", "app de inicio",
-                        "default home"
+                        "default home", "permiso de calendario", "calendar permission", "ubicación aproximada",
+                        "approximate location", "ubicación", "location", "modificar ajustes del sistema",
+                        "modify system settings"
                     )
                 )
             )
@@ -381,6 +516,9 @@ class SearchViewModel(
                     container.launchPause,
                     container.clock,
                     container.locales,
+                    container.forgotten,
+                    container.notes,
+                    container.phoneControls,
                     // El contexto de la aplicación: sus recursos siguen el idioma actual del sistema.
                     context::getString
                 )

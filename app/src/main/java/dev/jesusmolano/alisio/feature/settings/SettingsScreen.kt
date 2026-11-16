@@ -2,10 +2,6 @@ package dev.jesusmolano.alisio.feature.settings
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,17 +23,28 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
@@ -51,14 +58,17 @@ import dev.jesusmolano.alisio.feature.home.DockSlot
 import dev.jesusmolano.alisio.feature.home.HomePreview
 import dev.jesusmolano.alisio.feature.home.HomeViewModel
 import dev.jesusmolano.alisio.feature.home.dockApps
+import dev.jesusmolano.alisio.feature.home.favoritePeople
 import dev.jesusmolano.alisio.feature.zones.ZoneView
 import dev.jesusmolano.alisio.feature.zones.ZonesViewModel
+import dev.jesusmolano.alisio.ui.components.BackFollow
+import dev.jesusmolano.alisio.ui.components.BackFollowLayer
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.theme.AlisioMotion
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
-// Alto de la ventana al Inicio en miniatura, sin contar la barra de estado. La guía pedía 220 dp;
-// con menos de esto no caben a la vez la hora, Ahora, el reproductor, el dock y la píldora.
+// Alto de la ventana al Inicio en miniatura, sin contar la barra de estado, hasta que la miniatura
+// mide el suyo: con esto caben la hora, Ahora, el reproductor, el dock y la píldora.
 private val PreviewHeight = 292.dp
 
 // El botón de volver se centra en la columna de los dibujos de las filas, y el título empieza
@@ -72,6 +82,40 @@ private const val TITLE_STEP_SCALE = 0.05f
 
 // Aire al final de cada página: la barra de deshacer sale ahí y no debe tapar la última fila.
 private val PageBottom = 88.dp
+
+// Lo que queda de la miniatura bajo la barra de estado con el cuerpo subido del todo: la hora y la
+// primera línea bajo ella.
+private val PreviewMinVisible = 96.dp
+
+/**
+ * El cuerpo de los ajustes sube sobre la miniatura antes de desplazar la página y baja cuando la
+ * página ya está arriba del todo (lo que Material llama «salir hasta plegarse»).
+ *
+ * @param collapse cuánto ha subido el cuerpo, en píxeles; lo lee el marco para colocarlo.
+ * @param limit hasta dónde puede subir ahora: cambia con el alto de la miniatura.
+ */
+private class SheetCollapse(private val collapse: MutableFloatState, private val limit: () -> Float) :
+    NestedScrollConnection {
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // Solo el dedo que sube (la página avanza) pliega antes de desplazar.
+        if (available.y >= 0f) return Offset.Zero
+        return Offset(0f, -move(-available.y))
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        // Lo que sobra al bajar con la página ya arriba del todo despliega la miniatura.
+        if (available.y <= 0f) return Offset.Zero
+        return Offset(0f, -move(-available.y))
+    }
+
+    /** Sube (positivo) o baja el cuerpo dentro de su límite y devuelve lo que se ha movido. */
+    private fun move(delta: Float): Float {
+        val before = collapse.floatValue.coerceIn(0f, limit())
+        val after = (before + delta).coerceIn(0f, limit())
+        collapse.floatValue = after
+        return after - before
+    }
+}
 
 /**
  * Lo que la sección Zonas enseña y hace.
@@ -95,6 +139,10 @@ class SettingsAccess(
     val onHomeRole: () -> Unit,
     val contacts: Boolean,
     val onContacts: () -> Unit,
+    val calendar: Boolean,
+    val onCalendar: () -> Unit,
+    val location: Boolean,
+    val onLocation: () -> Unit,
     val bluetooth: Boolean,
     val bluetoothDevice: String?,
     val onBluetooth: () -> Unit,
@@ -103,16 +151,24 @@ class SettingsAccess(
     val usage: Boolean,
     val onUsage: () -> Unit,
     val accessibility: Boolean,
-    val onAccessibility: () -> Unit
+    val onAccessibility: () -> Unit,
+    val writeSettings: Boolean = false,
+    val onWriteSettings: () -> Unit = {},
+    val doNotDisturb: Boolean = false,
+    val onDoNotDisturb: () -> Unit = {}
 ) {
     val granted: Set<Access> =
         buildSet {
             if (homeRole) add(Access.HOME_ROLE)
             if (contacts) add(Access.CONTACTS)
+            if (calendar) add(Access.CALENDAR)
+            if (location) add(Access.LOCATION)
             if (bluetooth) add(Access.BLUETOOTH)
             if (notifications) add(Access.NOTIFICATIONS)
             if (usage) add(Access.USAGE)
             if (accessibility) add(Access.ACCESSIBILITY)
+            if (writeSettings) add(Access.SYSTEM_SETTINGS)
+            if (doNotDisturb) add(Access.DO_NOT_DISTURB)
         }
 }
 
@@ -137,10 +193,13 @@ internal class SettingsContext(
  * @param contacts la agenda, para enseñar una foto real al elegir entre fotos e iniciales.
  * @param onWallpaper abre el selector de fondo de pantalla del sistema.
  * @param onPreviewPause enseña la pausa de esa app tal como saldrá, sin abrirla.
+ * @param backup guarda la configuración en un archivo o la carga de uno.
+ * @param wallpaper elige la carpeta de los fondos que rotan y pasa al siguiente.
  */
 @Composable
 fun SettingsScreen(
     page: SettingsDestination,
+    back: BackFollow,
     onNavigate: (SettingsDestination) -> Unit,
     onClose: () -> Unit,
     home: HomeViewModel,
@@ -151,11 +210,17 @@ fun SettingsScreen(
     contacts: ContactsRepository,
     onWallpaper: () -> Unit,
     onPreviewPause: (AppEntry) -> Unit,
+    backup: BackupActions,
+    wallpaper: WallpaperActions,
     modifier: Modifier = Modifier
 ) {
     val loadedApps by home.apps.collectAsStateWithLifecycle()
     val loadedDock by home.dock.collectAsStateWithLifecycle()
     val swipeTargets by home.swipeTargets.collectAsStateWithLifecycle()
+    val glance by home.glance.collectAsStateWithLifecycle()
+    val notes by home.notes.collectAsStateWithLifecycle()
+    val people by home.people.collectAsStateWithLifecycle()
+    val favorites = remember(prefs.favoritePeople, people) { favoritePeople(prefs.favoritePeople, people) }
     val apps = loadedApps.orEmpty()
     val dock = loadedDock.orEmpty()
     val context = remember(prefs, settings, apps, dock, access) { SettingsContext(prefs, settings, apps, dock, access) }
@@ -166,13 +231,28 @@ fun SettingsScreen(
             apps.firstOrNull { it.key !in inDock } ?: apps.firstOrNull()
         }
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Lo que mide la miniatura por dentro (HomePreview lo mide: la línea bajo la hora, las notas, Ahora,
+    // las caras y el dock cambian con cada opción, con la letra y con el tamaño de la hora). Hasta la
+    // primera medida vale el alto de siempre.
+    var measured by remember { mutableStateOf<Dp?>(null) }
     // La ventana incluye la barra de estado: el fondo de pantalla llega hasta arriba, como en el Inicio.
     val window by animateDpAsState(
-        targetValue = if (page.hasPreview) statusBar + PreviewHeight else 0.dp,
+        targetValue = if (page.hasPreview) statusBar + (measured ?: PreviewHeight) else 0.dp,
         animationSpec = AlisioMotion.standard(),
         label = "settings-window"
     )
-    val rise = with(LocalDensity.current) { AlisioMotion.Rise.roundToPx() }
+    val density = LocalDensity.current
+    val rise = with(density) { AlisioMotion.Rise.roundToPx() }
+    // Con la línea, las notas y las caras la miniatura llega a pasar de media pantalla: al desplazar la
+    // página, el cuerpo sube sobre ella como una hoja (hasta dejar la hora a la vista) y baja al volver
+    // arriba. Así las opciones tienen sitio sin quitar la vista previa.
+    val maxCollapse =
+        with(density) { (window - statusBar - PreviewMinVisible).coerceAtLeast(0.dp).toPx() }
+    val collapse = remember { mutableFloatStateOf(0f) }
+    val limit by rememberUpdatedState(maxCollapse)
+    LaunchedEffect(page) { collapse.floatValue = 0f }
+    val bodyScroll = remember { SheetCollapse(collapse) { limit } }
+    val shown = with(density) { collapse.floatValue.coerceAtMost(maxCollapse).toDp() }
 
     Box(
         modifier
@@ -187,51 +267,59 @@ fun SettingsScreen(
                 swipeOwners = swipeTargets.keys,
                 sampleApp = sampleApp,
                 notificationsGranted = access.notifications,
-                modifier = Modifier.fillMaxWidth().height(window)
+                glance = glance,
+                modifier = Modifier.fillMaxWidth().height(window),
+                notes = notes,
+                favorites = favorites,
+                photos = home.photos.takeIf { prefs.contactPhotos },
+                onContentHeight = { measured = it }
             )
         }
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(top = window)
+                .padding(top = window - shown)
                 .clip(if (window > 0.dp) AlisioTokens.SheetShape else RectangleShape)
                 .background(AlisioTokens.Background)
                 .navigationBarsPadding()
                 // Con el teclado abierto al escribir, el final de la página sigue siendo alcanzable.
                 .imePadding()
+                .nestedScroll(bodyScroll)
         ) {
             // Sin ventana, el cuerpo llega arriba del todo y deja libre la barra de estado.
             Spacer(Modifier.height((statusBar - window).coerceAtLeast(0.dp)))
             AnimatedContent(
                 targetState = page,
-                transitionSpec = {
-                    (fadeIn(AlisioMotion.standard()) + slideInVertically(AlisioMotion.standard()) { rise }) togetherWith
-                        fadeOut(AlisioMotion.exit())
-                },
+                transitionSpec = { AlisioMotion.pageChange(rise) },
                 label = "settings-page"
             ) { shown ->
-                Column(Modifier.fillMaxSize()) {
-                    val cover = shown == SettingsDestination.COVER
-                    Header(
-                        title = stringResource(shown.title()),
-                        backLabel = stringResource(if (cover) R.string.settings_close else R.string.appmenu_back),
-                        onBack = { if (cover) onClose() else onNavigate(SettingsDestination.COVER) }
-                    )
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = AlisioTokens.Outset)
-                            .padding(bottom = PageBottom)
-                    ) {
-                        when (shown) {
-                            SettingsDestination.COVER -> CoverPage(context, zones, onNavigate)
-                            SettingsDestination.LOOK -> LookPage(context, home, onWallpaper)
-                            SettingsDestination.HOME -> HomePage(context, home)
-                            SettingsDestination.SEARCH -> SearchPage(context, contacts)
-                            SettingsDestination.ZONES -> ZonesPage(zones)
-                            SettingsDestination.PAUSE -> PausePage(context, onPreviewPause)
-                            SettingsDestination.PERMISSIONS -> PermissionsPage(access)
+                // Atrás desde una subpágina la baja con el dedo y deja quieta la miniatura de arriba.
+                BackFollowLayer(back, shown) {
+                    Column(Modifier.fillMaxSize()) {
+                        val cover = shown == SettingsDestination.COVER
+                        Header(
+                            title = stringResource(shown.title()),
+                            backLabel = stringResource(if (cover) R.string.settings_close else R.string.appmenu_back),
+                            onBack = { if (cover) onClose() else onNavigate(SettingsDestination.COVER) }
+                        )
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = AlisioTokens.Outset)
+                                .padding(bottom = PageBottom)
+                        ) {
+                            when (shown) {
+                                SettingsDestination.COVER -> CoverPage(context, zones, backup, onNavigate)
+                                SettingsDestination.LOOK -> LookPage(context, home, onWallpaper, wallpaper)
+                                SettingsDestination.ICONS -> IconsPage(context, home)
+                                SettingsDestination.HOME -> HomePage(context, home)
+                                SettingsDestination.GESTURES -> GesturesPage(context, home)
+                                SettingsDestination.SEARCH -> SearchPage(context, contacts)
+                                SettingsDestination.ZONES -> ZonesPage(context, zones, home)
+                                SettingsDestination.PAUSE -> PausePage(context, onPreviewPause)
+                                SettingsDestination.PERMISSIONS -> PermissionsPage(access)
+                            }
                         }
                     }
                 }
@@ -244,7 +332,9 @@ fun SettingsScreen(
 internal fun SettingsDestination.title(): Int = when (this) {
     SettingsDestination.COVER -> R.string.settings_title
     SettingsDestination.LOOK -> R.string.settings_appearance
+    SettingsDestination.ICONS -> R.string.settings_icons
     SettingsDestination.HOME -> R.string.settings_home
+    SettingsDestination.GESTURES -> R.string.settings_gestures
     SettingsDestination.SEARCH -> R.string.settings_search
     SettingsDestination.ZONES -> R.string.settings_zones
     SettingsDestination.PAUSE -> R.string.settings_pause

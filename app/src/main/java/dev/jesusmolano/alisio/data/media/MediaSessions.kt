@@ -35,7 +35,13 @@ data class NowPlaying(
     val artist: String?,
     val art: Bitmap?,
     val playing: Boolean,
-    val canSkip: Boolean
+    val canSkip: Boolean,
+    // Por dónde va (core/media trackProgress): la posición dicha por la sesión, cuándo la dijo (reloj
+    // desde el arranque), a qué velocidad avanza y cuánto dura; sin duración no hay anillo en el dock.
+    val positionMillis: Long = -1,
+    val positionAt: Long = 0,
+    val speed: Float = 1f,
+    val durationMillis: Long? = null
 )
 
 /**
@@ -169,12 +175,16 @@ class MediaSessions(
                     artist = track.artist,
                     art = track.art,
                     playing = state.isPlaying(),
-                    canSkip = (state?.actions ?: 0L) and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
+                    canSkip = (state?.actions ?: 0L) and PlaybackState.ACTION_SKIP_TO_NEXT != 0L,
+                    positionMillis = state?.position ?: -1,
+                    positionAt = state?.lastPositionUpdateTime ?: 0,
+                    speed = state?.playbackSpeed?.takeIf { it > 0f } ?: 1f,
+                    durationMillis = track.duration
                 )
             }
     }
 
-    private class Track(val title: String?, val artist: String?, val art: Bitmap?)
+    private class Track(val title: String?, val artist: String?, val art: Bitmap?, val duration: Long? = null)
 
     /** Una sesión y lo último que ha dicho de sí misma. */
     private inner class Watch(val controller: MediaController) : MediaController.Callback() {
@@ -215,7 +225,8 @@ class MediaSessions(
             getBitmap(MediaMetadata.METADATA_KEY_ART)
                 ?: getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                 ?: getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-        return Track(title, artist, art?.let(::shrink))
+        val duration = getLong(MediaMetadata.METADATA_KEY_DURATION).takeIf { it > 0 }
+        return Track(title, artist, art?.let(::shrink), duration)
     }
 
     private fun MediaMetadata.text(key: String): String? = getString(key)?.trim()?.ifEmpty { null }

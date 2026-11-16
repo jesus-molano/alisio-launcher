@@ -8,13 +8,16 @@ import java.time.ZoneId
  *
  * @param synonyms otras formas de llamarlo (los ajustes los usan); cuentan para encontrar, no para resaltar.
  * @param weight multiplica la calidad: por debajo de 1 deja pasar delante a una app que coincide igual.
+ * @param exactOnly solo sale si la consulta es su nombre o un sinónimo entero (una app oculta: no
+ *   debe aparecer por casualidad, pero quien escribe su nombre la encuentra).
  */
 class IndexItem<T>(
     val key: String,
     val label: String,
     val payload: T,
     synonyms: List<String> = emptyList(),
-    val weight: Double = 1.0
+    val weight: Double = 1.0,
+    val exactOnly: Boolean = false
 ) {
     val normalized: String = normalize(label)
     val normalizedSynonyms: List<String> = synonyms.map(::normalize)
@@ -43,6 +46,11 @@ fun <T> search(items: List<IndexItem<T>>, query: String, usage: Usage): List<Sea
     if (normalizedQuery.isEmpty()) return emptyList()
     val hits = ArrayList<SearchHit<T>>()
     for (item in items) {
+        if (item.exactOnly && item.normalized != normalizedQuery &&
+            normalizedQuery !in item.normalizedSynonyms
+        ) {
+            continue
+        }
         val onLabel = match(normalizedQuery, item.normalized)
         val onSynonym = item.normalizedSynonyms.maxOfOrNull { match(normalizedQuery, it)?.quality ?: 0.0 } ?: 0.0
         val quality = maxOf(onLabel?.quality ?: 0.0, onSynonym)
