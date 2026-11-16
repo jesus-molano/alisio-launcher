@@ -10,6 +10,21 @@ sealed interface ClipContent {
     /** Una dirección web, ya con su esquema. */
     data class Url(val url: String) : ClipContent {
         override val text get() = url
+
+        /**
+         * El sitio al que lleva de verdad, para enseñarlo antes de abrirlo: sin esquema, sin «www.»,
+         * sin puerto y sin lo que vaya delante de una «@», que es donde un enlace engañoso esconde
+         * un nombre conocido («https://banco.es@otro.example» lleva a «otro.example»).
+         */
+        val host: String
+            get() {
+                val authority = url.substringAfter("://").takeWhile { it != '/' && it != '?' && it != '#' }
+                val server = authority.substringAfterLast('@')
+                // Una dirección IPv6 va entre corchetes y lleva sus propios «:».
+                val name =
+                    if (server.startsWith('[')) server.substringBefore(']') + "]" else server.substringBefore(':')
+                return name.lowercase().removePrefix("www.")
+            }
     }
 
     /** Un teléfono, solo con sus cifras y el «+» si lo lleva. */

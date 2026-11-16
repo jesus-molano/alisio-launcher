@@ -1,7 +1,10 @@
 package dev.jesusmolano.alisio.feature.search
 
+import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.icu.util.Calendar
+import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
@@ -13,6 +16,8 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -28,9 +33,11 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -72,6 +79,8 @@ import dev.jesusmolano.alisio.core.extras.ClockCommand
 import dev.jesusmolano.alisio.core.people.Channel
 import dev.jesusmolano.alisio.core.people.initials
 import dev.jesusmolano.alisio.core.people.personKey
+import dev.jesusmolano.alisio.core.settings.SettingsDestination
+import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.contacts.ContactPhotos
 import dev.jesusmolano.alisio.data.contacts.Person
 import dev.jesusmolano.alisio.data.settings.Prefs
@@ -81,17 +90,17 @@ import dev.jesusmolano.alisio.feature.people.WHATSAPP_PACKAGE
 import dev.jesusmolano.alisio.feature.people.contact
 import dev.jesusmolano.alisio.feature.people.openContact
 import dev.jesusmolano.alisio.feature.people.rememberContactPhoto
+import dev.jesusmolano.alisio.feature.settings.icon
 import dev.jesusmolano.alisio.ui.components.Chip
 import dev.jesusmolano.alisio.ui.components.ItemRow
 import dev.jesusmolano.alisio.ui.components.PillTextField
+import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.SectionLabel
 import dev.jesusmolano.alisio.ui.components.formatClock
 import dev.jesusmolano.alisio.ui.components.rememberNow
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
-import java.util.Locale
 import kotlinx.coroutines.flow.first
 
-private val ScreenMargin = 16.dp
 private val CloseDrag = 64.dp
 
 private const val ROW_CHANNELS = 3
@@ -103,14 +112,17 @@ private const val ROW_CHANNELS = 3
  * @param onClose se llama tras abrir algo; quien la muestra decide cómo cerrarla.
  * @param onOpenSettings abre los ajustes de Alisio, que también salen como resultado.
  * @param onAskContacts pide los permisos de contactos y de llamada.
- * @param onOpenZones abre Zonas, que sale como resultado y, con la barra vacía, como acceso.
+ * @param onOpenZones abre Zonas, que sale como resultado y, con el campo vacío, como botón.
+ * @param onAppMenu abre el Interior de una app, al mantenerla pulsada.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
     onClose: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (SettingsDestination) -> Unit,
     onOpenZones: () -> Unit,
+    onAppMenu: (AppEntry) -> Unit,
     onAskContacts: () -> Unit,
     prefs: Prefs,
     modifier: Modifier = Modifier
@@ -118,8 +130,7 @@ fun SearchScreen(
     val source by viewModel.source.collectAsStateWithLifecycle()
     // El texto vive aquí, no en un flujo: si volviera con retraso, el campo perdería letras y el cursor.
     var query by remember { mutableStateOf("") }
-    val state =
-        remember(query, source, prefs.expenseTemplate) { viewModel.search(query, source, prefs.expenseTemplate) }
+    val state = remember(query, source) { viewModel.search(query, source) }
     val listState = rememberLazyListState()
     // Lo que había en el portapapeles al abrir la barra, si tiene acción. Vive solo mientras la barra
     // está abierta: no se guarda ni sobrevive a cerrarla (§5.8).
@@ -150,12 +161,10 @@ fun SearchScreen(
     val copiedMessage = stringResource(R.string.search_copied)
     val whatsappInstalled = remember { context.appLabel(WHATSAPP_PACKAGE) != null }
     val whatsappWithoutRows = remember(source) { whatsappInstalled && viewModel.noWhatsappRows() }
-    val whatsappIcon =
-        remember(source) {
-            source.index.firstNotNullOfOrNull { item ->
-                (item.payload as? Target.App)?.app?.takeIf { it.component.packageName == WHATSAPP_PACKAGE }?.icon
-            }
-        }
+    val whatsappIcon = remember(source) { source.appIcon(WHATSAPP_PACKAGE) }
+    // Las salidas llevan el icono de la app a la que mandan, para reconocerlas sin leer.
+    val assistantIcon = remember(source, prefs.assistantPackage) { source.appIcon(prefs.assistantPackage) }
+    val playIcon = remember(source) { source.appIcon(PLAY_STORE_PACKAGE) }
 
     fun channelsOf(person: Person): List<Channel> =
         viewModel.orderedChannels(person, person.channels(whatsappWithoutRows), source)
@@ -207,7 +216,7 @@ fun SearchScreen(
 
         is Target.AlisioSettings -> {
             viewModel.record(target)
-            onOpenSettings()
+            onOpenSettings(target.page)
         }
 
         is Target.Zones -> {
@@ -242,11 +251,6 @@ fun SearchScreen(
     }
 
     fun runQuick(quick: Quick) = when (quick) {
-        // No se apunta en el historial: los gastos no dejan rastro en Alisio.
-        is Quick.ExpenseEntry -> {
-            finish(context.openExpense(quick.url), resources.getString(R.string.search_expense_app))
-        }
-
         is Quick.Clock -> {
             val opened = context.setClock(quick.command)
             // El reloj no enseña su pantalla (EXTRA_SKIP_UI): sin este aviso no se sabría si ha valido.
@@ -256,14 +260,14 @@ fun SearchScreen(
                         is ClockCommand.Alarm -> R.string.search_alarm_set
                         is ClockCommand.Timer -> R.string.search_timer_set
                     }
-                val message = resources.getString(done, resources.clockValue(quick.command))
+                val message = resources.getString(done, context.clockValue(quick.command))
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
             finish(opened, resources.getString(R.string.search_clock_app))
         }
     }
 
-    fun runClip(content: ClipContent) = finish(context.openClip(content), resources.getString(content.action))
+    fun runClip(content: ClipContent) = finish(context.openClip(content), content.text)
 
     fun onEnter() {
         val calculation = state.calculation
@@ -336,23 +340,18 @@ fun SearchScreen(
             .systemBarsPadding()
             .imePadding()
     ) {
-        Text(
-            text = formatClock(rememberNow()),
-            style = MaterialTheme.typography.headlineLarge,
-            color = AlisioTokens.TextTertiary.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 24.dp, top = 16.dp)
-        )
         if (card != null) {
+            // Con muchos canales y la letra grande la tarjeta puede no caber sobre el teclado.
             Box(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = ScreenMargin, vertical = 8.dp),
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState(), reverseScrolling = true),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 PersonCard(
                     name = card.name,
                     channels = cardChannels,
                     learned = viewModel.mainChannel(card, cardChannels.toSet(), source)?.learned == true,
-                    whatsappIcon = whatsappIcon,
                     onContact = { contact(card, it) },
+                    onBack = { selectedKey = null },
                     onOpenContact = { finish(context.openContact(card), card.name) },
                     photo = rememberContactPhoto(card, photos)
                 )
@@ -362,51 +361,47 @@ fun SearchScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 state = listState,
                 reverseLayout = true,
-                contentPadding = PaddingValues(horizontal = ScreenMargin, vertical = 8.dp)
+                // Arriba, aire bajo la barra de estado: la última fila no se corta en seco contra ella.
+                contentPadding =
+                    PaddingValues(start = AlisioTokens.Outset, end = AlisioTokens.Outset, top = 16.dp, bottom = 8.dp)
             ) {
                 // Con reverseLayout el primer elemento es el más cercano a la barra.
                 if (state.query.isBlank()) {
                     clip?.let { content ->
                         item(key = "clipboard") {
                             ItemRow(
-                                title = AnnotatedString(stringResource(content.action)),
+                                // Un enlace dice a qué sitio lleva: Enter lo abre sin haberlo escrito.
+                                title = AnnotatedString(clipTitle(content)),
                                 leadingIcon = content.icon,
                                 subtitle = content.text,
-                                trailing = stringResource(R.string.search_enter),
-                                highlighted = true,
+                                enterTarget = true,
+                                onClickLabel = stringResource(R.string.search_do_open),
                                 onClick = { runClip(content) }
                             )
                         }
-                        item { SectionLabel(stringResource(R.string.search_section_clipboard)) }
                     }
-                    recents(state, photos, onOpen = ::open) { person ->
+                    recents(state, photos, onOpen = ::open, onAppMenu = onAppMenu) { person ->
                         PersonActions(person, ::channelsOf, whatsappIcon, ::contact)
                     }
                     if (!contactsGranted) {
                         item(key = "allow-contacts") {
                             ItemRow(
                                 title = AnnotatedString(stringResource(R.string.people_allow)),
-                                leading = "☺",
+                                leadingIcon = R.drawable.ic_contacts,
                                 subtitle = stringResource(R.string.people_allow_hint),
+                                subtitleLines = 2,
                                 onClick = onAskContacts
                             )
                         }
-                    }
-                    // Acceso a Zonas (§5.3). Arriba del todo: lo reciente se queda junto al pulgar.
-                    item(key = "zones") {
-                        ItemRow(
-                            title = AnnotatedString(stringResource(R.string.zones_title)),
-                            leadingIcon = R.drawable.ic_zones,
-                            subtitle = stringResource(R.string.zones_search_subtitle),
-                            onClick = onOpenZones
-                        )
                     }
                 } else {
                     results(
                         state,
                         photos,
                         assistant,
+                        assistantIcon,
                         onOpen = ::open,
+                        onAppMenu = onAppMenu,
                         onCopy = ::copyCalculation,
                         onQuick = ::runQuick,
                         onFallback = ::fallback
@@ -414,19 +409,21 @@ fun SearchScreen(
                 }
             }
         }
-        Row(
-            Modifier.padding(horizontal = ScreenMargin, vertical = 8.dp),
+        // Las salidas: a dónde mandar lo escrito si no está en el teléfono. Si no caben en una línea
+        // pasan a otra; nunca se cortan ni se desplazan.
+        FlowRow(
+            Modifier.padding(horizontal = AlisioTokens.Outset, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (assistant != null) {
-                Chip(assistant) {
+                Chip(assistant, icon = R.drawable.ic_auto_awesome, appIcon = assistantIcon) {
                     finish(context.askAssistant(prefs.assistantPackage, state.query), assistant)
                 }
             }
-            Chip(stringResource(R.string.search_chip_web)) {
+            Chip(stringResource(R.string.search_chip_web), icon = R.drawable.ic_search) {
                 finish(context.searchWeb(prefs.webSearchPackage, state.query), webLabel)
             }
-            Chip(stringResource(R.string.search_chip_play)) {
+            Chip(stringResource(R.string.search_chip_play), icon = R.drawable.ic_open_in_new, appIcon = playIcon) {
                 finish(context.searchPlayStore(state.query), resources.getString(R.string.search_chip_play))
             }
         }
@@ -440,21 +437,51 @@ fun SearchScreen(
             onEnter = ::onEnter,
             modifier =
                 Modifier
-                    .padding(start = ScreenMargin, end = ScreenMargin, bottom = 12.dp)
-                    .focusRequester(focusRequester)
+                    .padding(start = AlisioTokens.Outset, end = AlisioTokens.Outset, bottom = 12.dp)
+                    .focusRequester(focusRequester),
+            // Zonas y los ajustes de Alisio, siempre a la vista con el campo vacío y junto al pulgar.
+            // Al escribir ceden el sitio al botón de borrar: entonces salen como resultados.
+            emptyActions = {
+                RoundIconButton(
+                    R.drawable.ic_zones,
+                    stringResource(R.string.zones_title),
+                    AlisioTokens.TextSecondary,
+                    onOpenZones
+                )
+                RoundIconButton(
+                    R.drawable.ic_settings,
+                    stringResource(R.string.settings_title),
+                    AlisioTokens.TextSecondary,
+                    onClick = { onOpenSettings(SettingsDestination.COVER) }
+                )
+            }
         )
     }
+}
+
+private const val PLAY_STORE_PACKAGE = "com.android.vending"
+
+/** El icono de una app instalada, tal como sale en los resultados; `null` si no está. */
+private fun SearchSource.appIcon(packageName: String): Bitmap? = index.firstNotNullOfOrNull { item ->
+    (item.payload as? Target.App)?.app?.takeIf { it.component.packageName == packageName }?.icon
 }
 
 private fun LazyListScope.recents(
     state: SearchState,
     photos: ContactPhotos?,
     onOpen: (Target) -> Unit,
+    onAppMenu: (AppEntry) -> Unit,
     personActions: @Composable RowScope.(Person) -> Unit
 ) {
     items(state.recents.size, key = { state.recents[it].key.toString() }) { index ->
         val app = state.recents[index]
-        ItemRow(title = AnnotatedString(app.label), icon = app.icon, onClick = { onOpen(Target.App(app)) })
+        ItemRow(
+            title = AnnotatedString(app.label),
+            icon = app.icon,
+            onLongClick = { onAppMenu(app) },
+            onLongClickLabel = stringResource(R.string.dock_app_menu),
+            onClick = { onOpen(Target.App(app)) }
+        )
     }
     if (state.recents.isNotEmpty()) item { SectionLabel(stringResource(R.string.search_section_recents)) }
     items(state.recentPeople.size, key = { personKey(state.recentPeople[it].lookupKey) }) { index ->
@@ -462,7 +489,7 @@ private fun LazyListScope.recents(
         ItemRow(
             title = AnnotatedString(person.name),
             icon = rememberContactPhoto(person, photos),
-            leading = initials(person.name),
+            avatarName = person.name,
             actions = { personActions(person) },
             onClick = { onOpen(Target.Contact(person)) }
         )
@@ -474,26 +501,29 @@ private fun LazyListScope.results(
     state: SearchState,
     photos: ContactPhotos?,
     assistant: String?,
+    assistantIcon: Bitmap?,
     onOpen: (Target) -> Unit,
+    onAppMenu: (AppEntry) -> Unit,
     onCopy: (String) -> Unit,
     onQuick: (Quick) -> Unit,
     onFallback: (String) -> Unit,
     personActions: @Composable RowScope.(Person) -> Unit
 ) {
     val quick = state.quick
-    if (quick != null && state.quickFirst) quickRow(quick, first = true, onQuick)
+    if (quick != null && state.quickFirst) quickRow(quick, onQuick)
     state.calculation?.let { result ->
         item(key = "calc") {
             ItemRow(
                 title = AnnotatedString(result),
-                leading = "=",
-                subtitle = stringResource(R.string.search_calc_hint),
-                trailing = stringResource(R.string.search_enter),
-                highlighted = true,
+                leadingIcon = R.drawable.ic_calculate,
+                // La cuenta escrita, para comprobar de un vistazo que el resultado es de lo que se quería.
+                subtitle = state.query.trim(),
+                enterTarget = true,
+                numeral = true,
+                onClickLabel = stringResource(R.string.search_do_copy),
                 onClick = { onCopy(result) }
             )
         }
-        item { SectionLabel(stringResource(R.string.search_section_calc)) }
     }
     if (state.calculation == null && state.sections.isEmpty() && !state.quickFirst) {
         item(key = "fallback") {
@@ -506,14 +536,15 @@ private fun LazyListScope.results(
                 }
             ItemRow(
                 title = AnnotatedString(title),
-                leading = "?",
-                trailing = stringResource(R.string.search_enter),
-                highlighted = true,
+                // El icono dice a dónde va la pregunta: a la app del asistente o a un buscador.
+                icon = assistantIcon.takeIf { assistant != null },
+                leadingIcon = if (assistant != null) R.drawable.ic_auto_awesome else R.drawable.ic_search,
+                enterTarget = true,
                 onClick = { onFallback(state.query) }
             )
         }
     }
-    state.sections.forEachIndexed { sectionIndex, (section, results) ->
+    state.sections.forEach { (section, results) ->
         items(results.size, key = { "${section.name}:$it" }) { index ->
             val result = results[index]
             val best = result === state.best
@@ -521,20 +552,38 @@ private fun LazyListScope.results(
             ItemRow(
                 title = highlight(target.title, result.positions),
                 icon = if (target is Target.Contact) rememberContactPhoto(target.person, photos) else target.icon,
-                leading = if (target is Target.Contact) initials(target.person.name) else "⚙",
-                leadingIcon = if (target is Target.Zones) R.drawable.ic_zones else null,
+                avatarName = (target as? Target.Contact)?.person?.name,
+                leadingIcon =
+                    when (target) {
+                        is Target.Zones -> R.drawable.ic_zones
+
+                        is Target.Setting -> R.drawable.ic_settings
+
+                        // Cada sección con su dibujo, para no confundirla con un ajuste del sistema.
+                        is Target.AlisioSettings -> target.page.icon()
+
+                        else -> null
+                    },
                 subtitle =
                     when (target) {
                         is Target.App -> null
+
                         is Target.Shortcut -> target.shortcut.app.label
-                        is Target.Setting -> stringResource(R.string.search_setting_subtitle)
-                        is Target.AlisioSettings -> null
-                        is Target.Zones -> stringResource(R.string.zones_search_subtitle)
+
+                        // Su grupo ya se llama «Ajustes».
+                        is Target.Setting -> null
+
+                        // Una sección dice de qué ajustes es; la portada ya lo lleva en el nombre.
+                        is Target.AlisioSettings -> target.section
+
+                        is Target.Zones -> null
+
                         is Target.Contact -> null
                     },
-                // En una persona, lo que hace Enter lo dice el canal marcado, no la palabra «Enter».
-                trailing = if (best && target !is Target.Contact) stringResource(R.string.search_enter) else null,
-                highlighted = best,
+                enterTarget = best,
+                onClickLabel = stringResource(R.string.search_do_open),
+                onLongClick = (target as? Target.App)?.let { { onAppMenu(it.app) } },
+                onLongClickLabel = stringResource(R.string.dock_app_menu).takeIf { target is Target.App },
                 actions = (target as? Target.Contact)?.let { contact -> { personActions(contact.person) } },
                 onClick = { onOpen(target) }
             )
@@ -551,37 +600,14 @@ private fun LazyListScope.results(
                 )
             )
         }
-        // Un gasto que cede Enter a los resultados va justo detrás de la mejor sección: a la vista,
-        // pero sin quitarle el sitio junto a la barra.
-        if (sectionIndex == 0 && quick != null && !state.quickFirst) quickRow(quick, first = false, onQuick)
     }
 }
 
-/** La fila de un gasto, una alarma o un temporizador, con su etiqueta de sección. */
-private fun LazyListScope.quickRow(quick: Quick, first: Boolean, onQuick: (Quick) -> Unit) {
+/** La fila de una alarma o un temporizador. Es un resultado único: no lleva etiqueta de grupo. */
+private fun LazyListScope.quickRow(quick: Quick, onQuick: (Quick) -> Unit) {
     item(key = "quick") {
-        val resources = LocalResources.current
-        val trailing = if (first) stringResource(R.string.search_enter) else null
+        val context = LocalContext.current
         when (quick) {
-            is Quick.ExpenseEntry ->
-                ItemRow(
-                    title =
-                        AnnotatedString(
-                            stringResource(
-                                R.string.search_expense_title,
-                                // Con coma decimal, como el resultado de la calculadora.
-                                quick.expense.amount.replace('.', ','),
-                                quick.expense.concept
-                            )
-                        ),
-                    leadingIcon = R.drawable.ic_receipt,
-                    // La dirección que se va a abrir, para que se vea antes de abrirla.
-                    subtitle = quick.url,
-                    trailing = trailing,
-                    highlighted = first,
-                    onClick = { onQuick(quick) }
-                )
-
             is Quick.Clock -> {
                 val alarm = quick.command is ClockCommand.Alarm
                 ItemRow(
@@ -589,29 +615,32 @@ private fun LazyListScope.quickRow(quick: Quick, first: Boolean, onQuick: (Quick
                         AnnotatedString(
                             stringResource(
                                 if (alarm) R.string.search_alarm_title else R.string.search_timer_title,
-                                resources.clockValue(quick.command)
+                                context.clockValue(quick.command)
                             )
                         ),
                     leadingIcon = if (alarm) R.drawable.ic_alarm else R.drawable.ic_timer,
-                    trailing = trailing,
-                    highlighted = first,
+                    enterTarget = true,
                     onClick = { onQuick(quick) }
                 )
             }
         }
     }
-    item {
-        SectionLabel(
-            stringResource(
-                if (quick is Quick.Clock) R.string.search_section_clock else R.string.search_section_expense
-            )
-        )
-    }
 }
 
-/** La hora de una alarma («7:30») o la duración de un temporizador («1 h 30 min»), para enseñarla. */
-private fun Resources.clockValue(command: ClockCommand): String = when (command) {
-    is ClockCommand.Alarm -> String.format(Locale.ROOT, "%d:%02d", command.hour, command.minute)
+/**
+ * La hora de una alarma o la duración de un temporizador («1 h 30 min»), para enseñarla. La hora va
+ * como en el reloj del sistema, en 12 o 24 h: «19:00» o «7:00 p. m.». En 12 h lleva la marca de
+ * mañana o tarde, porque de ella depende cuándo suena.
+ */
+private fun Context.clockValue(command: ClockCommand): String = when (command) {
+    is ClockCommand.Alarm -> {
+        val time =
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, command.hour)
+                set(Calendar.MINUTE, command.minute)
+            }
+        DateFormat.getTimeFormat(this).format(time.time)
+    }
 
     is ClockCommand.Timer -> {
         val hours = command.seconds / 3600
@@ -625,13 +654,13 @@ private fun Resources.clockValue(command: ClockCommand): String = when (command)
     }
 }
 
-private val ClipContent.action: Int
-    @StringRes get() =
-        when (this) {
-            is ClipContent.Url -> R.string.search_clip_url
-            is ClipContent.Phone -> R.string.search_clip_phone
-            is ClipContent.Address -> R.string.search_clip_address
-        }
+/** Lo que hará la fila del portapapeles. Un enlace nombra su sitio, para verlo antes de abrirlo. */
+@Composable
+private fun clipTitle(content: ClipContent): String = when (content) {
+    is ClipContent.Url -> stringResource(R.string.search_clip_url, content.host)
+    is ClipContent.Phone -> stringResource(R.string.search_clip_phone)
+    is ClipContent.Address -> stringResource(R.string.search_clip_address)
+}
 
 private val ClipContent.icon: Int
     @DrawableRes get() =
@@ -694,6 +723,7 @@ private fun PersonActions(
     channelsOf(person).take(ROW_CHANNELS).forEachIndexed { index, channel ->
         ChannelButton(
             channel = channel,
+            personName = person.name,
             onClick = { onContact(person, channel, true) },
             whatsappIcon = whatsappIcon,
             main = index == 0

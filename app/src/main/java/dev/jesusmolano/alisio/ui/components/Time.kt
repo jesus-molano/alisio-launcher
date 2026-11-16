@@ -1,6 +1,7 @@
 package dev.jesusmolano.alisio.ui.components
 
 import android.text.format.DateFormat
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -9,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -34,6 +36,20 @@ fun rememberNow(): ZonedDateTime {
     }
     return now
 }
+
+// Hasta dónde se encoge la hora si no cabe, y en qué pasos, como fracción de su tamaño.
+private const val CLOCK_MIN_SCALE = 0.5f
+private const val CLOCK_STEP_SCALE = 0.05f
+
+/**
+ * Cómo se encoge la hora grande cuando no cabe: con formato de 12 h o letra grande del sistema se
+ * reduce antes que cortarse. La usan el Inicio y la bienvenida.
+ */
+fun clockAutoSize(clock: TextStyle): TextAutoSize = TextAutoSize.StepBased(
+    minFontSize = clock.fontSize * CLOCK_MIN_SCALE,
+    maxFontSize = clock.fontSize,
+    stepSize = clock.fontSize * CLOCK_STEP_SCALE
+)
 
 /** Hora en el formato del sistema (12 o 24 h), sin «a. m.»/«p. m.». */
 @Composable

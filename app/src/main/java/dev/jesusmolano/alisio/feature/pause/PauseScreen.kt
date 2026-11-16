@@ -27,19 +27,23 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.pause.pauseSecondsLeft
 import dev.jesusmolano.alisio.data.pause.PendingLaunch
 import dev.jesusmolano.alisio.ui.components.AppIcon
+import dev.jesusmolano.alisio.ui.components.PrimaryButton
+import dev.jesusmolano.alisio.ui.components.TextAction
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 import kotlinx.coroutines.delay
 
 private val PauseIconSize = 56.dp
-private val ScreenMargin = 24.dp
 
 // Cada cuánto se vuelve a mirar el reloj: bastante menos de un segundo para que el número no se salte.
 private const val TICK_MILLIS = 100L
@@ -64,6 +68,7 @@ fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit,
     // Al acabar, el número se apaga en su sitio: quitarlo movería el título justo cuando se va a tocar.
     val numberAlpha by animateFloatAsState(if (counting) 1f else 0f, label = "pause-number")
     val secondsLeft = pluralStringResource(R.plurals.pause_seconds_left, left, left)
+    val ready = stringResource(R.string.pause_ready, launch.label)
 
     Column(
         modifier =
@@ -73,13 +78,10 @@ fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit,
                 // La pausa se queda los toques: no llegan a lo que haya debajo.
                 .pointerInput(Unit) {}
                 .systemBarsPadding()
-                .padding(ScreenMargin),
+                .padding(AlisioTokens.Edge),
         verticalArrangement = Arrangement.Bottom
     ) {
-        launch.icon?.let {
-            AppIcon(it, PauseIconSize)
-            Spacer(Modifier.height(24.dp))
-        }
+        // La cuenta va lo primero: cuando se apaga queda aire arriba, no un hueco entre el icono y el título.
         Text(
             text = left.coerceAtLeast(1).toString(),
             style = AlisioTokens.Clock,
@@ -87,28 +89,38 @@ fun PauseScreen(launch: PendingLaunch, onOpen: () -> Unit, onCancel: () -> Unit,
             modifier =
                 Modifier
                     .alpha(numberAlpha)
-                    // Apagado sigue ocupando su sitio, pero el lector no debe anunciar una cuenta acabada.
-                    .then(
+                    // Apagado sigue ocupando su sitio. Para el lector deja de ser una cuenta y pasa a
+                    // decir, una sola vez, que ya se puede abrir: la región en vivo solo existe al
+                    // acabar, así no anuncia cada segundo.
+                    .clearAndSetSemantics {
                         if (counting) {
-                            Modifier.semantics { contentDescription = secondsLeft }
+                            contentDescription = secondsLeft
                         } else {
-                            Modifier.clearAndSetSemantics {}
+                            contentDescription = ready
+                            liveRegion = LiveRegionMode.Polite
                         }
-                    )
+                    }
         )
+        Spacer(Modifier.height(16.dp))
+        launch.icon?.let {
+            AppIcon(it, PauseIconSize)
+            Spacer(Modifier.height(24.dp))
+        }
         Text(
             text = stringResource(R.string.pause_title, launch.label),
             style = MaterialTheme.typography.headlineLarge,
-            color = AlisioTokens.Text
+            color = AlisioTokens.Text,
+            modifier = Modifier.semantics { heading() }
         )
         Spacer(Modifier.height(40.dp))
         // «No abrir» es el botón grande y el más cercano al pulgar: la salida fácil es no entrar.
-        TextButton(onClick = onOpen, enabled = !counting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.pause_open))
-        }
+        TextAction(
+            stringResource(R.string.pause_open),
+            onClick = onOpen,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !counting
+        )
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Text(stringResource(R.string.pause_cancel))
-        }
+        PrimaryButton(stringResource(R.string.pause_cancel), onClick = onCancel, modifier = Modifier.fillMaxWidth())
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,21 +43,32 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppSection
+import dev.jesusmolano.alisio.ui.components.AppIcon
+import dev.jesusmolano.alisio.ui.components.IconLabel
+import dev.jesusmolano.alisio.ui.components.selectedTile
+import dev.jesusmolano.alisio.ui.theme.AlisioTokens
+import dev.jesusmolano.alisio.ui.theme.onWallpaper
 import kotlin.math.roundToInt
 
 val TraceRailWidth = 48.dp
 private val RailLetterHeight = 22.dp
+
+/** Alto que pide el índice con [letters] letras sin apretarlas; con menos sitio se encogen. */
+fun traceRailHeight(letters: Int): Dp = RailLetterHeight * letters
 private val CellWidth = 80.dp
 private val CellHeight = 92.dp
 private val IconSize = 48.dp
@@ -73,15 +85,26 @@ private data class TraceState(val section: Int, val grid: TraceGrid, val locked:
  * cancela. Ocupa todo el [BoxScope] para poder tapar el Inicio mientras dura el trazo.
  *
  * @param railPadding márgenes del índice dentro de la pantalla (barras del sistema, dock).
+ * @param onOpenZones en el Inicio, el camino de TalkBack a todas las apps; `null` dentro de Zonas.
+ * @param onTracing avisa cuando empieza y cuando acaba un trazo.
  */
 @Composable
-fun BoxScope.Trace(sections: List<AppSection<AppEntry>>, railPadding: PaddingValues, onLaunch: (AppEntry) -> Unit) {
+fun BoxScope.Trace(
+    sections: List<AppSection<AppEntry>>,
+    railPadding: PaddingValues,
+    onLaunch: (AppEntry) -> Unit,
+    onOpenZones: (() -> Unit)? = null,
+    onTracing: (Boolean) -> Unit = {}
+) {
     if (sections.isEmpty()) return
     val view = LocalView.current
     val density = LocalDensity.current
     val insets = WindowInsets.systemBars
     // Si la lista de apps cambia a mitad de un trazo, el trazo se descarta: sus índices ya no valen.
     var trace by remember(sections) { mutableStateOf<TraceState?>(null) }
+    // Quien pinta debajo retira su contenido mientras dura el trazo: el velo no lo tapa del todo.
+    val tracing = trace != null
+    LaunchedEffect(tracing) { onTracing(tracing) }
     var boxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var railCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -89,6 +112,7 @@ fun BoxScope.Trace(sections: List<AppSection<AppEntry>>, railPadding: PaddingVal
         trace?.let { current -> sections.getOrNull(current.section)?.let { TraceOverlay(current, it) } }
 
         val railDescription = stringResource(R.string.trace_rail_description)
+        val openZones = stringResource(R.string.trace_open_zones)
         Column(
             modifier =
                 Modifier
@@ -101,7 +125,20 @@ fun BoxScope.Trace(sections: List<AppSection<AppEntry>>, railPadding: PaddingVal
                     // El índice pisa la franja del gesto atrás del borde derecho: sin esto, One UI
                     // se queda el trazo. El tope de 200 dp por borde no se aplica a la app de inicio.
                     .systemGestureExclusion()
-                    .semantics { contentDescription = railDescription }
+                    // TalkBack se queda los gestos y el trazo no se puede hacer con él: el camino
+                    // equivalente es Zonas, que tiene todas las apps y su propio índice.
+                    .semantics {
+                        contentDescription = railDescription
+                        if (onOpenZones != null) {
+                            customActions =
+                                listOf(
+                                    CustomAccessibilityAction(openZones) {
+                                        onOpenZones()
+                                        true
+                                    }
+                                )
+                        }
+                    }
                     .pointerInput(sections) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -183,16 +220,11 @@ fun BoxScope.Trace(sections: List<AppSection<AppEntry>>, railPadding: PaddingVal
             sections.forEachIndexed { index, section ->
                 val active = trace?.section == index
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val letter = AlisioTokens.RailLetter.onWallpaper()
+                    // La letra bajo el dedo es una señal viva: va en acento.
                     Text(
                         text = section.letter,
-                        fontSize = 11.sp,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                        color =
-                            if (active) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
-                            }
+                        style = if (active) letter.copy(color = AlisioTokens.Accent) else letter
                     )
                 }
             }
@@ -207,14 +239,14 @@ private fun TraceOverlay(trace: TraceState, section: AppSection<AppEntry>) {
     val density = LocalDensity.current
     val colors = MaterialTheme.colorScheme
     val selectedApp = trace.selected?.let(section.items::getOrNull)
-    Box(Modifier.fillMaxSize().background(colors.background.copy(alpha = 0.94f))) {
+    Box(Modifier.fillMaxSize().background(AlisioTokens.Scrim)) {
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .offset { IntOffset(0, (grid.top - HeaderHeight.toPx()).roundToInt()) }
                     .height(HeaderHeight)
-                    .padding(start = 24.dp, end = TraceRailWidth + GridGap + 8.dp, bottom = 8.dp),
+                    .padding(start = AlisioTokens.Edge, end = TraceRailWidth + GridGap * 2, bottom = GridGap),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.Bottom
         ) {
@@ -234,40 +266,19 @@ private fun TraceOverlay(trace: TraceState, section: AppSection<AppEntry>) {
         }
         section.items.take(grid.shown).forEachIndexed { index, app ->
             val selected = trace.selected == index
-            val shape = RoundedCornerShape(20.dp)
             Column(
                 modifier =
                     Modifier
                         .offset { IntOffset(grid.cellLeft(index).roundToInt(), grid.cellTop(index).roundToInt()) }
                         .size(with(density) { grid.cellWidth.toDp() }, with(density) { grid.cellHeight.toDp() })
                         .padding(2.dp)
-                        .then(
-                            if (selected) {
-                                Modifier
-                                    .background(colors.primary.copy(alpha = 0.14f), shape)
-                                    .border(1.dp, colors.primary, shape)
-                            } else {
-                                Modifier
-                            }
-                        )
+                        .selectedTile(selected, AlisioTokens.RowShape)
                         .padding(top = CellIconTop - 2.dp, start = 4.dp, end = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Decorativo: el nombre va debajo.
-                Image(
-                    bitmap = remember(app.icon) { app.icon.asImageBitmap() },
-                    contentDescription = null,
-                    modifier = Modifier.size(IconSize)
-                )
+                AppIcon(app.icon, IconSize)
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = app.label,
-                    fontSize = 11.sp,
-                    color = if (selected) colors.onBackground else colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
+                IconLabel(app.label, color = if (selected) AlisioTokens.Text else AlisioTokens.TextSecondary)
             }
         }
     }

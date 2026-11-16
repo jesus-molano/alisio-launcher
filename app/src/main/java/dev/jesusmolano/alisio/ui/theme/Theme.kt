@@ -1,44 +1,71 @@
 package dev.jesusmolano.alisio.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ripple.RippleAlpha
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RippleConfiguration
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.theme.FontChoice
 
-/** Tokens de docs/PLAN.md §6 que Material 3 no tiene con ese nombre. */
+/**
+ * Tokens de docs/DISENO.md §2 que Material 3 no tiene con ese nombre. Ninguna pantalla define
+ * colores, alfas, márgenes, radios ni tamaños de letra propios: se cambian aquí.
+ */
 object AlisioTokens {
+    // Color y superficies (§2.4).
     val Background = Color(0xFF0B0C0E)
     val Surface = Color(0xFF15171A)
-    val SurfaceElevated = Color(0xFF1B1E22)
-    val CardBorder = Color(0xFF23272C)
-    val ControlBorder = Color(0xFF2A2E34)
     val Text = Color(0xFFF2F3F5)
     val TextSecondary = Color(0xFF9AA0A8)
+
+    /** Solo para el texto de marcador de un campo. */
     val TextTertiary = Color(0xFF8A9099)
 
-    /** Acentos de §6; el primero es el de por defecto. */
+    /**
+     * Único relleno dentro de fondo opaco, hoja o placa: campo, chip sin elegir, botón tonal, avatar
+     * sin foto, fondo de tesela, asa de hoja y pista del interruptor apagado.
+     */
+    val Fill = Text.copy(alpha = 0.06f)
+
+    /** Todo lo que flota sobre el fondo de pantalla: píldora, Ahora, reproductor, islas, pila y hueco vacío. */
+    val Plate = Surface.copy(alpha = 0.86f)
+
+    /** Velo uniforme de Zonas sobre el fondo de pantalla. */
+    val ZonesVeil = Background.copy(alpha = 0.70f)
+
+    /** Velo de Trazo abierto: tapa el Inicio mientras dura el gesto. */
+    val Scrim = Background.copy(alpha = 0.86f)
+
+    /** Contenido de una opción a la que le falta un requisito y de un destino de arrastre imposible. */
+    const val DISABLED_ALPHA = 0.38f
+
+    /** Acentos; el primero es el de por defecto. */
     val Accents = listOf(Color(0xFF6FD6C6), Color(0xFF8FB4FF), Color(0xFFF2B872), Color(0xFFC9A7FF))
 
     /**
      * Acento elegido en los ajustes. Es estado observable: lo fija [AlisioTheme] y todo lo que lo
-     * lee al componerse o al dibujarse se repinta cuando cambia.
+     * lee al componerse o al dibujarse se repinta cuando cambia. Solo marca lo que hará Enter, lo
+     * elegido, la acción principal y una señal viva (§2.5); nunca decora.
      */
     val Accent: Color get() = accentState.value
 
@@ -48,88 +75,243 @@ object AlisioTokens {
         accentState.value = color
     }
 
+    /** Relleno del destino de Enter y del chip elegido. */
     val AccentSoft: Color get() = Accent.copy(alpha = 0.14f)
 
-    val CardShape = RoundedCornerShape(22.dp)
+    /**
+     * Verde de WhatsApp en el canal principal: sus canales se reconocen por el color aunque el
+     * dibujo sea el mismo que el de la llamada normal.
+     */
+    val WhatsAppGreen = Color(0xFF25D366)
+
+    // Espaciado (§2.2), en rejilla de 4 dp.
+
+    /** El filo: donde empieza todo el contenido, en todas las pantallas. */
+    val Edge = 24.dp
+
+    /** Margen exterior de placas, filas, campos y teselas; con sus 12 dp de relleno, su contenido cae en [Edge]. */
+    val Outset = 12.dp
+
+    /** Hueco del icono de una fila. */
+    val IconSlot = 44.dp
+
+    /** Del hueco del icono al texto: el segundo filo queda a [Edge] + [IconSlot] + [IconGap]. */
+    val IconGap = 16.dp
+    val RowMinHeight = 56.dp
+
+    /** Aire antes de una etiqueta de sección. */
+    val GroupGap = 28.dp
+
+    /** Aire después de una etiqueta de sección. */
+    val LabelGap = 8.dp
+
+    /** Bajo un título de pantalla. */
+    val TitleGap = 24.dp
+
+    /** Bajo un título de hoja. */
+    val SheetTitleGap = 20.dp
+
+    /** Entre las piezas del pie del Inicio y entre islas. */
+    val PlateGap = 12.dp
+    val MinTouch = 48.dp
+
+    /** Lado del icono de una app en el dock, en Zonas y en las teselas. */
+    val DockIconSize = 52.dp
+
+    // Radios (§2.3). No hay un quinto: los avatares van en círculo.
     val PillShape = RoundedCornerShape(28.dp)
-    val DockIconShape = RoundedCornerShape(17.dp)
+    val CardShape = RoundedCornerShape(22.dp)
     val RowShape = RoundedCornerShape(20.dp)
+    val DockIconShape = RoundedCornerShape(17.dp)
 
-    /** Reloj del Inicio: Space Grotesk Light, 112 sp. */
-    val Clock =
-        TextStyle(
-            fontFamily = SpaceGrotesk,
-            fontWeight = FontWeight.Light,
-            fontSize = 112.sp,
-            lineHeight = 112.sp,
-            letterSpacing = (-0.045).em
-        )
+    /** Esquinas superiores de una hoja y del cuerpo de los ajustes. */
+    val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-    /** Etiqueta de sección: se escribe en mayúsculas. */
-    val SectionLabel =
-        TextStyle(
-            fontFamily = Inter,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 11.sp,
-            letterSpacing = 0.12.em,
-            color = TextTertiary
-        )
+    // Tipografía (§2.1) que no cabe en las ranuras de Material. Las familias salen de la elección
+    // de los ajustes, por eso cada estilo se lee al componer.
 
-    val DockLabel = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp)
+    /** Reloj del Inicio. */
+    val Clock: TextStyle
+        @Composable @ReadOnlyComposable
+        get() =
+            TextStyle(
+                fontFamily = LocalAlisioFonts.current.display,
+                fontWeight = FontWeight.Light,
+                fontSize = 112.sp,
+                lineHeight = 112.sp,
+                letterSpacing = (-0.045).em
+            )
+
+    /** Cifra: el resultado de un cálculo y la hora de una vista previa. */
+    val Numeral: TextStyle
+        @Composable @ReadOnlyComposable
+        get() =
+            TextStyle(
+                fontFamily = LocalAlisioFonts.current.display,
+                fontWeight = FontWeight.Light,
+                fontSize = 40.sp,
+                lineHeight = 44.sp,
+                letterSpacing = (-0.02).em
+            )
+
+    /** Etiqueta de sección: mayúscula solo inicial, sin interletrado. */
+    val SectionLabel: TextStyle
+        @Composable @ReadOnlyComposable
+        get() =
+            TextStyle(
+                fontFamily = LocalAlisioFonts.current.text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = TextSecondary
+            )
+
+    /** Nombre bajo un icono: dock, Zonas, Trazo y teselas. */
+    val DockLabel: TextStyle
+        @Composable @ReadOnlyComposable
+        get() =
+            TextStyle(
+                fontFamily = LocalAlisioFonts.current.text,
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.5.sp,
+                lineHeight = 14.sp
+            )
+
+    /** Letra del índice de Trazo y de Resto. */
+    val RailLetter: TextStyle
+        @Composable @ReadOnlyComposable
+        get() =
+            TextStyle(
+                fontFamily = LocalAlisioFonts.current.text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+                lineHeight = 14.sp
+            )
 }
 
-private fun colorScheme(accent: Color) = darkColorScheme(
-    primary = accent,
-    onPrimary = AlisioTokens.Background,
-    background = AlisioTokens.Background,
-    onBackground = AlisioTokens.Text,
-    surface = AlisioTokens.Surface,
-    onSurface = AlisioTokens.Text,
-    surfaceContainerLow = AlisioTokens.Surface,
-    surfaceContainer = AlisioTokens.SurfaceElevated,
-    onSurfaceVariant = AlisioTokens.TextSecondary,
-    outline = AlisioTokens.ControlBorder,
-    outlineVariant = AlisioTokens.CardBorder
-)
+private val OnWallpaperShadowColor = Color.Black.copy(alpha = 0.45f)
+private val OnWallpaperShadowBlur = 10.dp
 
-private val AlisioTypography =
-    Typography().run {
-        copy(
-            displayMedium = displayMedium.copy(fontFamily = SpaceGrotesk, fontWeight = FontWeight.Light),
-            displaySmall = displaySmall.copy(fontFamily = SpaceGrotesk, fontWeight = FontWeight.Medium),
-            // Título de pantalla.
-            headlineLarge = headlineLarge.copy(
-                fontFamily = SpaceGrotesk,
+/**
+ * El estilo para un texto que va directo sobre el fondo de pantalla: siempre claro y opaco, con una
+ * sombra sin desplazamiento que lo separa de un fondo claro (§3). No se usa dentro de una placa ni
+ * sobre fondo opaco.
+ */
+@Composable
+@ReadOnlyComposable
+fun TextStyle.onWallpaper(): TextStyle {
+    val blur = with(LocalDensity.current) { OnWallpaperShadowBlur.toPx() }
+    return copy(color = AlisioTokens.Text, shadow = Shadow(OnWallpaperShadowColor, Offset.Zero, blur))
+}
+
+private fun colorScheme(accent: Color): androidx.compose.material3.ColorScheme {
+    // Lo que Material pinta como contenedor o contorno usa el único relleno de la guía.
+    val fill = AlisioTokens.Fill.compositeOver(AlisioTokens.Surface)
+    return darkColorScheme(
+        primary = accent,
+        onPrimary = AlisioTokens.Background,
+        background = AlisioTokens.Background,
+        onBackground = AlisioTokens.Text,
+        surface = AlisioTokens.Surface,
+        onSurface = AlisioTokens.Text,
+        surfaceContainerLow = AlisioTokens.Surface,
+        surfaceContainer = fill,
+        inverseSurface = AlisioTokens.Surface,
+        inverseOnSurface = AlisioTokens.Text,
+        onSurfaceVariant = AlisioTokens.TextSecondary,
+        outline = fill,
+        outlineVariant = fill
+    )
+}
+
+private fun typography(fonts: AlisioFonts) = Typography().run {
+    copy(
+        displayMedium = displayMedium.copy(fontFamily = fonts.display, fontWeight = FontWeight.Light),
+        displaySmall = displaySmall.copy(fontFamily = fonts.display, fontWeight = FontWeight.Medium),
+        // Título de pantalla.
+        headlineLarge =
+            headlineLarge.copy(
+                fontFamily = fonts.display,
                 fontWeight = FontWeight.Medium,
-                fontSize = 32.sp
+                fontSize = 32.sp,
+                lineHeight = 38.sp
             ),
-            // Título de fila.
-            titleMedium = titleMedium.copy(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-            bodyLarge = bodyLarge.copy(fontFamily = Inter, fontSize = 15.sp, letterSpacing = 0.sp),
-            bodyMedium = bodyMedium.copy(fontFamily = Inter, fontSize = 13.sp),
-            labelLarge = labelLarge.copy(fontFamily = Inter, fontWeight = FontWeight.SemiBold),
-            labelMedium = labelMedium.copy(fontFamily = Inter, fontWeight = FontWeight.Medium),
-            labelSmall = labelSmall.copy(fontFamily = Inter, fontWeight = FontWeight.Medium)
-        )
-    }
+        // Título de hoja y cabecera de persona.
+        headlineSmall =
+            headlineSmall.copy(
+                fontFamily = fonts.display,
+                fontWeight = FontWeight.Medium,
+                fontSize = 24.sp,
+                lineHeight = 30.sp
+            ),
+        titleLarge = titleLarge.copy(fontFamily = fonts.text, fontWeight = FontWeight.Medium),
+        // Título de fila. La jerarquía sale del tamaño y del color, no de la negrita.
+        titleMedium =
+            titleMedium.copy(
+                fontFamily = fonts.text,
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                letterSpacing = 0.sp
+            ),
+        titleSmall = titleSmall.copy(fontFamily = fonts.text),
+        // Texto y campo.
+        bodyLarge = bodyLarge.copy(fontFamily = fonts.text, fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = 0.sp),
+        // Secundario.
+        bodyMedium =
+            bodyMedium.copy(fontFamily = fonts.text, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.sp),
+        bodySmall = bodySmall.copy(fontFamily = fonts.text),
+        // Acción, botón y chip.
+        labelLarge =
+            labelLarge.copy(
+                fontFamily = fonts.text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.sp
+            ),
+        labelMedium = labelMedium.copy(fontFamily = fonts.text, fontWeight = FontWeight.Medium),
+        labelSmall = labelSmall.copy(fontFamily = fonts.text, fontWeight = FontWeight.Medium)
+    )
+}
 
 private val AlisioShapes =
     Shapes(
-        small = RoundedCornerShape(12.dp),
+        small = AlisioTokens.RowShape,
         medium = AlisioTokens.RowShape,
         large = AlisioTokens.CardShape,
         extraLarge = AlisioTokens.PillShape
     )
 
-/** @param accent índice en [AlisioTokens.Accents]; uno fuera de rango usa el de por defecto. */
+// Pulsado (§2.6): el texto al 8 %, con la forma del elemento. Se define una vez para toda la app.
+private const val PRESSED_ALPHA = 0.08f
+
+@OptIn(ExperimentalMaterial3Api::class)
+private val Pressed =
+    RippleConfiguration(
+        color = AlisioTokens.Text,
+        rippleAlpha = RippleAlpha(PRESSED_ALPHA, PRESSED_ALPHA, PRESSED_ALPHA, PRESSED_ALPHA)
+    )
+
+/**
+ * @param accent índice en [AlisioTokens.Accents]; uno fuera de rango usa el de por defecto.
+ * @param font familias de toda la interfaz.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AlisioTheme(accent: Int = 0, content: @Composable () -> Unit) {
+fun AlisioTheme(accent: Int = 0, font: FontChoice = FontChoice.PAIR, content: @Composable () -> Unit) {
     val color = AlisioTokens.Accents.getOrElse(accent) { AlisioTokens.Accents.first() }
     SideEffect { AlisioTokens.useAccent(color) }
+    val fonts = remember(font) { fontsFor(font) }
     MaterialTheme(
         colorScheme = remember(color) { colorScheme(color) },
-        typography = AlisioTypography,
-        shapes = AlisioShapes,
-        content = content
-    )
+        typography = remember(fonts) { typography(fonts) },
+        shapes = AlisioShapes
+    ) {
+        CompositionLocalProvider(
+            LocalAlisioFonts provides fonts,
+            LocalRippleConfiguration provides Pressed,
+            content = content
+        )
+    }
 }

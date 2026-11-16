@@ -10,10 +10,7 @@ import dev.jesusmolano.alisio.AppContainer
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.calc.calculate
 import dev.jesusmolano.alisio.core.extras.ClockCommand
-import dev.jesusmolano.alisio.core.extras.Expense
-import dev.jesusmolano.alisio.core.extras.expenseUrl
 import dev.jesusmolano.alisio.core.extras.parseClockCommand
-import dev.jesusmolano.alisio.core.extras.parseExpense
 import dev.jesusmolano.alisio.core.people.Channel
 import dev.jesusmolano.alisio.core.people.MainChannel
 import dev.jesusmolano.alisio.core.people.channelKey
@@ -27,6 +24,7 @@ import dev.jesusmolano.alisio.core.search.Usage
 import dev.jesusmolano.alisio.core.search.mostRecentKeys
 import dev.jesusmolano.alisio.core.search.search
 import dev.jesusmolano.alisio.core.search.toSections
+import dev.jesusmolano.alisio.core.settings.SettingsDestination
 import dev.jesusmolano.alisio.core.time.Clock
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppsRepository
@@ -59,8 +57,12 @@ sealed interface Target {
     /** Una persona de la agenda: abre su tarjeta, donde se elige el canal. */
     class Contact(val person: Person) : Target
 
-    /** Los ajustes del propio Alisio. */
-    class AlisioSettings(val label: String) : Target
+    /**
+     * Los ajustes del propio Alisio: su portada o una de sus secciones.
+     *
+     * @param section nombre de los ajustes cuando [page] es una sección, para decir de dónde es.
+     */
+    class AlisioSettings(val label: String, val page: SettingsDestination, val section: String?) : Target
 
     /** Zonas, la vista de islas con todas las apps. */
     class Zones(val label: String) : Target
@@ -77,9 +79,6 @@ class Result(val target: Target, val positions: IntArray)
 
 /** Lo que lo escrito pide hacer en vez de buscar (§5.8). */
 sealed interface Quick {
-    /** Apuntar un gasto: [url] es la plantilla de los ajustes ya rellena. */
-    class ExpenseEntry(val expense: Expense, val url: String) : Quick
-
     /** Poner una alarma o un temporizador. */
     class Clock(val command: ClockCommand) : Quick
 }
@@ -90,7 +89,7 @@ sealed interface Quick {
  * @param sections por orden de cercanía a la barra: la primera es la del mejor resultado, y dentro
  *   de cada una el primero es el mejor.
  * @param calculation resultado si lo escrito es una operación; entonces es lo que abre Enter.
- * @param quick gasto, alarma o temporizador que lo escrito pide, si no es una operación.
+ * @param quick alarma o temporizador que lo escrito pide, si no es una operación.
  * @param recents apps abiertas hace menos; solo se enseñan con la barra vacía.
  * @param recentPeople personas contactadas hace menos; también solo con la barra vacía.
  */
@@ -102,12 +101,8 @@ class SearchState(
     val recents: List<AppEntry> = emptyList(),
     val recentPeople: List<Person> = emptyList()
 ) {
-    /**
-     * Si [quick] es lo que abre Enter. La alarma y el temporizador empiezan por su palabra y son
-     * inequívocos; un gasto tiene la forma de muchas búsquedas («3 en raya»), así que cede ante
-     * cualquier resultado y solo se queda Enter cuando no hay ninguno.
-     */
-    val quickFirst: Boolean get() = quick is Quick.Clock || (quick is Quick.ExpenseEntry && sections.isEmpty())
+    /** Si [quick] es lo que abre Enter: la alarma y el temporizador empiezan por su palabra y son inequívocos. */
+    val quickFirst: Boolean get() = quick is Quick.Clock
 
     /** El resultado que abre Enter, si no hay cálculo ni manda [quick]. */
     val best: Result?
@@ -143,13 +138,18 @@ class SearchViewModel(
             val label = text(setting.label)
             IndexItem<Target>(setting.key, label, Target.Setting(setting, label), setting.synonyms, SETTING_WEIGHT)
         } +
-            IndexItem<Target>(
-                key = ALISIO_SETTINGS_KEY,
-                label = alisioSettingsLabel,
-                payload = Target.AlisioSettings(alisioSettingsLabel),
-                synonyms = listOf("ajustes de alisio", "alisio settings", "launcher", "iconos", "icons", "dock"),
-                weight = SETTING_WEIGHT
-            ) +
+            // La portada y cada sección: quien escribe «acento» o «pausa» llega a su página sin recorrerlos.
+            ALISIO_PAGES.map { page ->
+                val label = text(page.label)
+                val cover = page.destination == SettingsDestination.COVER
+                IndexItem<Target>(
+                    key = alisioSettingsKey(page.destination),
+                    label = label,
+                    payload = Target.AlisioSettings(label, page.destination, alisioSettingsLabel.takeIf { !cover }),
+                    synonyms = page.synonyms,
+                    weight = SETTING_WEIGHT
+                )
+            } +
             // Zonas hace de cajón de apps: se encuentra también por los nombres de siempre.
             IndexItem<Target>(
                 key = ZONES_KEY,
@@ -211,24 +211,16 @@ class SearchViewModel(
      * Busca en el momento, sin pasar por un flujo: la pantalla lo llama en cada tecla con el texto
      * que tiene el campo, así Enter y los resultados nunca van una letra por detrás (§5.3: cada
      * tecla recorre el índice entero).
-     *
-     * @param expenseTemplate plantilla del gasto rápido de los ajustes; vacía o inválida, no hay gasto.
      */
-    fun search(query: String, source: SearchSource, expenseTemplate: String): SearchState {
+    fun search(query: String, source: SearchSource): SearchState {
         val sections =
             search(source.index, query, source.usage)
                 .toSections(sectionOf = { sectionOf(it.item.payload) }, limitOf = Section::limit)
                 .map { (section, hits) -> section to hits.map { Result(it.item.payload, it.positions) } }
         val calculation = calculate(query)
-        // Una operación gana a todo: «12 x 3» es una cuenta, no un gasto de 12 € en «x 3».
-        val quick = if (calculation == null) quickOf(query, expenseTemplate) else null
+        // Una operación gana a todo: lo que se lee como cuenta no se interpreta además como orden.
+        val quick = if (calculation == null) parseClockCommand(query)?.let(Quick::Clock) else null
         return SearchState(query, sections, calculation, quick, source.recents, source.recentPeople)
-    }
-
-    private fun quickOf(query: String, expenseTemplate: String): Quick? {
-        parseClockCommand(query)?.let { return Quick.Clock(it) }
-        val expense = parseExpense(query) ?: return null
-        return expenseUrl(expenseTemplate, expense)?.let { Quick.ExpenseEntry(expense, it) }
     }
 
     /**
@@ -242,9 +234,6 @@ class SearchViewModel(
 
     /** Ningún contacto tiene filas de WhatsApp: señal de que WhatsApp ya no las escribe (riesgo de §9). */
     fun noWhatsappRows(): Boolean = contacts.people.value.none { it.whatsappRows.isNotEmpty() }
-
-    /** Tras responder al diálogo de permisos: la agenda se lee o se vacía según lo concedido. */
-    fun onContactsPermissionResult() = contacts.onPermissionChanged()
 
     /** Canal principal de [person], según lo aprendido. */
     fun mainChannel(person: Person, channels: Set<Channel>, source: SearchSource): MainChannel? =
@@ -284,7 +273,7 @@ class SearchViewModel(
 
         is Target.Setting -> history.record(LaunchHistory.TYPE_SETTING, target.setting.key)
 
-        is Target.AlisioSettings -> history.record(LaunchHistory.TYPE_SETTING, ALISIO_SETTINGS_KEY)
+        is Target.AlisioSettings -> history.record(LaunchHistory.TYPE_SETTING, alisioSettingsKey(target.page))
 
         is Target.Zones -> history.record(LaunchHistory.TYPE_SETTING, ZONES_KEY)
 
@@ -312,6 +301,71 @@ class SearchViewModel(
         private const val RECENT_PEOPLE = 3
         private const val ALISIO_SETTINGS_KEY = "setting:alisio"
         private const val ZONES_KEY = "alisio:zones"
+
+        /** La portada conserva la clave de siempre, para no perder su historial; cada sección añade la suya. */
+        private fun alisioSettingsKey(page: SettingsDestination): String =
+            if (page == SettingsDestination.COVER) ALISIO_SETTINGS_KEY else ALISIO_SETTINGS_KEY + ":" + page.id
+
+        /**
+         * Una página de los ajustes de Alisio como resultado de la barra.
+         *
+         * @param synonyms las opciones que hay dentro, en español y en inglés: se encuentra por ellas.
+         */
+        private class AlisioPage(val destination: SettingsDestination, val label: Int, val synonyms: List<String>)
+
+        private val ALISIO_PAGES =
+            listOf(
+                AlisioPage(
+                    SettingsDestination.COVER,
+                    R.string.settings_title,
+                    listOf("ajustes de alisio", "alisio settings", "launcher", "configuración", "preferences")
+                ),
+                AlisioPage(
+                    SettingsDestination.LOOK,
+                    R.string.settings_appearance,
+                    listOf(
+                        "aspecto", "apariencia", "look", "appearance", "acento", "accent", "velo", "veil",
+                        "fondo de pantalla", "wallpaper", "iconos", "icons", "paquete de iconos", "icon pack",
+                        "tipografía", "letra", "fuente", "font", "nombres", "labels"
+                    )
+                ),
+                AlisioPage(
+                    SettingsDestination.HOME,
+                    R.string.settings_home,
+                    listOf(
+                        "inicio", "home screen", "dock", "sugerencia", "ahora", "suggestion", "reproductor", "player",
+                        "puntos", "no leído", "unread", "dots", "gestos", "gestures", "deslizar", "swipe", "pellizcar",
+                        "pinch", "bloquear", "lock", "bluetooth"
+                    )
+                ),
+                AlisioPage(
+                    SettingsDestination.SEARCH,
+                    R.string.settings_search,
+                    listOf(
+                        "búsqueda", "barra", "search", "asistente", "assistant", "búsqueda web", "web search",
+                        "portapapeles", "clipboard", "personas", "people"
+                    )
+                ),
+                AlisioPage(
+                    SettingsDestination.ZONES,
+                    R.string.settings_islands,
+                    listOf("islas propias", "nueva isla", "your islands", "new island", "ajustes de zonas")
+                ),
+                AlisioPage(
+                    SettingsDestination.PAUSE,
+                    R.string.settings_pause,
+                    listOf("pausa", "pause", "esperar", "delay", "apps con pausa")
+                ),
+                AlisioPage(
+                    SettingsDestination.PERMISSIONS,
+                    R.string.settings_permissions,
+                    listOf(
+                        "permisos", "permissions", "accesos", "access", "accesibilidad", "accessibility",
+                        "notificaciones", "notifications", "acceso a uso", "usage access", "app de inicio",
+                        "default home"
+                    )
+                )
+            )
 
         // Por debajo de 1 para que, a igual coincidencia, ganen la app y la persona de la agenda.
         private const val CONVERSATION_WEIGHT = 0.95

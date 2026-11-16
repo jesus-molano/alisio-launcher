@@ -6,6 +6,7 @@ import dev.jesusmolano.alisio.core.zones.ZoneId
 import dev.jesusmolano.alisio.core.zones.assignmentChange
 import dev.jesusmolano.alisio.data.db.ZoneAssignment
 import dev.jesusmolano.alisio.data.db.ZoneDao
+import dev.jesusmolano.alisio.data.db.ZoneRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,10 +49,28 @@ class ZonesRepository(private val dao: ZoneDao, private val scope: CoroutineScop
      * Borra la isla y lo asignado a ella: sus apps vuelven a la isla que les toca sin asignación
      * (Resto, salvo las del dock y las de Sistema). Primero las asignaciones: si el proceso muere
      * entre las dos sentencias queda una isla vacía, no apps apuntando a una isla que no existe.
+     *
+     * Devuelve cómo deshacerlo: la isla vuelve con su id, su nombre y su puesto, y sus apps con ella.
      */
-    fun delete(id: Long) = write {
-        dao.clearZone(ZoneId.Custom(id).encode())
-        dao.delete(id)
+    fun delete(id: Long): () -> Unit {
+        val zone = ZoneId.Custom(id).encode()
+        // Solo se toca bajo `writes`, y deshacer se encola detrás de la escritura que lo rellena.
+        var before: Pair<ZoneRow?, List<ZoneAssignment>>? = null
+        write {
+            before = dao.find(id) to dao.assignedTo(zone)
+            dao.clearZone(zone)
+            dao.delete(id)
+        }
+        return {
+            write {
+                before?.let { (row, assigned) ->
+                    if (row != null) {
+                        dao.restore(row)
+                        assigned.forEach { dao.assign(it) }
+                    }
+                }
+            }
+        }
     }
 
     /**

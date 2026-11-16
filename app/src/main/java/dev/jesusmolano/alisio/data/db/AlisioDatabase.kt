@@ -152,6 +152,16 @@ interface ZoneDao {
 
     @Query("DELETE FROM zone_assignment WHERE zone = :zone")
     suspend fun clearZone(zone: String)
+
+    @Query("SELECT * FROM zone WHERE id = :id")
+    suspend fun find(id: Long): ZoneRow?
+
+    @Query("SELECT * FROM zone_assignment WHERE zone = :zone")
+    suspend fun assignedTo(zone: String): List<ZoneAssignment>
+
+    /** Devuelve una isla borrada con su mismo id y su mismo puesto: lo asignado a ella vuelve a valer. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restore(zone: ZoneRow)
 }
 
 @Dao
@@ -180,6 +190,15 @@ interface SuggestionFeedbackDao {
             "ON CONFLICT(rule, `key`) DO UPDATE SET dismissals = dismissals + 1, last_dismissed_at = :at"
     )
     suspend fun addDismissal(rule: String, key: String, at: Long)
+
+    @Query("DELETE FROM suggestion_feedback WHERE rule = :rule AND `key` = :key")
+    suspend fun forget(rule: String, key: String)
+
+    @Query(
+        "UPDATE suggestion_feedback SET dismissals = :dismissals, last_dismissed_at = :at " +
+            "WHERE rule = :rule AND `key` = :key"
+    )
+    suspend fun restore(rule: String, key: String, dismissals: Int, at: Long)
 }
 
 @Dao
@@ -220,6 +239,12 @@ interface HomeConfigDao {
 
     @Query("DELETE FROM dock_slot WHERE position = :position")
     suspend fun clearSlot(position: Int)
+
+    @Query("SELECT * FROM dock_slot WHERE position = :position")
+    suspend fun slot(position: Int): DockSlot?
+
+    @Query("SELECT * FROM stack_item WHERE slot = :slot")
+    suspend fun stackOf(slot: Int): List<StackItem>
 
     @Query("SELECT * FROM stack_item ORDER BY slot, position")
     fun stackItems(): Flow<List<StackItem>>

@@ -69,16 +69,64 @@ class HomeConfigRepository(private val dao: HomeConfigDao, private val scope: Co
             }
         }.stateIn(scope, SharingStarted.Eagerly, null)
 
-    fun setApp(position: Int, appKey: String) = write {
+    /** Pone una app en el hueco. Devuelve cómo deshacerlo: lo que el hueco tenía antes vuelve entero. */
+    fun setApp(position: Int, appKey: String): () -> Unit = replace(position) {
         dao.clearStack(position)
         dao.setSlot(DockSlot(position, appKey = appKey))
     }
 
-    /** Convierte el hueco en una pila vacía. */
+    /**
+     * Hace [change] en el hueco y devuelve la orden que lo deja como estaba: su app, o su pila con
+     * nombre, icono, apps y orden. Lo anterior se lee dentro de la misma escritura, así que es
+     * exactamente lo que [change] pisa.
+     */
+    private fun replace(position: Int, change: suspend () -> Unit): () -> Unit {
+        // Solo se toca bajo `writes`, y deshacer se encola detrás de la escritura que lo rellena.
+        var before: Pair<DockSlot?, List<StackItem>>? = null
+        write {
+            before = dao.slot(position) to dao.stackOf(position)
+            change()
+        }
+        return {
+            write {
+                before?.let { (slot, items) ->
+                    dao.clearStack(position)
+                    if (slot == null) dao.clearSlot(position) else dao.setSlot(slot)
+                    items.forEach { dao.addToStack(it) }
+                }
+            }
+        }
+    }
+
+    /**
+     * Convierte el hueco en una pila. Si tenía una app, queda como la primera de la pila: convertir
+     * no debe parecer que la app se ha perdido ni obligar a buscarla otra vez.
+     */
     fun makeStack(position: Int, name: String) = write {
+        val seed = dao.slot(position)?.appKey
         dao.clearStack(position)
         dao.setSlot(DockSlot(position, stackName = name))
+        if (seed != null) dao.addToStack(StackItem(position, seed, 0))
     }
+
+    /**
+     * Pone [appKeys] en los primeros huecos, uno por hueco. Solo toca huecos vacíos, así que
+     * deshacerlo es vaciar los que ha llenado. Devuelve esa orden.
+     */
+    fun fill(appKeys: List<String>): () -> Unit {
+        // Solo se toca bajo `writes`, como en `replace`.
+        var filled = emptyList<Int>()
+        write {
+            val free = (0 until DOCK_SLOTS).filter { dao.slot(it).isFree() }
+            filled = free.zip(appKeys) { position, appKey ->
+                dao.setSlot(DockSlot(position, appKey = appKey))
+                position
+            }
+        }
+        return { write { filled.forEach { dao.clearSlot(it) } } }
+    }
+
+    private fun DockSlot?.isFree(): Boolean = this == null || (appKey == null && stackName == null)
 
     fun renameStack(position: Int, name: String) = write { dao.renameStack(position, name) }
 
@@ -86,7 +134,8 @@ class HomeConfigRepository(private val dao: HomeConfigDao, private val scope: Co
         dao.setStackIcon(position, icon.id, glyph.ifBlank { null })
     }
 
-    fun clear(position: Int) = write {
+    /** Vacía el hueco. Devuelve cómo deshacerlo, igual que [setApp]. */
+    fun clear(position: Int): () -> Unit = replace(position) {
         dao.clearStack(position)
         dao.clearSlot(position)
     }

@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.core.pause.DEFAULT_PAUSE_SECONDS
 import dev.jesusmolano.alisio.core.pause.normalizePauseSeconds
+import dev.jesusmolano.alisio.core.theme.FontChoice
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +29,7 @@ private val Context.dataStore by preferencesDataStore("settings")
  * Lo que se elige en los ajustes de Alisio. Cada función nueva añade aquí sus opciones.
  *
  * @param accent índice del color de acento en la paleta del tema.
+ * @param font familias de letra de toda la interfaz.
  * @param assistantPackage app de IA a la que la barra manda las preguntas.
  * @param webSearchPackage app que hace la búsqueda web; `null` es la que elija el sistema.
  * @param nowEnabled si el Inicio enseña la sugerencia de Ahora.
@@ -37,8 +39,6 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param dockGestures si deslizar hacia arriba sobre un icono del dock abre su destino secundario.
  * @param zonesPinch si pellizcar el Inicio abre Zonas; apagado, se llega desde la barra.
  * @param zonesLabels si Zonas enseña el nombre debajo de cada icono.
- * @param expenseTemplate dirección que apunta un gasto escrito en la barra, con las marcas `{importe}`
- *   y `{concepto}`; vacía, el gasto rápido está apagado.
  * @param clipboardActions si la barra mira el portapapeles al abrirse para ofrecer su acción.
  * @param lockDoubleTap si dos toques en una zona vacía del Inicio bloquean la pantalla. Solo tiene
  *   efecto con el servicio de accesibilidad activado.
@@ -48,10 +48,12 @@ private val Context.dataStore by preferencesDataStore("settings")
  * @param pauseSeconds cuánto dura esa pausa.
  * @param contactPhotos si el avatar de una persona es su foto de la agenda; apagado, o si no tiene
  *   foto, son sus iniciales.
+ * @param onboardingSkipped la bienvenida se descartó con «Ahora no»: Alisio se usa sin ser la app de inicio.
  */
 data class Prefs(
     val iconStyle: IconStyle = IconStyle.Color,
     val accent: Int = 0,
+    val font: FontChoice = FontChoice.PAIR,
     val dockLabels: Boolean = true,
     val wallpaperDim: WallpaperDim = WallpaperDim.MEDIUM,
     val assistantPackage: String = DEFAULT_ASSISTANT,
@@ -63,13 +65,13 @@ data class Prefs(
     val dockGestures: Boolean = true,
     val zonesPinch: Boolean = true,
     val zonesLabels: Boolean = true,
-    val expenseTemplate: String = "",
     val clipboardActions: Boolean = true,
     val lockDoubleTap: Boolean = true,
     val notificationsSwipe: Boolean = true,
     val pausedApps: Set<String> = DEFAULT_PAUSED_APPS,
     val pauseSeconds: Int = DEFAULT_PAUSE_SECONDS,
-    val contactPhotos: Boolean = true
+    val contactPhotos: Boolean = true,
+    val onboardingSkipped: Boolean = false
 )
 
 /** X y YouTube llevan pausa de entrada (§3 «Opcional»); si no están instaladas, no pintan nada. */
@@ -101,6 +103,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
                 Prefs(
                     iconStyle = IconStyle.parse(stored[ICON_STYLE]),
                     accent = stored[ACCENT] ?: 0,
+                    font = FontChoice.parse(stored[FONT]),
                     dockLabels = stored[DOCK_LABELS] ?: true,
                     wallpaperDim =
                         WallpaperDim.entries.getOrElse(stored[WALLPAPER_DIM] ?: WallpaperDim.MEDIUM.ordinal) {
@@ -115,13 +118,13 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
                     dockGestures = stored[DOCK_GESTURES] ?: true,
                     zonesPinch = stored[ZONES_PINCH] ?: true,
                     zonesLabels = stored[ZONES_LABELS] ?: true,
-                    expenseTemplate = stored[EXPENSE_TEMPLATE].orEmpty(),
                     clipboardActions = stored[CLIPBOARD_ACTIONS] ?: true,
                     lockDoubleTap = stored[LOCK_DOUBLE_TAP] ?: true,
                     notificationsSwipe = stored[NOTIFICATIONS_SWIPE] ?: true,
                     pausedApps = stored[PAUSED_APPS] ?: DEFAULT_PAUSED_APPS,
                     pauseSeconds = normalizePauseSeconds(stored[PAUSE_SECONDS_KEY]),
-                    contactPhotos = stored[CONTACT_PHOTOS] ?: true
+                    contactPhotos = stored[CONTACT_PHOTOS] ?: true,
+                    onboardingSkipped = stored[ONBOARDING_SKIPPED] ?: false
                 )
             }
             .stateIn(scope, SharingStarted.Eagerly, null)
@@ -138,6 +141,14 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
 
     fun setAccent(index: Int) = write { it[ACCENT] = index }
 
+    fun setFont(font: FontChoice) = write { it[FONT] = font.id }
+
+    /** Vuelve a poner la pausa a una app, al deshacer haberla quitado. */
+    fun addPauseFor(packageName: String) = write {
+        it[PAUSED_APPS] =
+            (it[PAUSED_APPS] ?: DEFAULT_PAUSED_APPS) + packageName
+    }
+
     /** El valor nuevo se decide dentro de la escritura: dos toques seguidos no pisan el mismo valor. */
     fun toggleDockLabels() = write { it[DOCK_LABELS] = !(it[DOCK_LABELS] ?: true) }
 
@@ -148,11 +159,6 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
     fun toggleZonesLabels() = write { it[ZONES_LABELS] = !(it[ZONES_LABELS] ?: true) }
 
     fun toggleClipboardActions() = write { it[CLIPBOARD_ACTIONS] = !(it[CLIPBOARD_ACTIONS] ?: true) }
-
-    /** Vacía apaga el gasto rápido. Se guarda tal cual se escribe; quien la usa decide si vale. */
-    fun setExpenseTemplate(template: String) = write {
-        if (template.isBlank()) it.remove(EXPENSE_TEMPLATE) else it[EXPENSE_TEMPLATE] = template
-    }
 
     fun setWallpaperDim(dim: WallpaperDim) = write { it[WALLPAPER_DIM] = dim.ordinal }
 
@@ -182,6 +188,9 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
 
     fun toggleContactPhotos() = write { it[CONTACT_PHOTOS] = !(it[CONTACT_PHOTOS] ?: true) }
 
+    /** La bienvenida no vuelve a salir; ser la app de inicio queda como un permiso más de los ajustes. */
+    fun skipOnboarding() = write { it[ONBOARDING_SKIPPED] = true }
+
     fun setAssistant(packageName: String) = write { it[ASSISTANT] = packageName }
 
     fun setWebSearch(packageName: String?) = write {
@@ -203,6 +212,7 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         const val TAG = "AlisioSettings"
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val ACCENT = intPreferencesKey("accent")
+        val FONT = stringPreferencesKey("font")
         val DOCK_LABELS = booleanPreferencesKey("dock_labels")
         val WALLPAPER_DIM = intPreferencesKey("wallpaper_dim")
         val ASSISTANT = stringPreferencesKey("assistant")
@@ -214,12 +224,12 @@ class AlisioSettings(context: Context, private val scope: CoroutineScope) {
         val DOCK_GESTURES = booleanPreferencesKey("dock_gestures")
         val ZONES_PINCH = booleanPreferencesKey("zones_pinch")
         val ZONES_LABELS = booleanPreferencesKey("zones_labels")
-        val EXPENSE_TEMPLATE = stringPreferencesKey("expense_template")
         val CLIPBOARD_ACTIONS = booleanPreferencesKey("clipboard_actions")
         val LOCK_DOUBLE_TAP = booleanPreferencesKey("lock_double_tap")
         val NOTIFICATIONS_SWIPE = booleanPreferencesKey("notifications_swipe")
         val PAUSED_APPS = stringSetPreferencesKey("paused_apps")
         val PAUSE_SECONDS_KEY = intPreferencesKey("pause_seconds")
         val CONTACT_PHOTOS = booleanPreferencesKey("contact_photos")
+        val ONBOARDING_SKIPPED = booleanPreferencesKey("onboarding_skipped")
     }
 }

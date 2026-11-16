@@ -2,21 +2,16 @@ package dev.jesusmolano.alisio.feature.people
 
 import android.graphics.Bitmap
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,26 +20,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.core.people.Channel
-import dev.jesusmolano.alisio.core.people.initials
 import dev.jesusmolano.alisio.data.contacts.ContactPhotos
 import dev.jesusmolano.alisio.data.contacts.Person
-import dev.jesusmolano.alisio.ui.components.AppIcon
+import dev.jesusmolano.alisio.ui.components.Avatar
+import dev.jesusmolano.alisio.ui.components.PrimaryButton
+import dev.jesusmolano.alisio.ui.components.RoundIconButton
+import dev.jesusmolano.alisio.ui.components.TonalButton
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
 
-/** Nombre de cada canal: lo que lee TalkBack en su botón y lo que se escribe debajo en la tarjeta. */
+private val CardAvatarSize = 56.dp
+
+/** Nombre de cada canal: lo que se escribe en su botón de la tarjeta. */
 @StringRes
 fun channelLabel(channel: Channel): Int = when (channel) {
     Channel.WHATSAPP_CHAT -> R.string.channel_whatsapp
@@ -68,67 +61,49 @@ fun rememberContactPhoto(person: Person, photos: ContactPhotos?): Bitmap? {
 }
 
 /**
- * Avatar de la persona: su [photo], que llega ya recortada en círculo, o sus iniciales.
- * Decorativo: el nombre va siempre al lado.
- */
-@Composable
-fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier, photo: Bitmap? = null) {
-    if (photo != null) {
-        AppIcon(photo, size, modifier)
-        return
-    }
-    Box(
-        modifier.size(size).background(AlisioTokens.AccentSoft, CircleShape).clearAndSetSemantics {},
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = initials(name),
-            style = if (size >= 56.dp) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-            color = AlisioTokens.Accent
-        )
-    }
-}
-
-/**
- * Tarjeta de persona: todos sus canales, cada uno con su icono y su nombre debajo. La fila de
- * resultados solo enseña los primeros; aquí caben todos.
+ * Persona elegida: sustituye a los resultados, sin caja, pegada a las salidas y al campo. El canal
+ * principal es el botón relleno, que es también lo que hace Enter; los demás van debajo, cada uno
+ * con su nombre. La fila de resultados solo enseña los primeros canales; aquí caben todos.
  *
- * @param channels en orden de uso; el primero es el principal y va marcado con el acento.
+ * @param channels en orden de uso; el primero es el principal.
  * @param learned el canal principal sale del historial: la tarjeta lo dice.
+ * @param onBack vuelve a los resultados sin contactar.
  * @param onOpenContact abre su ficha en la app de Contactos.
  * @param photo su foto para el avatar; sin ella van las iniciales.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PersonCard(
     name: String,
     channels: List<Channel>,
     learned: Boolean,
-    whatsappIcon: Bitmap?,
     onContact: (Channel) -> Unit,
+    onBack: () -> Unit,
     onOpenContact: () -> Unit,
     modifier: Modifier = Modifier,
     photo: Bitmap? = null
 ) {
-    val shape = AlisioTokens.CardShape
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(AlisioTokens.Surface, shape)
-            .border(1.dp, AlisioTokens.CardBorder, shape)
-            .padding(20.dp)
-    ) {
+    val main = channels.firstOrNull()
+    Column(modifier.fillMaxWidth().padding(horizontal = AlisioTokens.Outset)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, 56.dp, photo = photo)
-            Spacer(Modifier.width(16.dp))
+            RoundIconButton(
+                R.drawable.ic_arrow_back,
+                stringResource(R.string.person_back),
+                AlisioTokens.TextSecondary,
+                onBack
+            )
+            Spacer(Modifier.width(4.dp))
+            Avatar(name, CardAvatarSize, photo = photo)
+            Spacer(Modifier.width(AlisioTokens.IconGap))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = AlisioTokens.Text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
                 )
-                val main = channels.firstOrNull()
                 if (learned && main != null) {
                     Text(
                         text = stringResource(R.string.person_reason, stringResource(channelLabel(main))),
@@ -137,46 +112,37 @@ fun PersonCard(
                     )
                 }
             }
-            val openContact = stringResource(R.string.person_open_contact)
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button, onClick = onOpenContact)
-                    .semantics { contentDescription = openContact },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_person),
-                    // El nombre de la acción ya está en la semántica del botón.
-                    contentDescription = null,
-                    tint = AlisioTokens.TextSecondary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            RoundIconButton(
+                R.drawable.ic_person,
+                stringResource(R.string.person_open_contact),
+                AlisioTokens.TextSecondary,
+                onOpenContact
+            )
         }
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            channels.forEachIndexed { index, channel ->
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    ChannelButton(
-                        channel = channel,
-                        onClick = { onContact(channel) },
-                        whatsappIcon = whatsappIcon,
-                        main = index == 0
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    // El botón ya lleva este nombre para TalkBack.
-                    Text(
+        if (main != null) {
+            Spacer(Modifier.height(AlisioTokens.SheetTitleGap))
+            PrimaryButton(
+                text = stringResource(channelLabel(main)),
+                onClick = { onContact(main) },
+                modifier = Modifier.fillMaxWidth(),
+                icon = channelGlyph(main),
+                // Enter hace lo mismo que este botón.
+                trailingIcon = R.drawable.ic_keyboard_return
+            )
+        }
+        val others = channels.drop(1)
+        if (others.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                others.forEach { channel ->
+                    TonalButton(
                         text = stringResource(channelLabel(channel)),
-                        style = AlisioTokens.DockLabel,
-                        color = if (index == 0) AlisioTokens.Accent else AlisioTokens.TextSecondary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        modifier = Modifier.clearAndSetSemantics {}
+                        onClick = { onContact(channel) },
+                        icon = channelGlyph(channel)
                     )
                 }
             }
         }
+        Spacer(Modifier.height(8.dp))
     }
 }

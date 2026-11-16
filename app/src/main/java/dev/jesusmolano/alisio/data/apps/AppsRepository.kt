@@ -16,6 +16,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import dev.jesusmolano.alisio.StartupTrace
 import dev.jesusmolano.alisio.core.icons.IconStyle
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,6 +65,9 @@ class AppsRepository(
     private val _shortcuts = MutableStateFlow<List<ShortcutEntry>>(emptyList())
     val shortcuts: StateFlow<List<ShortcutEntry>> = _shortcuts.asStateFlow()
 
+    // Iconos de las vistas previas de estilo, por estilo y app. Se leen y se escriben desde varios hilos.
+    private val previewIcons = ConcurrentHashMap<String, Bitmap>()
+
     private var reloadJob: Job? = null
     private var shortcutsJob: Job? = null
 
@@ -103,6 +107,8 @@ class AppsRepository(
                         apps to loadShortcuts(apps)
                     }
                 if (_apps.value == null) StartupTrace.mark("apps e iconos listos (${apps.size})")
+                // Una app actualizada puede traer otro icono: las vistas previas se vuelven a dibujar.
+                previewIcons.clear()
                 _apps.value = apps
                 _shortcuts.value = shortcuts
             }
@@ -166,6 +172,31 @@ class AppsRepository(
         } catch (e: OutOfMemoryError) {
             Log.w(TAG, "Icono de acceso directo demasiado grande", e)
             null
+        }
+    }
+
+    /**
+     * Los iconos de [apps] dibujados con [style], sin cambiar el estilo elegido: es lo que enseña cada
+     * opción de estilo en los ajustes. Son pocos iconos y se guardan en memoria hasta la próxima
+     * recarga de apps; una app que ya no está se queda con el icono que tenía.
+     */
+    suspend fun previewIcons(style: IconStyle, apps: List<AppEntry>): List<Bitmap> = withContext(Dispatchers.IO) {
+        // El paquete solo se lee si algún icono no está ya dibujado.
+        val pack by lazy { (style as? IconStyle.Pack)?.let { IconPack.load(appContext, it.packageName) } }
+        apps.map { app ->
+            previewIcons.getOrPut(style.id + "|" + app.key) {
+                val info =
+                    try {
+                        launcherApps
+                            .getActivityList(app.component.packageName, app.user)
+                            .firstOrNull { it.componentName == app.component }
+                    } catch (e: RuntimeException) {
+                        // Perfil bloqueado o app desinstalada mientras se pedía.
+                        Log.w(TAG, "No se ha podido leer ${app.key} para su vista previa", e)
+                        null
+                    }
+                if (info == null) app.icon else safeIcon(info.getIcon(0), pack?.iconFor(app.component), style)
+            }
         }
     }
 

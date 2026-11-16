@@ -2,35 +2,54 @@
 <resources>
     <string name="app_name" translatable="false">Alisio</string>
     <string name="onboarding_title" translatable="false">Alisio</string>
-    <string name="onboarding_body">To try it as your home screen, make it your default launcher. You can go back to your previous one at any time from Settings.</string>
+    <string name="onboarding_body">To use Alisio as your home screen, make it your default home app. You can switch back at any time in Settings.</string>
     <string name="onboarding_set_default">Set as default</string>
     <string name="onboarding_skip">Not now</string>
-    <string name="trace_rail_description">Alphabet index: touch a letter, slide left and release on an app to open it</string>
-    <string name="trace_hint_slide">Slide left and release on an app</string>
+    <string name="home_open_clock">Open clock</string>
+    <string name="home_open_calendar">Open calendar</string>
+    <string name="trace_rail_description">Alphabetical app index</string>
+    <string name="trace_open_zones">Open Zones</string>
+    <string name="trace_hint_slide">Release on an app</string>
     <string name="trace_hint_cancel">Release to cancel</string>
     <string name="app_launch_failed">Couldn\'t open %1$s</string>
 
-    <string name="dock_empty">Add</string>
-    <string name="dock_empty_description">Empty dock slot: tap to choose an app</string>
+    <string name="undo">Undo</string>
+    <string name="undo_slot_cleared">Slot emptied</string>
+    <string name="undo_stack_removed">Stack removed</string>
+    <string name="undo_slot_replaced">App replaced</string>
+    <string name="undo_now_hidden">Hidden for 6 h</string>
+    <string name="undo_now_silenced">It won\'t be suggested again</string>
+    <string name="undo_pause_removed">%1$s opens without a pause</string>
+    <string name="undo_zone_deleted">%1$s deleted</string>
+    <string name="undo_dock_filled">Dock filled</string>
+    <string name="undo_dock_placed">%1$s, in the dock</string>
+    <string name="undo_stack_added">%1$s, in %2$s</string>
+
+    <string name="dock_empty_description">Empty dock slot</string>
+    <string name="dock_empty_action">Choose an app</string>
     <string name="stack_default_name">Stack</string>
     <string name="stack_name_hint">Stack name</string>
     <string name="stack_icon_folder">Folder</string>
     <string name="stack_icon_first">First app</string>
     <string name="stack_icon_symbol">Symbol</string>
     <string name="stack_symbol_hint">A symbol or an emoji</string>
-    <string name="stack_order_title">IN THIS STACK</string>
-    <string name="stack_all_apps">ALL APPS</string>
+    <string name="stack_order_title">In this stack</string>
+    <string name="stack_all_apps">Apps</string>
+    <string name="stack_add_title">Add</string>
+    <string name="stack_add_app">Add to the stack</string>
+    <string name="stack_remove_app">Remove %1$s from the stack</string>
     <string name="stack_drag">Drag to move %1$s</string>
     <string name="stack_move_up">Move up</string>
     <string name="stack_move_down">Move down</string>
     <string name="stack_edit">Edit this stack</string>
     <string name="slot_title">Dock slot</string>
     <string name="slot_make_stack">Turn into a stack</string>
-    <string name="slot_make_stack_hint">A named group of apps that opens from the dock</string>
+    <string name="slot_new_stack">Create a stack</string>
+    <string name="slot_make_stack_hint">Several apps in one slot</string>
+    <string name="slot_fill">Fill with your most used</string>
     <string name="slot_remove_stack">Remove this stack</string>
     <string name="picker_search">Search apps</string>
     <string name="picker_clear">Leave empty</string>
-    <string name="picker_checked">In the stack</string>
 
     <string name="dock_swipe_open">Swipe up: open %1$s</string>
     <string name="dock_app_menu">Shortcuts and options</string>
@@ -41,119 +60,157 @@
     <string name="usage_hours">%1$d h</string>
     <string name="usage_hours_minutes">%1$d h %2$d min</string>
     <string name="app_usage_allow">See today\'s usage</string>
-    <string name="appmenu_shortcuts">SHORTCUTS</string>
-    <string name="appmenu_swipe">SWIPE UP ON THE ICON</string>
-    <string name="appmenu_swipe_none">No destination yet</string>
-    <string name="appmenu_swipe_none_hint">Another app or a shortcut, one swipe away</string>
+    <string name="appmenu_shortcuts">Shortcuts</string>
+    <string name="appmenu_swipe">On swipe up</string>
+    <string name="appmenu_swipe_none">No destination</string>
+    <string name="appmenu_swipe_shortcut">%1$s · %2$s</string>
     <string name="appmenu_swipe_choose">Choose</string>
     <string name="appmenu_swipe_title">Swipe-up destination</string>
     <string name="appmenu_swipe_search">Search apps and shortcuts</string>
     <string name="appmenu_swipe_clear">Remove the destination</string>
     <string name="appmenu_back">Back</string>
     <string name="appmenu_app_info">App info</string>
-    <string name="appmenu_slot">DOCK SLOT</string>
+    <string name="appmenu_slot">Dock slot</string>
+    <string name="appmenu_dock">Put in the dock</string>
     <string name="appmenu_change_app">Change app</string>
-    <string name="settings_dock_gestures">Swipe up on dock icons</string>
-    <string name="settings_dock_gestures_hint">Each app opens a second destination you choose</string>
+    <string name="settings_dock_gestures">Swipe up on the dock</string>
+    <string name="settings_swipe_targets">Tap an app to choose where swiping up on it leads</string>
+    <string name="settings_swipe_targets_empty">Put single apps in the dock to give them a destination</string>
+    <string name="settings_swipe_target">Swipe destination for %1$s: %2$s</string>
+    <string name="settings_swipe_target_none">Swipe destination for %1$s: none</string>
     <string name="settings_usage">Usage access</string>
     <string name="settings_usage_hint">Needed to see how long you used each app today</string>
     <string name="settings_usage_on">Hold a dock app to see its usage today</string>
 
     <string name="channel_whatsapp" translatable="false">WhatsApp</string>
     <string name="channel_whatsapp_call">WhatsApp call</string>
-    <string name="channel_whatsapp_video">WhatsApp video</string>
+    <string name="channel_whatsapp_video">WhatsApp video call</string>
     <string name="channel_call">Call</string>
     <string name="channel_sms" translatable="false">SMS</string>
+    <string name="channel_whatsapp_to">WhatsApp %1$s</string>
+    <string name="channel_whatsapp_call_to">WhatsApp call to %1$s</string>
+    <string name="channel_whatsapp_video_to">WhatsApp video call to %1$s</string>
+    <string name="channel_call_to">Call %1$s</string>
+    <string name="channel_sms_to">Text %1$s</string>
+    <string name="channel_main">Main</string>
+    <string name="person_back">Back to results</string>
     <string name="person_open_contact">Open contact</string>
     <string name="person_reason">You usually use %1$s</string>
-    <string name="search_section_people">PEOPLE</string>
+    <string name="search_section_people">People</string>
     <string name="people_allow">Find people from here</string>
-    <string name="people_allow_hint">Allow contacts to call or message anyone by name</string>
+    <string name="people_allow_hint">Allow access to contacts to call or message anyone by name</string>
 
-    <string name="now_label">NOW</string>
+    <string name="now_description">Now: %1$s. %2$s</string>
     <string name="now_reason_new_version_minutes">New version installed %1$d min ago</string>
     <string name="now_reason_new_version_hours">New version installed %1$d h ago</string>
     <string name="now_reason_bluetooth">%1$s connected</string>
     <string name="now_reason_habit">You usually open it around now</string>
     <string name="now_dismiss">Dismiss this suggestion</string>
-    <string name="settings_now">Suggestion on the home screen</string>
-    <string name="settings_now_hint">One app at a time, always with the reason</string>
+    <string name="settings_now">Suggestion</string>
     <string name="settings_bluetooth">Bluetooth audio</string>
     <string name="settings_bluetooth_hint">Suggests what you open with your car or earbuds</string>
     <string name="settings_bluetooth_none">No audio device connected right now</string>
+    <string name="settings_bluetooth_on">The suggestion knows which earbuds or car is connected</string>
+    <string name="settings_now_silenced">Silenced: tap one to let it be suggested again</string>
+    <string name="settings_now_restore">Suggest %1$s again</string>
+    <string name="settings_home_role">Home app</string>
+    <string name="settings_home_role_hint">Needed for app shortcuts and for the home button to bring you here</string>
+    <string name="settings_home_role_on">Alisio is the home app</string>
 
     <string name="dock_unread">%1$s, unread notifications</string>
     <string name="player_open">Open %1$s</string>
     <string name="player_play">Play</string>
     <string name="player_pause">Pause</string>
     <string name="player_next">Next track</string>
+    <string name="player_hide">Hide player</string>
     <string name="player_subtitle" translatable="false">%1$s · %2$s</string>
-    <string name="settings_notifications">NOTIFICATIONS</string>
+    <string name="settings_notifications">Notifications</string>
     <string name="settings_notification_access">Notification access</string>
     <string name="settings_notification_access_hint">Needed for the player and the unread dots</string>
     <string name="settings_notification_access_on">Alisio only counts them, it never reads them</string>
-    <string name="settings_player">Player on Home</string>
-    <string name="settings_player_hint">What is playing, with pause and next</string>
+    <string name="settings_needs_notifications">Notification access is off</string>
+    <string name="settings_player">Player</string>
     <string name="settings_unread">Unread dots</string>
-    <string name="settings_unread_hint">A dot on dock apps that have notifications</string>
     <string name="settings_unread_apps">Tap an app to turn its dot on or off</string>
     <string name="settings_unread_apps_empty">Add apps to the dock to choose their dots</string>
     <string name="settings_unread_app">Unread dot for %1$s</string>
 
     <string name="settings_title">Alisio settings</string>
-    <string name="settings_appearance">APPEARANCE</string>
-    <string name="settings_accent">Accent color</string>
-    <string name="settings_accent_option">Accent color %1$d</string>
-    <string name="settings_wallpaper_dim">Wallpaper dimming</string>
+    <string name="list_separator" translatable="false">" · "</string>
+    <string name="settings_close">Close settings</string>
+    <string name="settings_preview">Home screen preview</string>
+    <string name="settings_preview_track">Sample song</string>
+    <string name="settings_preview_artist">Artist</string>
+    <string name="settings_home">Home screen</string>
+    <string name="settings_permissions">Permissions</string>
+    <string name="settings_granted">Granted</string>
+    <string name="settings_summary_home_none">Just the clock and the dock</string>
+    <string name="settings_summary_no_islands">No islands of your own</string>
+    <plurals name="settings_summary_islands">
+        <item quantity="one">%1$d island of your own</item>
+        <item quantity="other">%1$d islands of your own</item>
+    </plurals>
+    <plurals name="settings_summary_pause">
+        <item quantity="one">%1$d app · %2$d s</item>
+        <item quantity="other">%1$d apps · %2$d s</item>
+    </plurals>
+    <string name="settings_summary_all_granted">Everything allowed</string>
+    <plurals name="settings_summary_missing">
+        <item quantity="one">%1$d missing</item>
+        <item quantity="other">%1$d missing</item>
+    </plurals>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_wallpaper">Wallpaper</string>
+    <string name="settings_accent">Accent</string>
+    <string name="accent_teal">Teal</string>
+    <string name="accent_blue">Blue</string>
+    <string name="accent_amber">Amber</string>
+    <string name="accent_lilac">Lilac</string>
+    <string name="settings_wallpaper_dim">Dim the wallpaper</string>
     <string name="settings_dim_light">Light</string>
     <string name="settings_dim_medium">Medium</string>
     <string name="settings_dim_strong">Strong</string>
-    <string name="settings_dock" translatable="false">DOCK</string>
-    <string name="settings_dock_labels">App names</string>
-    <string name="settings_dock_labels_hint">Show the name under each dock icon</string>
-    <string name="settings_on">On</string>
-    <string name="settings_off">Off</string>
-    <string name="settings_search">SEARCH</string>
+    <string name="settings_font">Typeface</string>
+    <string name="font_pair">Original</string>
+    <string name="font_inter" translatable="false">Inter</string>
+    <string name="font_grotesk" translatable="false">Grotesk</string>
+    <string name="font_system">System</string>
+    <string name="settings_dock" translatable="false">Dock</string>
+    <string name="settings_dock_labels">Names in the dock</string>
+    <string name="settings_labels_on">With names</string>
+    <string name="settings_labels_off">No names</string>
+    <string name="settings_search">Search</string>
     <string name="settings_assistant">AI assistant</string>
     <string name="settings_assistant_missing">Not installed: searches go to the web</string>
     <string name="settings_web_search">Web search</string>
     <string name="settings_web_search_system">Let the system choose</string>
     <string name="settings_change">Change</string>
+    <string name="settings_section_people">People</string>
     <string name="settings_contacts">Contacts</string>
     <string name="settings_contacts_on">People show up in search</string>
-    <string name="settings_contact_photos">Contact photos</string>
-    <string name="settings_contact_photos_hint">Each person shows their photo; without one, their initials</string>
+    <string name="settings_photos_on">Photo</string>
+    <string name="settings_photos_off">Initials</string>
+    <string name="settings_photos_sample">Laura Hill</string>
     <string name="settings_allow">Allow</string>
-    <string name="settings_icons">ICONS</string>
-    <string name="settings_selected">Selected</string>
+    <string name="settings_icons">Icons</string>
     <string name="icons_color">Color</string>
-    <string name="icons_color_hint">Each app\'s own icon, all in the same shape</string>
     <string name="icons_mono">Monochrome</string>
-    <string name="icons_mono_hint">Themed icon where the app has one, grayscale otherwise</string>
     <string name="icons_system">System</string>
-    <string name="icons_system_hint">As One UI draws them</string>
-    <string name="icons_pack_hint">Icon pack</string>
 
     <string name="search_hint">Search or ask %1$s</string>
     <string name="search_hint_plain">Search</string>
     <string name="search_clear">Clear</string>
-    <string name="search_enter" translatable="false">Enter</string>
+    <string name="search_do_open">Open</string>
+    <string name="search_do_copy">Copy</string>
     <string name="search_copied">Result copied</string>
-    <string name="search_calc_hint">Tap to copy</string>
     <string name="search_ask_assistant">Ask %1$s: “%2$s”</string>
     <string name="search_ask_web">Search the web: “%1$s”</string>
     <string name="search_chip_web" translatable="false">Web</string>
     <string name="search_chip_play" translatable="false">Play Store</string>
-    <string name="search_setting_subtitle">Settings</string>
-    <string name="search_section_recents">RECENT</string>
-    <string name="search_section_apps" translatable="false">APPS</string>
-    <string name="search_section_shortcuts">APP ACTIONS</string>
-    <string name="search_section_settings">SETTINGS</string>
-    <string name="search_section_calc">CALCULATION</string>
-    <string name="search_section_expense">QUICK EXPENSE</string>
-    <string name="search_expense_title">Log %1$s € · %2$s</string>
-    <string name="search_expense_app">the expense page</string>
-    <string name="search_section_clock">CLOCK</string>
+    <string name="search_section_recents">Recent</string>
+    <string name="search_section_apps" translatable="false">Apps</string>
+    <string name="search_section_shortcuts">App actions</string>
+    <string name="search_section_settings">Settings</string>
     <string name="search_alarm_title">Set an alarm for %1$s</string>
     <string name="search_timer_title">Start a %1$s timer</string>
     <string name="search_alarm_set">Alarm set for %1$s</string>
@@ -162,20 +219,12 @@
     <string name="duration_hours" translatable="false">%1$d h</string>
     <string name="duration_minutes" translatable="false">%1$d min</string>
     <string name="duration_seconds" translatable="false">%1$d s</string>
-    <string name="search_section_clipboard">CLIPBOARD</string>
-    <string name="search_clip_url">Open link</string>
+    <string name="search_clip_url">Open %1$s</string>
     <string name="search_clip_phone">Call</string>
     <string name="search_clip_address">See on the map</string>
-    <string name="settings_clipboard">Clipboard actions</string>
+    <string name="settings_clipboard">Clipboard</string>
     <string name="settings_clipboard_hint">Offers to open a copied link, phone number or address</string>
     <string name="settings_clipboard_on">Android tells you each time Alisio reads it</string>
-    <string name="settings_expense">QUICK EXPENSE</string>
-    <string name="settings_expense_hint">Type an amount and what it was for in search, like “%1$s”, and Alisio opens this address with {importe} and {concepto} filled in.</string>
-    <string name="settings_expense_placeholder" translatable="false">https://…/nuevo?importe={importe}&amp;concepto={concepto}</string>
-    <string name="settings_expense_sample">12 coffee</string>
-    <string name="settings_expense_preview">“%1$s” opens:</string>
-    <string name="settings_expense_off">No address yet: quick expense is off.</string>
-    <string name="settings_expense_invalid">Not usable yet: it has to be a full address (like https://…) and include {importe} or {concepto}.</string>
 
     <string name="setting_all">Settings</string>
     <string name="setting_wifi" translatable="false">Wi-Fi</string>
@@ -202,76 +251,68 @@
     <string name="setting_about">About phone</string>
 
     <string name="zones_title">Zones</string>
-    <string name="zones_hint_back">Pinch out to go back</string>
-    <string name="zones_footer">Hold an app and drag it to move it to another island</string>
-    <string name="zones_search_subtitle">All your apps, by island</string>
+    <string name="zones_hint">Hold an app to move it</string>
     <string name="zone_daily">Daily</string>
     <string name="zone_dev" translatable="false">Dev</string>
     <string name="zone_system">System</string>
     <string name="zone_rest">Everything else</string>
     <string name="zone_empty">Drop apps here</string>
     <string name="zone_new">New island</string>
-    <string name="zone_edit_title">Your island</string>
-    <string name="zone_edit">Rename or delete %1$s</string>
+    <string name="zone_edit">Edit island %1$s</string>
     <string name="zone_name_hint">Island name</string>
     <string name="zone_create">Create</string>
-    <string name="zone_save">Save</string>
     <string name="zone_delete">Delete island</string>
-    <string name="zone_delete_confirm">Delete? Its apps go back where they were</string>
     <plurals name="zone_apps">
         <item quantity="one">%1$d app</item>
         <item quantity="other">%1$d apps</item>
     </plurals>
-    <string name="appmenu_zone">ZONE</string>
-    <string name="appmenu_move">Move to another zone</string>
-    <string name="settings_zones">ZONES</string>
+    <string name="appmenu_zone">Island</string>
+    <string name="appmenu_move">Move to another island</string>
+    <string name="settings_zones">Zones</string>
     <string name="settings_zones_open">See Zones</string>
-    <string name="settings_zones_pinch">Pinch the home screen</string>
-    <string name="settings_zones_pinch_hint">Bring two fingers together to open Zones</string>
-    <string name="settings_zones_labels">App names in Zones</string>
-    <string name="settings_zones_labels_hint">Show the name under each icon</string>
-    <string name="settings_zones_new_hint">A group of apps with the name you give it</string>
+    <string name="settings_zones_pinch">Pinch to open Zones</string>
+    <string name="settings_zones_labels">Names in Zones</string>
+    <string name="settings_islands">Your islands</string>
+    <string name="settings_island_edit">Edit island</string>
 
     <string name="accessibility_service_summary">Lock the screen and pull down the notifications from the home screen</string>
     <string name="accessibility_service_description">Alisio uses this service for two things only: locking the screen when you double tap its home screen, and pulling down the notifications when you swipe down on it. It does not read what is on the screen, it receives no events and it sends nothing anywhere.</string>
     <string name="accessibility_notice_title">Before you turn it on</string>
-    <string name="accessibility_notice_does_label">WHAT IT DOES</string>
-    <string name="accessibility_notice_does">Two things, and only when you ask for them: it locks the screen when you double tap an empty area of the home screen, and it pulls down the notifications when you swipe down.</string>
-    <string name="accessibility_notice_does_not_label">WHAT IT DOESN\'T DO</string>
-    <string name="accessibility_notice_does_not">It doesn\'t read the screen or what you type, it doesn\'t watch other apps and it doesn\'t tap anything for you. It asks Android for no events and no window content, and Alisio has no Internet permission.</string>
-    <string name="accessibility_notice_why_label">WHY IT\'S NEEDED</string>
-    <string name="accessibility_notice_why">Android only lets an accessibility service lock the screen or open the notifications. Without it those two gestures do nothing, and the rest of Alisio works the same. Some apps, such as banking apps, check for active accessibility services and may warn you.</string>
-    <string name="accessibility_notice_how_label">HOW TO TURN IT ON</string>
+    <string name="accessibility_notice_does_label">What it does</string>
+    <string name="accessibility_notice_does_lock">Locks the screen when you double tap an empty area of the home screen</string>
+    <string name="accessibility_notice_does_notifications">Pulls down the notifications when you swipe down on the home screen</string>
+    <string name="accessibility_notice_does_not_label">What it doesn\'t do</string>
+    <string name="accessibility_notice_does_not">It doesn\'t read the screen or what you type, or tap anything for you. No Internet.</string>
+    <string name="accessibility_notice_why">It doesn\'t watch other apps: it asks Android for no events and no window content, and Alisio has no Internet permission. Android only lets an accessibility service lock the screen or open the notifications. Without it those two gestures do nothing, and the rest of Alisio works the same. Some apps, such as banking apps, check for active accessibility services and may warn you.</string>
     <string name="accessibility_notice_how">On the next screen, find Alisio (on Samsung, under Installed apps) and turn it on. Android shows its own generic warning about full control: it is the same for every service. You can turn it off there at any time.</string>
     <string name="accessibility_notice_continue">Open accessibility settings</string>
     <string name="accessibility_notice_dismiss">Not now</string>
-    <string name="settings_gestures">HOME GESTURES</string>
+    <string name="settings_gestures">Gestures</string>
+    <string name="settings_needs_accessibility">Accessibility is off</string>
     <string name="settings_accessibility">Accessibility service</string>
     <string name="settings_accessibility_hint">Needed to lock the screen and pull down the notifications</string>
     <string name="settings_accessibility_on">It only locks and opens the notifications; it never reads the screen</string>
     <string name="settings_lock_double_tap">Double tap to lock</string>
     <string name="settings_lock_double_tap_hint">Tap an empty area of the home screen twice</string>
-    <string name="settings_notifications_swipe">Swipe down for notifications</string>
+    <string name="settings_notifications_swipe">Pull down notifications</string>
     <string name="settings_notifications_swipe_hint">Swipe down on an empty area of the home screen</string>
-    <string name="settings_gesture_needs_service">Turn on the accessibility service first</string>
     <string name="gesture_service_silent">The accessibility service didn\'t respond</string>
 
     <string name="pause_title">A pause before %1$s</string>
     <string name="pause_open">Open anyway</string>
     <string name="pause_cancel">Don\'t open</string>
+    <string name="pause_ready">You can open %1$s now</string>
     <plurals name="pause_seconds_left">
         <item quantity="one">%1$d second left</item>
         <item quantity="other">%1$d seconds left</item>
     </plurals>
     <string name="pause_seconds_short" translatable="false">%1$d s</string>
-    <string name="settings_pause">PAUSE</string>
-    <string name="settings_pause_hint">Alisio waits a few seconds before opening these apps and asks whether you still want to. Only when you open them from Alisio.</string>
-    <string name="settings_pause_none">No app has a pause.</string>
+    <string name="settings_pause">Pause</string>
+    <string name="settings_pause_hint">Only when opened from Alisio.</string>
+    <string name="settings_pause_none">No app has a pause</string>
     <string name="settings_pause_remove">Remove the pause from %1$s</string>
+    <string name="settings_pause_add">Add</string>
     <string name="settings_pause_apps">Apps with a pause</string>
-    <string name="settings_pause_apps_hint">Choose which apps open after a pause</string>
-    <string name="settings_pause_on">With pause</string>
-    <string name="settings_pause_duration">How long the pause lasts</string>
+    <string name="settings_pause_duration">Duration</string>
     <string name="settings_pause_preview">See the pause</string>
-    <string name="settings_pause_preview_hint">As it will look when you open %1$s</string>
 </resources>

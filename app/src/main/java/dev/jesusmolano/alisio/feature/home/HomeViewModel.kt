@@ -8,6 +8,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.jesusmolano.alisio.AppContainer
+import dev.jesusmolano.alisio.core.dock.mostUsed
+import dev.jesusmolano.alisio.core.icons.IconStyle
+import dev.jesusmolano.alisio.core.media.PlayerSeen
+import dev.jesusmolano.alisio.core.media.hiddenAfter
+import dev.jesusmolano.alisio.core.now.DISMISSALS_TO_SILENCE
 import dev.jesusmolano.alisio.core.now.NowApp
 import dev.jesusmolano.alisio.core.now.NowInput
 import dev.jesusmolano.alisio.core.now.NowSuggestion
@@ -18,6 +23,7 @@ import dev.jesusmolano.alisio.data.apps.AppsRepository
 import dev.jesusmolano.alisio.data.apps.ShortcutEntry
 import dev.jesusmolano.alisio.data.bluetooth.BluetoothAudio
 import dev.jesusmolano.alisio.data.history.LaunchHistory
+import dev.jesusmolano.alisio.data.home.DOCK_SLOTS
 import dev.jesusmolano.alisio.data.home.GestureTarget
 import dev.jesusmolano.alisio.data.home.HomeConfigRepository
 import dev.jesusmolano.alisio.data.home.IconGestureRepository
@@ -36,6 +42,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** Hueco del dock listo para pintar: las claves ya son apps instaladas. */
 sealed interface DockSlot {
@@ -45,6 +53,13 @@ sealed interface DockSlot {
 
     class Stack(val name: String, val apps: List<AppEntry>, val icon: StackIcon, val glyph: String) : DockSlot
 }
+
+/**
+ * Lo que ha pasado al descartar una sugerencia de Ahora.
+ *
+ * @param silenced con este descarte la sugerencia no vuelve a salir; si no, solo se oculta unas horas.
+ */
+class NowDismissal(val silenced: Boolean, val undo: () -> Unit)
 
 /** Las apps del dock, las de las pilas incluidas, en su orden y sin repetir paquete. */
 fun List<DockSlot>.dockApps(): List<AppEntry> = flatMap { slot ->
@@ -94,8 +109,44 @@ class HomeViewModel(
             }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
-    /** Lo que suena o lo último que sonó; `null` sin sesiones o sin acceso a notificaciones. */
-    val player: StateFlow<NowPlaying?> = mediaSessions.playing
+    // Lo último visto con el reproductor apartado a mano; `null` si está a la vista. Solo en memoria:
+    // apartarlo es cosa del momento, no una preferencia.
+    private val playerHidden = MutableStateFlow<PlayerSeen?>(null)
+
+    /**
+     * Lo que suena o lo último que sonó; `null` sin sesiones, sin acceso a notificaciones o si se ha
+     * apartado con [hidePlayer] y nada ha vuelto a sonar ([hiddenAfter]).
+     */
+    val player: StateFlow<NowPlaying?> =
+        combine(mediaSessions.playing, playerHidden) { playing, hidden ->
+            playing.takeIf { hiddenAfter(hidden, it?.seen()) == null }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Las apps con alguna sugerencia de Ahora silenciada para siempre, para poder devolverlas. */
+    val silencedSuggestions: StateFlow<List<AppEntry>> =
+        combine(appsRepository.apps, nowFeedback.feedback) { apps, feedback ->
+            val silenced =
+                feedback.filterValues { it.dismissals >= DISMISSALS_TO_SILENCE }.keys.mapTo(HashSet()) { it.second }
+            apps.orEmpty().filter { it.key.toString() in silenced }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Las apps más abiertas, para rellenar de un toque un dock vacío. Vacía sin historial: recién
+     * instalado no hay nada que proponer.
+     */
+    val dockSuggestions: StateFlow<List<AppEntry>> =
+        combine(appsRepository.apps, history.openings) { apps, openings ->
+            val byKey = apps.orEmpty().associateBy { it.key.toString() }
+            mostUsed(openings, byKey.keys, DOCK_SLOTS).mapNotNull(byKey::get)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        // El recuerdo de lo oculto avanza con cada cambio de sesión: así «pausa y vuelve a sonar» se
+        // distingue de «sigue sonando».
+        viewModelScope.launch {
+            mediaSessions.playing.collect { playing -> playerHidden.update { hiddenAfter(it, playing?.seen()) } }
+        }
+    }
 
     /** Notificaciones sin leer por paquete, para los puntos del dock. */
     val unread: StateFlow<Map<String, Int>> = notificationAccess.unread
@@ -175,7 +226,12 @@ class HomeViewModel(
         nowTick.value++
     }
 
-    fun dismissNow(suggestion: NowSuggestion) = nowFeedback.dismiss(suggestion.rule, suggestion.appKey)
+    /** Descarta la sugerencia y dice qué pasa con ella, para contarlo junto a «Deshacer». */
+    fun dismissNow(suggestion: NowSuggestion): NowDismissal {
+        val before = nowFeedback.feedback.value[suggestion.rule to suggestion.appKey]?.dismissals ?: 0
+        val undo = nowFeedback.dismiss(suggestion.rule, suggestion.appKey)
+        return NowDismissal(silenced = before + 1 >= DISMISSALS_TO_SILENCE, undo = undo)
+    }
 
     /**
      * Abre la app y lo apunta en el historial. Devuelve `false` si no se ha podido abrir. Si la app
@@ -224,9 +280,26 @@ class HomeViewModel(
 
     suspend fun shortcutIcon(shortcut: ShortcutEntry): Bitmap? = appsRepository.shortcutIcon(shortcut)
 
+    /** Los iconos de [apps] en otro estilo, para la vista previa de cada estilo en los ajustes. */
+    suspend fun previewIcons(style: IconStyle, apps: List<AppEntry>): List<Bitmap> =
+        appsRepository.previewIcons(style, apps)
+
     fun togglePlayback() = mediaSessions.toggle()
 
     fun skipToNext() = mediaSessions.skipToNext()
+
+    /** Aparta el reproductor del Inicio hasta que algo vuelva a sonar. */
+    fun hidePlayer() {
+        playerHidden.value = mediaSessions.playing.value?.seen()
+    }
+
+    private fun NowPlaying.seen() = PlayerSeen(packageName, playing)
+
+    /** Devuelve al motor de Ahora una app silenciada. */
+    fun restoreSuggestion(app: AppEntry) = nowFeedback.restore(app.key.toString())
+
+    /** Llena los huecos vacíos del dock con las apps más abiertas. Devuelve cómo deshacerlo. */
+    fun fillDock(): () -> Unit = homeConfig.fill(dockSuggestions.value.map { it.key.toString() })
 
     /** Para una app que suena pero no tiene icono de inicio en la lista. */
     fun openPlayerApp(): Boolean {

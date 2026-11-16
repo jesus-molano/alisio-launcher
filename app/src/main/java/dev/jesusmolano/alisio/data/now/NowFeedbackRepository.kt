@@ -28,8 +28,30 @@ class NowFeedbackRepository(
             }
             .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
-    /** Apunta un descarte más de esa sugerencia, con la hora de ahora. */
-    fun dismiss(rule: NowRule, key: String) {
+    /**
+     * Apunta un descarte más de esa sugerencia, con la hora de ahora. Devuelve cómo deshacerlo: el
+     * contador y la hora vuelven a lo que había, y la sugerencia puede salir otra vez.
+     */
+    fun dismiss(rule: NowRule, key: String): () -> Unit {
+        val before = feedback.value[rule to key]
         scope.launch { dao.addDismissal(rule.name, key, clock.now()) }
+        return {
+            scope.launch {
+                if (before == null) {
+                    dao.forget(rule.name, key)
+                } else {
+                    dao.restore(rule.name, key, before.dismissals, before.lastDismissedAt)
+                }
+            }
+        }
+    }
+
+    /**
+     * Olvida todos los descartes de [key], con cualquier regla: la app puede volver a sugerirse.
+     * Es la salida de una sugerencia silenciada, que de otro modo no volvería nunca.
+     */
+    fun restore(key: String) {
+        val rules = feedback.value.keys.filter { it.second == key }.map { it.first }
+        scope.launch { rules.forEach { dao.forget(it.name, key) } }
     }
 }

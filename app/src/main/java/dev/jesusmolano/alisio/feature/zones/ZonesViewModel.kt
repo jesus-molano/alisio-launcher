@@ -58,7 +58,7 @@ private fun AppEntry.toZoneApp() = ZoneApp(key.toString(), label, component.pack
 
 /**
  * Zonas (§5.7): reparte las apps en islas a partir del dock, de lo asignado a mano y de las apps del
- * sistema. También lo usa el Interior de app del Inicio, para «Mover a otra zona».
+ * sistema. También lo usan el Interior de app, para «Mover a otra isla», y la hoja de una isla.
  */
 class ZonesViewModel(
     private val appsRepository: AppsRepository,
@@ -66,13 +66,9 @@ class ZonesViewModel(
     private val zones: ZonesRepository,
     private val history: LaunchHistory,
     private val systemApps: SystemApps,
-    private val usageAccess: UsageAccess,
     private val pause: LaunchPause,
     private val clock: Clock
 ) : ViewModel() {
-    val shortcuts: StateFlow<List<ShortcutEntry>> = appsRepository.shortcuts
-    val usageGranted: StateFlow<Boolean> = usageAccess.granted
-
     // Sube cada vez que Zonas se abre.
     private val opened = MutableStateFlow(0)
 
@@ -139,12 +135,6 @@ class ZonesViewModel(
         launched
     }
 
-    fun launch(shortcut: ShortcutEntry): Boolean = pause.open(shortcut) {
-        val launched = appsRepository.launch(shortcut)
-        if (launched) history.record(LaunchHistory.TYPE_SHORTCUT, shortcut.key)
-        launched
-    }
-
     /** Lleva [app] a la isla [target]; a una isla del dock que no es la suya no hace nada. */
     fun move(app: AppEntry, target: ZoneId) {
         val default = state.value?.defaultZone(app) ?: return
@@ -157,14 +147,6 @@ class ZonesViewModel(
 
     fun deleteZone(id: Long) = zones.delete(id)
 
-    /** Tiempo de uso de hoy, o `null` sin acceso a uso o si la app es de otro perfil. */
-    suspend fun usageToday(app: AppEntry): Long? =
-        if (app.user == Process.myUserHandle()) usageAccess.todayMillis(app.component.packageName) else null
-
-    fun openAppInfo(app: AppEntry): Boolean = appsRepository.openDetails(app)
-
-    suspend fun shortcutIcon(shortcut: ShortcutEntry): Bitmap? = appsRepository.shortcutIcon(shortcut)
-
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -174,7 +156,6 @@ class ZonesViewModel(
                     container.zones,
                     container.launchHistory,
                     container.systemApps,
-                    container.usageAccess,
                     container.launchPause,
                     container.clock
                 )

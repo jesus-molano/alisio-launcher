@@ -86,9 +86,6 @@ internal fun Context.webSearchApps(): List<WebSearchApp> {
         .sortedBy { it.label.lowercase() }
 }
 
-/** Abre la dirección que apunta un gasto (§5.8). El gasto no se escribe en el registro. */
-internal fun Context.openExpense(url: String): Boolean = open(Intent(Intent.ACTION_VIEW, url.toUri()), secret = true)
-
 /**
  * Le pide al reloj una alarma o un temporizador, sin pasar por su pantalla. Necesita el permiso
  * `SET_ALARM`; sin él o sin una app de reloj que lo atienda, devuelve `false`.
@@ -145,7 +142,7 @@ internal fun Context.clipboardContent(): ClipContent? = try {
     null
 }
 
-/** @param secret el intent lleva algo del usuario (un gasto, lo copiado): no se escribe en el registro. */
+/** @param secret el intent lleva algo del usuario (lo copiado): no se escribe en el registro. */
 private fun Context.open(intent: Intent, secret: Boolean = false): Boolean = try {
     startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     true

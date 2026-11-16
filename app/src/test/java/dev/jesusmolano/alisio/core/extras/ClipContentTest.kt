@@ -83,4 +83,15 @@ class ClipContentTest {
         assertNull(detectClip("https://example.com " + "a".repeat(2_000)))
         assertNull(detectClip("Calle Mayor 5, " + "muy lejos ".repeat(20)))
     }
+
+    @Test
+    fun `el sitio de un enlace`() {
+        assertEquals("example.org", Url("https://example.org/receta?x=1").host)
+        assertEquals("example.org", Url("https://www.Example.org").host)
+        assertEquals("example.org", Url("http://example.org:8080/a").host)
+        assertEquals("example.org", Url("https://example.org#parte").host)
+        // Lo que va delante de la «@» no es el sitio: es donde se esconde un nombre conocido.
+        assertEquals("otro.example", Url("https://banco.es@otro.example/entrar").host)
+        assertEquals("[2001:db8::1]", Url("http://[2001:db8::1]:8080/").host)
+    }
 }

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,9 +38,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -51,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -65,6 +69,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,30 +90,59 @@ import dev.jesusmolano.alisio.feature.appmenu.AppMenuSheet
 import dev.jesusmolano.alisio.feature.appmenu.AppUsage
 import dev.jesusmolano.alisio.feature.home.Trace
 import dev.jesusmolano.alisio.feature.home.TraceRailWidth
+import dev.jesusmolano.alisio.feature.home.traceRailHeight
 import dev.jesusmolano.alisio.ui.components.AppIcon
+import dev.jesusmolano.alisio.ui.components.IconLabel
+import dev.jesusmolano.alisio.ui.components.LocalUndo
 import dev.jesusmolano.alisio.ui.components.RoundIconButton
 import dev.jesusmolano.alisio.ui.components.onPinch
+import dev.jesusmolano.alisio.ui.components.selectedTile
+import dev.jesusmolano.alisio.ui.components.selectedTileSegment
 import dev.jesusmolano.alisio.ui.theme.AlisioTokens
+import dev.jesusmolano.alisio.ui.theme.onWallpaper
 import kotlin.math.roundToInt
 
-private val StartMargin = 20.dp
+private val StartMargin = AlisioTokens.Outset
+
+// Lo que Resto se retira además del margen para que su índice de Trazo quepa a su derecha.
+private val RestRailGap = TraceRailWidth - StartMargin
+
+// El índice no sube más allá de la cabecera de Zonas ni baja hasta el borde de la pantalla.
+private val RailMinTop = 104.dp
+private val RailEdgeGap = 24.dp
+
+// Claves de Resto en la lista: de ellas sale si Resto está a la vista y dónde empieza.
+private const val REST_TITLE_KEY = "rest-title"
+private const val REST_ROW_PREFIX = "rest-"
 
 // Ancho mínimo de un icono con su nombre: de aquí sale cuántos caben a lo ancho.
 private val MinCellWidth = 76.dp
 private const val MIN_COLUMNS = 3
-private val IslandGap = 8.dp
-private val IslandPadding = 6.dp
-private val IslandTitleHeight = 48.dp
-private val CellIconSize = 48.dp
-private val DragIconSize = 64.dp
+private val IslandGap = AlisioTokens.PlateGap
+
+// Relleno interior de la placa: con el margen exterior, el nombre y el primer icono caen en el filo.
+private val IslandInset = AlisioTokens.Edge - StartMargin
+private val IslandBottom = 4.dp
+private val CellIconSize = AlisioTokens.DockIconSize
+
+// La celda es más ancha que el icono para que quepa su nombre, y el icono va centrado en ella: la
+// fila se mete solo lo que falta para que el primer icono, y no su celda, empiece en el relleno.
+private val CellWidth = 72.dp
+private val CellRowInset = IslandInset - (CellWidth - CellIconSize) / 2
+
+// La app cogida crece lo justo para notarse levantada (docs/DISENO.md §2.6).
+private val DragIconSize = CellIconSize * 1.04f
 
 // Franja junto al borde superior e inferior en la que, con una app cogida, la lista se desplaza sola.
 private val AutoScrollEdge = 88.dp
 private val AutoScrollStep = 14.dp
 private val IslandShape = AlisioTokens.CardShape
-private val RestTopShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-private val RestBottomShape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp)
-private val SquareShape = RoundedCornerShape(0.dp)
+private val Square = CornerSize(0.dp)
+
+// Resto se pinta por tramos: el primero y el último llevan las esquinas de una isla; los demás, ninguna.
+private val RestTopShape = IslandShape.copy(bottomStart = Square, bottomEnd = Square)
+private val RestBottomShape = IslandShape.copy(topStart = Square, topEnd = Square)
+private val SquareShape = RoundedCornerShape(Square)
 
 /** Una app cogida con el dedo: de qué isla sale, dónde va y sobre qué isla está. */
 private class DragState(val app: AppEntry, val from: ZoneId, val default: ZoneId, val start: Offset) {
@@ -151,19 +185,19 @@ private class Geometry {
  * Pellizcar hacia fuera vuelve al Inicio. La isla Resto lleva el índice de Trazo.
  *
  * @param onClose vuelve al Inicio; atrás e «inicio» los atiende quien muestra la pantalla.
- * @param onGrantUsage abre el acceso a uso del sistema, para el uso de hoy del Interior de app.
+ * @param onAppMenu abre el Interior de una app. La hoja la pinta el Inicio, que tiene sus datos y
+ *   el dock donde ponerla.
  */
 @Composable
 fun ZonesScreen(
     viewModel: ZonesViewModel,
     prefs: Prefs,
     onClose: () -> Unit,
-    onGrantUsage: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onAppMenu: (AppEntry) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val shortcuts by viewModel.shortcuts.collectAsStateWithLifecycle()
-    val usageGranted by viewModel.usageGranted.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resources = LocalResources.current
     val view = LocalView.current
@@ -172,8 +206,8 @@ fun ZonesScreen(
     val listState = rememberLazyListState()
     val geometry = remember { Geometry() }
     var drag by remember { mutableStateOf<DragState?>(null) }
-    // Clave de la app cuyo Interior está abierto: si la app desaparece, la hoja se cierra sola.
-    var menuKey by remember { mutableStateOf<String?>(null) }
+    // El gesto de coger una app vive lo que vive la pantalla: lee siempre la orden de ahora.
+    val openMenu by rememberUpdatedState(onAppMenu)
     var editing by remember { mutableStateOf<ZoneEdit?>(null) }
 
     LaunchedEffect(Unit) { viewModel.onOpened() }
@@ -211,17 +245,8 @@ fun ZonesScreen(
     BoxWithConstraints(
         modifier
             .fillMaxSize()
-            .drawBehind {
-                // El fondo de pantalla se intuye detrás, como en el Inicio, pero aquí manda el contenido.
-                drawRect(AlisioTokens.Background.copy(alpha = 0.93f))
-                drawRect(
-                    Brush.radialGradient(
-                        colors = listOf(AlisioTokens.Accent.copy(alpha = 0.09f), Color.Transparent),
-                        center = Offset(0f, 0f),
-                        radius = size.width * 1.1f
-                    )
-                )
-            }
+            // El fondo de pantalla se ve detrás, como en el Inicio; las islas son placas sobre él.
+            .background(AlisioTokens.ZonesVeil)
             .onGloballyPositioned { geometry.root = it }
             .onPinch { if (it == Pinch.OUT) onClose() }
             // Coger una app se detecta aquí y no en cada icono: la lista recicla sus filas al
@@ -284,7 +309,7 @@ fun ZonesScreen(
                                     viewModel.move(picked.app, target)
                                 }
 
-                                !picked.moved -> menuKey = picked.app.key.toString()
+                                !picked.moved -> openMenu(picked.app)
                             }
                         }
                     } finally {
@@ -294,6 +319,7 @@ fun ZonesScreen(
                 }
             }
     ) {
+        // Las columnas salen del ancho de Resto, la más estrecha: así todas las islas tienen las mismas.
         val contentWidth = maxWidth - StartMargin - TraceRailWidth
         val columns = (contentWidth / MinCellWidth).toInt().coerceAtLeast(MIN_COLUMNS)
         val zones = state?.zones.orEmpty()
@@ -303,20 +329,28 @@ fun ZonesScreen(
         val restRows = remember(rest, columns) { rest?.apps.orEmpty().chunked(columns) }
         val restSections = remember(rest) { rest?.apps.orEmpty().toSections { it.label } }
         val dragging = drag
+        var tracing by remember { mutableStateOf(false) }
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            // Durante un trazo sobre el índice de Resto, las islas se retiran para dejar ver su rejilla.
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    // La lista acaba donde empieza la barra de estado: al desplazarse, las islas no
+                    // pasan por debajo de la hora.
+                    .padding(top = bars.calculateTopPadding())
+                    .graphicsLayer { alpha = if (tracing) 0f else 1f },
             contentPadding =
                 PaddingValues(
                     start = StartMargin,
-                    // El índice de Trazo ocupa el borde derecho, como en el Inicio.
-                    end = TraceRailWidth,
-                    top = bars.calculateTopPadding() + 24.dp,
+                    // Márgenes iguales a los dos lados; solo Resto deja sitio a su índice (RestPart).
+                    end = StartMargin,
+                    top = 24.dp,
                     bottom = bars.calculateBottomPadding() + 24.dp
                 )
         ) {
-            item(key = "header") { Header(onNew = { editing = ZoneEdit.New }) }
+            item(key = "header") { Header(onSettings = onOpenSettings, onNew = { editing = ZoneEdit.New }) }
 
             items(rows.size, key = { index -> rows[index].joinToString("+") { islands[it].id.encode() } }) { index ->
                 val row = rows[index]
@@ -335,7 +369,7 @@ fun ZonesScreen(
                             drag = dragging,
                             geometry = geometry,
                             onLaunch = ::launch,
-                            onMenu = { menuKey = it.key.toString() },
+                            onMenu = onAppMenu,
                             onEdit = { id, name -> editing = ZoneEdit.Existing(id, name) },
                             modifier = Modifier.weight(span.toFloat()).fillMaxHeight()
                         )
@@ -348,14 +382,22 @@ fun ZonesScreen(
             if (rest != null) {
                 // Resto puede tener más de cien apps: cada fila es un elemento de la lista, y el
                 // fondo de la isla se compone con el de sus filas.
-                item(key = "rest-title") {
-                    RestPart("title", RestTopShape, dragging, geometry) {
+                item(key = REST_TITLE_KEY) {
+                    RestPart("title", top = true, bottom = false, dragging, geometry) {
                         IslandTitle(zoneName(ZoneId.Rest, null))
                     }
                 }
-                items(restRows.size, key = { "rest-$it" }) { index ->
-                    RestPart(index, SquareShape, dragging, geometry) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = IslandPadding)) {
+                if (restRows.isEmpty()) {
+                    item(key = "rest-empty") {
+                        RestPart("empty", top = false, bottom = true, dragging, geometry) { EmptyIsland() }
+                    }
+                }
+                items(restRows.size, key = { REST_ROW_PREFIX + it }) { index ->
+                    // La última fila cierra la isla: lleva sus esquinas y el aire del pie. Un tramo
+                    // aparte solo para el pie sería más bajo que el radio y no las dibujaría.
+                    val last = index == restRows.lastIndex
+                    RestPart(index, top = false, bottom = last, dragging, geometry) {
+                        CellRow(Modifier.padding(bottom = if (last) IslandBottom else 0.dp)) {
                             Cells(
                                 apps = restRows[index],
                                 columns = columns,
@@ -364,128 +406,91 @@ fun ZonesScreen(
                                 drag = dragging,
                                 geometry = geometry,
                                 onLaunch = ::launch,
-                                onMenu = { menuKey = it.key.toString() }
+                                onMenu = onAppMenu
                             )
                         }
                     }
                 }
-                item(key = "rest-end") {
-                    RestPart("end", RestBottomShape, dragging, geometry) {
-                        if (restRows.isEmpty()) EmptyIsland() else Spacer(Modifier.height(IslandPadding))
-                    }
-                }
-            }
-
-            item(key = "footer") {
-                Text(
-                    text = stringResource(R.string.zones_footer),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AlisioTokens.TextTertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp)
-                )
             }
         }
 
+        // El índice es de Resto: solo sale con Resto a la vista y empieza a su altura, para no quedar
+        // junto a islas que no indexa. Si Resto asoma muy abajo, sube lo justo para no aplastar las letras.
+        val railBottom = bars.calculateBottomPadding() + RailEdgeGap
+        val railMinTop = bars.calculateTopPadding() + RailMinTop
+        val railMaxTop = (maxHeight - railBottom - traceRailHeight(restSections.size)).coerceAtLeast(railMinTop)
+        val restTop by remember(listState) {
+            derivedStateOf {
+                val info = listState.layoutInfo
+                val visible = info.visibleItemsInfo
+                val title = visible.firstOrNull { it.key == REST_TITLE_KEY }
+                when {
+                    title != null -> with(density) { (title.offset - info.viewportStartOffset).toDp() }
+                    visible.any { (it.key as? String)?.startsWith(REST_ROW_PREFIX) == true } -> 0.dp
+                    else -> null
+                }
+            }
+        }
         // Con una app cogida el índice se retira: el borde derecho es entonces sitio para soltar.
-        if (dragging == null) {
+        val railTop = restTop?.let { (bars.calculateTopPadding() + it).coerceIn(railMinTop, railMaxTop) }
+        if (dragging == null && railTop != null) {
             Trace(
                 sections = restSections,
-                railPadding =
-                    PaddingValues(
-                        top = bars.calculateTopPadding() + 104.dp,
-                        bottom = bars.calculateBottomPadding() + 24.dp
-                    ),
-                onLaunch = ::launch
+                railPadding = PaddingValues(top = railTop, bottom = railBottom),
+                onLaunch = ::launch,
+                onTracing = { tracing = it }
             )
-        } else {
+        } else if (dragging != null) {
             DraggedIcon(dragging)
         }
     }
 
-    val current = state
-    val menuApp =
-        remember(menuKey, current) {
-            current?.zones?.firstNotNullOfOrNull { zone -> zone.apps.firstOrNull { it.key.toString() == menuKey } }
-        }
-    LaunchedEffect(menuKey, menuApp, current) {
-        if (menuKey != null && menuApp == null && current != null) menuKey = null
-    }
-    if (menuApp != null) {
-        AppMenuSheet(
-            app = menuApp,
-            apps = emptyList(),
-            shortcuts = shortcuts,
-            target = null,
-            // El destino al deslizar es cosa de los iconos del dock: aquí no hay gesto que configurar.
-            gesturesEnabled = false,
-            usage = AppUsage(usageGranted, today = { viewModel.usageToday(menuApp) }, onGrant = onGrantUsage),
-            slot = null,
-            zones = zoneMove(current, menuApp) { viewModel.move(menuApp, it) },
-            shortcutIcon = viewModel::shortcutIcon,
-            onOpenShortcut = { shortcut ->
-                menuKey = null
-                if (!viewModel.launch(shortcut)) {
-                    val message = resources.getString(R.string.app_launch_failed, shortcut.label)
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                }
-            },
-            onSetTarget = {},
-            onAppInfo = {
-                menuKey = null
-                viewModel.openAppInfo(menuApp)
-            },
-            onDismiss = { menuKey = null }
-        )
-    }
-
-    editing?.let { edit ->
-        ZoneEditSheet(
-            edit = edit,
-            onSave = { name ->
-                when (edit) {
-                    ZoneEdit.New -> viewModel.createZone(name)
-                    is ZoneEdit.Existing -> viewModel.renameZone(edit.id, name)
-                }
-                editing = null
-            },
-            onDelete = {
-                (edit as? ZoneEdit.Existing)?.let { viewModel.deleteZone(it.id) }
-                editing = null
-            },
-            onDismiss = { editing = null }
-        )
-    }
+    editing?.let { edit -> ZoneEditSheet(edit = edit, viewModel = viewModel, onDismiss = { editing = null }) }
 }
 
+/** Título, botones y, debajo, la única pista: cómo se mueve una app. Todo sobre el fondo, sin placa. */
 @Composable
-private fun Header(onNew: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+private fun Header(onSettings: () -> Unit, onNew: () -> Unit) {
+    // Las islas empiezan en el margen exterior; el título, como su contenido, en el filo.
+    Column(Modifier.fillMaxWidth().padding(start = IslandInset, bottom = AlisioTokens.TitleGap)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.zones_title),
-                style = MaterialTheme.typography.headlineLarge,
-                color = AlisioTokens.Text
+                style = MaterialTheme.typography.headlineLarge.onWallpaper(),
+                modifier = Modifier.weight(1f).semantics { heading() }
             )
-            Text(
-                text = stringResource(R.string.zones_hint_back),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AlisioTokens.TextSecondary
+            // Los ajustes no tenían ninguna salida a la vista: aquí y en la barra hay una.
+            RoundIconButton(
+                R.drawable.ic_settings,
+                stringResource(R.string.settings_title),
+                AlisioTokens.Text,
+                onSettings
             )
+            RoundIconButton(R.drawable.ic_add, stringResource(R.string.zone_new), AlisioTokens.Text, onNew)
         }
-        RoundIconButton(R.drawable.ic_add, stringResource(R.string.zone_new), AlisioTokens.Text, onNew)
+        Text(text = stringResource(R.string.zones_hint), style = MaterialTheme.typography.bodyMedium.onWallpaper())
     }
 }
 
-/** Fondo de una isla según lo que pase con la app cogida: se enciende bajo el dedo si puede recibirla. */
-private fun Modifier.islandSurface(zone: ZoneId, drag: DragState?, shape: Shape): Modifier {
+/**
+ * Placa de una isla según lo que pase con la app cogida: bajo el dedo, si puede recibirla, lleva la
+ * marca de tesela elegida.
+ *
+ * @param ring dibuja esa marca; los tramos de Resto dibujan cada uno su parte del anillo.
+ */
+private fun Modifier.islandSurface(
+    zone: ZoneId,
+    drag: DragState?,
+    shape: Shape,
+    ring: Modifier.(hovered: Boolean) -> Modifier
+): Modifier {
     val hovered = drag != null && drag.over == zone && drag.accepts(zone)
     // Las islas a las que la app no puede ir se apagan mientras dura el arrastre; la suya no.
     val blocked = drag != null && zone != drag.from && !drag.accepts(zone)
     return this
-        .alpha(if (blocked) 0.45f else 1f)
-        .background(AlisioTokens.Surface.copy(alpha = 0.78f), shape)
-        .then(if (hovered) Modifier.background(AlisioTokens.AccentSoft, shape) else Modifier)
+        .alpha(if (blocked) AlisioTokens.DISABLED_ALPHA else 1f)
+        .background(AlisioTokens.Plate, shape)
+        .ring(hovered)
 }
 
 /** Una isla que no es Resto: su nombre y sus apps en tantas columnas como ocupa de ancho. */
@@ -508,8 +513,8 @@ private fun Island(
             .onGloballyPositioned { coords ->
                 geometry.areas.getOrPut(zone.id) { Geometry.Area(zone.id, coords) }.coords = coords
             }
-            .islandSurface(zone.id, drag, IslandShape)
-            .padding(bottom = IslandPadding)
+            .islandSurface(zone.id, drag, IslandShape) { selectedTile(it, IslandShape) }
+            .padding(bottom = IslandBottom)
     ) {
         val custom = zone.id as? ZoneId.Custom
         if (custom == null) {
@@ -531,26 +536,34 @@ private fun Island(
             EmptyIsland()
         } else {
             zone.apps.chunked(span).forEach { rowApps ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = IslandPadding)) {
-                    Cells(rowApps, span, zone.id, showLabels, drag, geometry, onLaunch, onMenu)
-                }
+                CellRow { Cells(rowApps, span, zone.id, showLabels, drag, geometry, onLaunch, onMenu) }
             }
         }
     }
 }
 
+/** Una fila de apps de una isla, con el primer icono y el último a la misma distancia del borde. */
+@Composable
+private fun CellRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier.fillMaxWidth().padding(horizontal = CellRowInset),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        content = content
+    )
+}
+
 @Composable
 private fun IslandTitle(name: String, modifier: Modifier = Modifier, editable: Boolean = false) {
     Row(
-        modifier.fillMaxWidth().height(IslandTitleHeight).padding(horizontal = 14.dp),
+        modifier.fillMaxWidth().heightIn(min = AlisioTokens.MinTouch).padding(horizontal = IslandInset),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = name.uppercase(),
+            text = name,
             style = AlisioTokens.SectionLabel,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f, fill = false).semantics { heading() }
         )
         if (editable) {
             Spacer(Modifier.width(6.dp))
@@ -558,8 +571,8 @@ private fun IslandTitle(name: String, modifier: Modifier = Modifier, editable: B
             Icon(
                 painter = painterResource(R.drawable.ic_edit),
                 contentDescription = null,
-                tint = AlisioTokens.TextTertiary,
-                modifier = Modifier.size(14.dp)
+                tint = AlisioTokens.TextSecondary,
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -568,12 +581,16 @@ private fun IslandTitle(name: String, modifier: Modifier = Modifier, editable: B
 /** Lo que enseña una isla sin apps: que es un sitio donde soltarlas. */
 @Composable
 private fun EmptyIsland() {
-    Text(
-        text = stringResource(R.string.zone_empty),
-        style = MaterialTheme.typography.bodyMedium,
-        color = AlisioTokens.TextTertiary,
-        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 18.dp)
-    )
+    Box(
+        Modifier.heightIn(min = AlisioTokens.MinTouch).padding(horizontal = IslandInset),
+        contentAlignment = Alignment.TopStart
+    ) {
+        Text(
+            text = stringResource(R.string.zone_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = AlisioTokens.TextSecondary
+        )
+    }
 }
 
 /**
@@ -581,18 +598,35 @@ private fun EmptyIsland() {
  * la misma isla al soltar.
  *
  * @param part lo que distingue a este tramo de los demás.
+ * @param top es el primer tramo: lleva las esquinas de arriba de la isla.
+ * @param bottom es el último: lleva las de abajo.
  */
 @Composable
-private fun RestPart(part: Any, shape: Shape, drag: DragState?, geometry: Geometry, content: @Composable () -> Unit) {
+private fun RestPart(
+    part: Any,
+    top: Boolean,
+    bottom: Boolean,
+    drag: DragState?,
+    geometry: Geometry,
+    content: @Composable () -> Unit
+) {
     val key = remember(part) { "rest" to part }
+    val shape =
+        when {
+            top -> RestTopShape
+            bottom -> RestBottomShape
+            else -> SquareShape
+        }
     DisposableEffect(key) { onDispose { geometry.areas.remove(key) } }
     Box(
         Modifier
             .fillMaxWidth()
+            // Solo Resto deja sitio a su índice, que va fuera de la placa, a la derecha.
+            .padding(end = RestRailGap)
             .onGloballyPositioned { coords ->
                 geometry.areas.getOrPut(key) { Geometry.Area(ZoneId.Rest, coords) }.coords = coords
             }
-            .islandSurface(ZoneId.Rest, drag, shape)
+            .islandSurface(ZoneId.Rest, drag, shape) { selectedTileSegment(it, top, bottom, IslandShape) }
     ) { content() }
 }
 
@@ -617,15 +651,15 @@ private fun RowScope.Cells(
             geometry = geometry,
             onClick = { onLaunch(app) },
             onMenu = { onMenu(app) },
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.width(CellWidth)
         )
     }
-    repeat(columns - apps.size) { Spacer(Modifier.weight(1f)) }
+    repeat(columns - apps.size) { Spacer(Modifier.width(CellWidth)) }
 }
 
 /**
  * Una app de una isla. El toque la abre; cogerla lo detecta la pantalla, que sabe dónde está cada
- * icono por [geometry]. Con TalkBack no hay arrastre: la acción «Mover a otra zona» abre su Interior.
+ * icono por [geometry]. Con TalkBack no hay arrastre: la acción «Mover a otra isla» abre su Interior.
  */
 @Composable
 private fun AppCell(
@@ -670,23 +704,16 @@ private fun AppCell(
                         )
                 }
                 // La app cogida deja su hueco a la vista, atenuado: ahí vuelve si se suelta fuera.
-                .alpha(if (picked) 0.25f else 1f)
-                .heightIn(min = 64.dp)
-                .padding(vertical = 8.dp, horizontal = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+                .alpha(if (picked) AlisioTokens.DISABLED_ALPHA else 1f)
+                // Más aire debajo que encima: el nombre de la isla ya trae el suyo, y entre filas
+                // el nombre de una app no debe pegarse al icono de la siguiente.
+                .padding(top = 4.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AppIcon(app.icon, CellIconSize)
         if (showLabel) {
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = app.label,
-                style = AlisioTokens.DockLabel,
-                color = AlisioTokens.Text.copy(alpha = 0.9f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
+            IconLabel(app.label)
         }
     }
 }
