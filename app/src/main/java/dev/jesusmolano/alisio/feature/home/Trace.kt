@@ -53,10 +53,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.trace.EDGE_FLING_MILLIS
 import dev.jesusmolano.alisio.core.trace.RestRail
 import dev.jesusmolano.alisio.core.trace.TraceBand
 import dev.jesusmolano.alisio.core.trace.TraceGrid
 import dev.jesusmolano.alisio.core.trace.TraceRail
+import dev.jesusmolano.alisio.core.trace.isEdgeFling
 import dev.jesusmolano.alisio.data.apps.AppEntry
 import dev.jesusmolano.alisio.data.apps.AppSection
 import dev.jesusmolano.alisio.data.apps.OTHER_SECTION
@@ -296,6 +298,11 @@ fun BoxScope.Trace(
                         // apoyarlo: un toque suelto en el borde no ha decidido aún nada.
                         var felt = false
                         val slop = viewConfiguration.touchSlop
+                        // Lo más que se ha alejado en vertical mientras sigue en el índice, y si salió
+                        // como un «atrás» (core/trace isEdgeFling): entonces no abre nada.
+                        var verticalTravel = 0f
+                        var left = false
+                        var fled = false
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -312,6 +319,15 @@ fun BoxScope.Trace(
                                 change.consume()
                                 val x = change.position.x + railLeft
                                 val y = change.position.y + zoneTop
+                                if (x >= railLeft) {
+                                    if (!left) verticalTravel = max(verticalTravel, abs(y - startY))
+                                } else if (!left) {
+                                    left = true
+                                    if (isEdgeFling(change.uptimeMillis - down.uptimeMillis, verticalTravel, slop)) {
+                                        fled = true
+                                        break
+                                    }
+                                }
                                 val next =
                                     when {
                                         x >= railLeft -> {
@@ -341,7 +357,14 @@ fun BoxScope.Trace(
                                             current.copy(fingerY = y, locked = true, selected = selected)
                                         }
                                     }
-                                val moved = (change.position - down.position).getDistance() > slop
+                                // Lo horizontal solo cuenta pasado el plazo de isEdgeFling: un «atrás»
+                                // recorre el índice de lado antes de salir y no debe vibrar como un trazo.
+                                val moved =
+                                    abs(change.position.y - down.position.y) > slop ||
+                                        (
+                                            change.uptimeMillis - down.uptimeMillis >= EDGE_FLING_MILLIS &&
+                                                (change.position - down.position).getDistance() > slop
+                                            )
                                 if (!felt && (moved || next.letter != current.letter)) {
                                     felt = true
                                     AlisioHaptics.step(view)
@@ -352,6 +375,14 @@ fun BoxScope.Trace(
                         } finally {
                             // También si el sistema cancela el gesto a medias.
                             trace = null
+                        }
+                        if (fled) {
+                            // El resto del «atrás» también es del índice: que no lo tome el Inicio.
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+                            return@awaitEachGesture
                         }
                         val selected = current.selected
                         if (open && selected != null) {
