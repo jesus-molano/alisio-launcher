@@ -1,6 +1,7 @@
 package dev.jesusmolano.alisio.data.apps
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.LauncherApps.ShortcutQuery
@@ -10,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -18,6 +20,7 @@ import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import dev.jesusmolano.alisio.StartupTrace
+import dev.jesusmolano.alisio.core.apps.removalFor
 import dev.jesusmolano.alisio.core.icons.CustomIcon
 import dev.jesusmolano.alisio.core.icons.IconStyle
 import dev.jesusmolano.alisio.data.db.AppCustom
@@ -216,7 +219,8 @@ class AppsRepository(
             hidden = own.hidden,
             customIcon = chosen.takeIf { drawn != null },
             suspended = suspended,
-            hideFromSuggestions = hideFromSuggestions
+            hideFromSuggestions = hideFromSuggestions,
+            removal = removal
         )
     }
 
@@ -350,6 +354,22 @@ class AppsRepository(
     }
 
     /**
+     * Pide al sistema desinstalar la app (o, si es del sistema, quitar sus actualizaciones): es el
+     * sistema quien pregunta y quien la quita, así que no hay deshacer. Al irse, la lista de apps se
+     * recarga sola. Lo que se ofrece lo decide [AppEntry.removal]. Devuelve `false` si no se ha podido pedir.
+     */
+    fun uninstall(app: AppEntry): Boolean = try {
+        val intent =
+            Intent(Intent.ACTION_DELETE, Uri.fromParts("package", app.component.packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        appContext.startActivity(intent)
+        true
+    } catch (e: RuntimeException) {
+        Log.w(TAG, "No se ha podido pedir desinstalar ${app.key}", e)
+        false
+    }
+
+    /**
      * El icono propio de un acceso directo, o `null` si no tiene o no se deja leer. Se pide solo
      * para los pocos que enseña el Interior de app; al indexar, todos llevan el icono de su app.
      */
@@ -407,7 +427,8 @@ class AppsRepository(
             val unsuggested = HashMap<String, Boolean>()
             launcherApps.getActivityList(null, user).map { info ->
                 val packageName = info.componentName.packageName
-                val suspended = info.applicationInfo.flags and ApplicationInfo.FLAG_SUSPENDED != 0
+                val flags = info.applicationInfo.flags
+                val suspended = flags and ApplicationInfo.FLAG_SUSPENDED != 0
                 val icon = safeIcon(info.getIcon(0), pack?.iconFor(info.componentName), style)
                 AppEntry(
                     key = AppKey(packageName, info.componentName.className, serial),
@@ -417,7 +438,15 @@ class AppsRepository(
                     icon = if (suspended) dimmed(icon) else icon,
                     updatedAt = updatedAt(packageName),
                     suspended = suspended,
-                    hideFromSuggestions = unsuggested.getOrPut(packageName) { hiddenFromSuggestions(packageName, user) }
+                    hideFromSuggestions = unsuggested.getOrPut(packageName) {
+                        hiddenFromSuggestions(packageName, user)
+                    },
+                    removal =
+                        removalFor(
+                            system = flags and ApplicationInfo.FLAG_SYSTEM != 0,
+                            updated = flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0,
+                            ownProfile = user == android.os.Process.myUserHandle()
+                        )
                 )
             }
         }

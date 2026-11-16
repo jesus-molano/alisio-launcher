@@ -61,6 +61,12 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
+    <!--
+        «Desinstalar» en el Interior de app: abre el diálogo de confirmación del sistema, que desde
+        Android 9 no sale sin este permiso. Permiso normal: se concede al instalar y no borra nada solo.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <!-- CALL_PHONE da por hecho que hay telefonía; Alisio funciona igual sin ella. -->
     <uses-feature
         android:name="android.hardware.telephony"

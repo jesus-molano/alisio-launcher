@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jesusmolano.alisio.R
+import dev.jesusmolano.alisio.core.apps.Removal
 import dev.jesusmolano.alisio.core.search.filterByName
 import dev.jesusmolano.alisio.core.usage.usageDuration
 import dev.jesusmolano.alisio.core.zones.ZoneId
@@ -134,6 +135,7 @@ class ZoneMove(val current: ZoneId, val choices: List<ZoneChoice>, val onMove: (
  * @param shortcutIcon carga el icono propio de un acceso directo; `null` si no tiene.
  * @param look cambia el icono y el nombre de la app y la oculta; cada uno es un paso de la hoja.
  * @param onUnpin quita un acceso fijado a Alisio; `null` si desde aquí no se ofrece.
+ * @param onUninstall pide al sistema desinstalar la app; `null` si no se puede (del sistema u otro perfil).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,6 +156,7 @@ fun AppMenuSheet(
     onUnpin: ((ShortcutEntry) -> Unit)?,
     onSetTarget: (SwipeTarget?) -> Unit,
     onAppInfo: () -> Unit,
+    onUninstall: (() -> Unit)?,
     onDismiss: () -> Unit
 ) {
     // El segundo paso que ocupa la hoja, si hay alguno: nunca una hoja sobre otra.
@@ -185,7 +188,7 @@ fun AppMenuSheet(
 
             MenuStep.MAIN -> MainStep(
                 app, usage, onAppInfo, onGrantHomeRole, own, icons, onOpenShortcut, onUnpin, gesturesEnabled, target,
-                zones, dock, slot, look, onStep = { step = it }
+                zones, dock, slot, look, onUninstall, onStep = { step = it }
             )
         }
     }
@@ -212,6 +215,7 @@ private fun MainStep(
     dock: DockPlacement?,
     slot: SlotActions?,
     look: AppLook,
+    onUninstall: (() -> Unit)?,
     onStep: (MenuStep) -> Unit
 ) {
     Column(
@@ -308,6 +312,24 @@ private fun MainStep(
                 leadingIcon = R.drawable.ic_close,
                 secondary = true,
                 onClick = slot.onClear
+            )
+        }
+        // Lo único sin deshacer: lo último de todo y aparte. Confirma el diálogo del sistema.
+        if (onUninstall != null) {
+            Spacer(Modifier.height(AlisioTokens.GroupGap))
+            // De una app del sistema solo se quitan las actualizaciones: el título lo dice antes del diálogo.
+            val updatesOnly = app.removal == Removal.UPDATES
+            ItemRow(
+                title =
+                    AnnotatedString(
+                        stringResource(
+                            if (updatesOnly) R.string.appmenu_uninstall_updates else R.string.appmenu_uninstall
+                        )
+                    ),
+                leadingIcon = R.drawable.ic_delete,
+                subtitle = stringResource(R.string.appmenu_uninstall_hint),
+                secondary = true,
+                onClick = onUninstall
             )
         }
     }

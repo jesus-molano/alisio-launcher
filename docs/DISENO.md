@@ -334,6 +334,7 @@ Gestos, sin cambio: deslizar arriba o tocar la píldora abre la barra; pellizcar
 - **«Isla»:** chips de elección en `FlowRow`.
 - **«Hueco del dock»** (si se abrió desde el dock): fila `ic_swap_horiz` «Cambiar la app», fila `ic_stacks` «Convertir en pila» y, separada `GroupGap`, fila `ic_remove` «Dejar vacío» en `TextSecondary` con `UndoBar`.
 - **«Poner en el dock»** (si se abrió desde Zonas, la barra o una pila): los seis huecos en miniatura (iconos de 44 dp, sin nombre) en una fila; un toque sustituye ese hueco, con `UndoBar`.
+- **«Desinstalar»**, lo último y separado `GroupGap`: fila `ic_delete` en `TextSecondary` con el secundario «El teléfono te pedirá confirmarlo». Abre el diálogo del sistema; no hay `UndoBar`. En una app del sistema actualizada dice «Desinstalar actualizaciones». No sale en apps del sistema sin actualizar ni en las de otro perfil.
 
 ### 6.6 Pausa
 

@@ -121,6 +121,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jesusmolano.alisio.R
 import dev.jesusmolano.alisio.TouchTrace
+import dev.jesusmolano.alisio.core.apps.Removal
 import dev.jesusmolano.alisio.core.dock.DOCK_ITEM_SPARE_DP
 import dev.jesusmolano.alisio.core.dock.dockIconSize
 import dev.jesusmolano.alisio.core.draw.InitialPick
@@ -942,6 +943,22 @@ fun HomeScreen(
                     appMenu = null
                     viewModel.openAppInfo(app)
                 },
+                // La hoja se cierra al pedirlo: si se cancela el diálogo, se vuelve al Inicio.
+                onUninstall =
+                    if (app.removal != Removal.NONE) {
+                        {
+                            appMenu = null
+                            if (!viewModel.uninstall(app)) {
+                                Toast.makeText(
+                                    context,
+                                    resources.getString(R.string.appmenu_uninstall_failed, app.label),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    } else {
+                        null
+                    },
                 onDismiss = { appMenu = null }
             )
         }

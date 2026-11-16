@@ -3,6 +3,7 @@ package dev.jesusmolano.alisio.data.apps
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.os.UserHandle
+import dev.jesusmolano.alisio.core.apps.Removal
 import dev.jesusmolano.alisio.core.icons.CustomIcon
 
 /**
@@ -17,6 +18,7 @@ import dev.jesusmolano.alisio.core.icons.CustomIcon
  *   atenuado y al abrirla el sistema enseña su propio aviso.
  * @param hideFromSuggestions el sistema pide no sugerirla (`shouldHideFromSuggestions`): Ahora y
  *   Recientes no la proponen, aunque sigue en todas partes donde se la busca.
+ * @param removal lo que el Interior de app ofrece quitar; se calcula al cargar, fuera del hilo principal.
  */
 class AppEntry(
     val key: AppKey,
@@ -30,7 +32,8 @@ class AppEntry(
     val hidden: Boolean = false,
     val customIcon: CustomIcon? = null,
     val suspended: Boolean = false,
-    val hideFromSuggestions: Boolean = false
+    val hideFromSuggestions: Boolean = false,
+    val removal: Removal = Removal.NONE
 ) {
     val renamed: Boolean get() = label != originalLabel
 }

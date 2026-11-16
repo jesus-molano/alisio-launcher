@@ -70,6 +70,10 @@
     <string name="appmenu_swipe_clear">Remove the destination</string>
     <string name="appmenu_back">Back</string>
     <string name="appmenu_app_info">App info</string>
+    <string name="appmenu_uninstall">Uninstall</string>
+    <string name="appmenu_uninstall_updates">Uninstall updates</string>
+    <string name="appmenu_uninstall_hint">Your phone will ask you to confirm</string>
+    <string name="appmenu_uninstall_failed">Couldn\'t uninstall %1$s</string>
     <string name="appmenu_slot">Dock slot</string>
     <string name="appmenu_dock">Put in the dock</string>
     <string name="appmenu_change_app">Change app</string>

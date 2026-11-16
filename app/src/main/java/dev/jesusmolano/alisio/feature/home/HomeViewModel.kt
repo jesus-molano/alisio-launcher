@@ -588,6 +588,8 @@ class HomeViewModel(
 
     fun openAppInfo(app: AppEntry): Boolean = appsRepository.openDetails(app)
 
+    fun uninstall(app: AppEntry): Boolean = appsRepository.uninstall(app)
+
     /**
      * Quita un acceso fijado a Alisio. Devuelve cómo deshacerlo: volver a fijarlo, que el sistema
      * solo admite mientras la app lo siga publicando.
