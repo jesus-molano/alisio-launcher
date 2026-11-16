@@ -8,8 +8,13 @@ import android.provider.AlarmClock
 import android.text.format.DateFormat
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,6 +83,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -518,14 +524,14 @@ fun HomeScreen(
     ) {
         val glanceData by viewModel.glance.collectAsStateWithLifecycle()
         val musicApp by viewModel.musicApp.collectAsStateWithLifecycle()
-        val somethingPlaying by viewModel.somethingPlaying.collectAsStateWithLifecycle()
+        val musicPieceShown by viewModel.musicPieceShown.collectAsStateWithLifecycle()
         // Recordada: una pieza nueva en cada recomposición impediría saltarse ClockAndDate.
         val musicGlance =
             remember(musicApp) { musicApp?.let { app -> MusicGlance(app.label) { playMusic(app) } } }
         ClockAndDate(
             prefs = prefs,
             glance = glanceData,
-            music = musicGlance?.takeIf { !somethingPlaying },
+            music = musicGlance?.takeIf { musicPieceShown },
             notes = if (prefs.homeNotes) notes else emptyList(),
             onStrikeNote = { note ->
                 undo.show(resources.getString(R.string.undo_note_struck), viewModel.removeNote(note))
@@ -603,19 +609,56 @@ fun HomeScreen(
                     Spacer(Modifier.height(AlisioTokens.PlateGap))
                 }
             }
-            player?.let { playing ->
+            // DISENO §2: el reproductor entra subiendo 12 dp y sale desvaneciéndose. Mientras sale se
+            // sigue pintando el último que hubo.
+            var lastPlayer by remember { mutableStateOf(player) }
+            // Apartada con el dedo, la placa ya se ha ido con él: desvanecerla la haría volver al
+            // centro (PlayerBar devuelve su desplazamiento a 0) antes de irse.
+            var swipedAway by remember { mutableStateOf(false) }
+            if (player != null) {
+                lastPlayer = player
+                swipedAway = false
+            }
+            AnimatedVisibility(
+                visible = player != null,
+                enter = fadeIn(AlisioMotion.standard()) +
+                    slideInVertically(AlisioMotion.standard()) { with(density) { AlisioMotion.Rise.roundToPx() } },
+                exit = if (swipedAway) ExitTransition.None else fadeOut(AlisioMotion.exit())
+            ) {
+                val playing = lastPlayer ?: return@AnimatedVisibility
                 val playingApp = apps.orEmpty().firstOrNull { it.component.packageName == playing.packageName }
-                PlayerBar(
-                    player = playing,
-                    appIcon = playingApp?.icon,
-                    // Por la lista de apps siempre que se pueda: así la apertura cuenta en el historial.
-                    onOpen = { if (playingApp != null) launch(playingApp) else viewModel.openPlayerApp() },
-                    onToggle = viewModel::togglePlayback,
-                    onNext = viewModel::skipToNext,
-                    onHide = viewModel::hidePlayer,
-                    modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
-                )
-                Spacer(Modifier.height(AlisioTokens.PlateGap))
+                val leaving = player == null
+                // Mientras se desvanece, la placa ya no es de ninguna sesión: no atiende toques.
+                Column(
+                    if (leaving) {
+                        Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach {
+                                        it.consume()
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    }
+                ) {
+                    PlayerBar(
+                        player = playing,
+                        appIcon = playingApp?.icon,
+                        // Por la lista de apps siempre que se pueda: así la apertura cuenta en el historial.
+                        onOpen = { if (playingApp != null) launch(playingApp) else viewModel.openPlayerApp() },
+                        onToggle = viewModel::togglePlayback,
+                        onNext = viewModel::skipToNext,
+                        onHide = {
+                            swipedAway = true
+                            viewModel.hidePlayer()
+                        },
+                        modifier = Modifier.padding(horizontal = AlisioTokens.Outset)
+                    )
+                    Spacer(Modifier.height(AlisioTokens.PlateGap))
+                }
             }
             // Con más huecos los iconos encogen para caber de filo a filo; sin huecos no hay dock.
             val iconSize = rememberDockIconSize(dock.size)

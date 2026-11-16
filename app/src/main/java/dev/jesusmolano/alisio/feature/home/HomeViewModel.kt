@@ -17,6 +17,7 @@ import dev.jesusmolano.alisio.core.icons.customLabel
 import dev.jesusmolano.alisio.core.media.PlayerSeen
 import dev.jesusmolano.alisio.core.media.hiddenAfter
 import dev.jesusmolano.alisio.core.media.musicKey
+import dev.jesusmolano.alisio.core.media.musicPieceDelay
 import dev.jesusmolano.alisio.core.now.ConnectedAudio
 import dev.jesusmolano.alisio.core.now.DISMISSALS_TO_SILENCE
 import dev.jesusmolano.alisio.core.now.NowApp
@@ -71,7 +72,9 @@ import dev.jesusmolano.alisio.data.usage.UsageAccess
 import dev.jesusmolano.alisio.data.zones.ZonesRepository
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -80,6 +83,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -150,9 +154,33 @@ class HomeViewModel(
     /** La última carátula guardada de cada app de música: la lleva la sugerencia «Reanudar». */
     val musicArt: StateFlow<Map<String, Bitmap>> = music.lastArt
 
-    /** Si suena algo, de la app que sea: la pieza «Música» solo sale cuando no. */
-    val somethingPlaying: StateFlow<Boolean> =
-        mediaSessions.playingApps.map { it.isNotEmpty() }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // Si hay un toque en la pieza o en «Reanudar» esperando a que la app suene (playMusic).
+    private val musicStarting = MutableStateFlow(false)
+
+    /**
+     * Si se enseña la pieza «Música»: solo sin nada sonando, y con el margen de [musicPieceDelay] para
+     * que no parpadee mientras la app arranca o cambia de canción.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val musicPieceShown: StateFlow<Boolean> = run {
+        var hidden = mediaSessions.playingApps.value.isNotEmpty()
+        combine(mediaSessions.watching, mediaSessions.playingApps, musicStarting) { watching, playing, starting ->
+            Triple(watching, playing.isNotEmpty(), starting)
+        }
+            .distinctUntilChanged()
+            .transformLatest { (watching, playing, starting) ->
+                val wait = musicPieceDelay(watching, playing, starting, hidden)
+                if (wait == null) {
+                    hidden = true
+                    emit(false)
+                } else {
+                    // transformLatest corta la espera si vuelve a sonar algo antes de acabar.
+                    delay(wait)
+                    hidden = false
+                    emit(true)
+                }
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, !hidden)
+    }
 
     /**
      * Pone la app de música sin abrirla ([MusicStarter.resume]); si en 1,5 s no suena, la abre como
@@ -166,7 +194,12 @@ class HomeViewModel(
         if (musicJob?.isActive == true) return
         musicJob =
             viewModelScope.launch {
-                if (!music.resume(app.component.packageName) && stillShown() && !launch(app)) onFailed()
+                musicStarting.value = true
+                try {
+                    if (!music.resume(app.component.packageName) && stillShown() && !launch(app)) onFailed()
+                } finally {
+                    musicStarting.value = false
+                }
             }
     }
 
