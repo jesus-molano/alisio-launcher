@@ -11,10 +11,13 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.graphics.scale
 import dev.jesusmolano.alisio.core.media.SessionFacts
 import dev.jesusmolano.alisio.core.media.chooseSession
+import dev.jesusmolano.alisio.core.media.playingSinceAfter
+import dev.jesusmolano.alisio.core.media.untitledRecheckDelay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +49,8 @@ data class NowPlaying(
 
 /**
  * Las sesiones multimedia activas y la que enseña el reproductor del Inicio (§5.5): la que suena o,
- * si ninguna suena, la última. Leerlas exige el acceso a notificaciones; sin él no hay reproductor.
+ * si ninguna suena, la última; una que suena sin título espera un margen (`chooseSession`,
+ * `SessionFacts.showable`). Leerlas exige el acceso a notificaciones; sin él no hay reproductor.
  *
  * No hay servicio propio: los avisos de sesiones solo llegan mientras el proceso vive. Todo ocurre en
  * el hilo principal.
@@ -210,10 +214,17 @@ class MediaSessions(
     private fun publish() {
         val last = watches.firstOrNull { it.controller.sessionToken == lastShown }
         val wantedApp = preferred.value
+        val now = SystemClock.elapsedRealtime()
         val chosen =
             chooseSession(watches, last, preferred = { it.controller.packageName == wantedApp }) {
-                SessionFacts(it.state.isPlaying(), it.track.title != null)
+                SessionFacts(it.state.isPlaying(), it.track.title != null, it.playingFor(now), shown = it === shown)
             }
+        // Una sesión que suena sin título aún no sale (SessionFacts.showable): si no manda nada más,
+        // hay que volver a mirar cuando acabe el margen, o no saldría nunca.
+        mainHandler.removeCallbacks(republish)
+        untitledRecheckDelay(
+            watches.filter { it.track.title == null && it.state.isPlaying() }.map { it.playingFor(now) }
+        )?.let { mainHandler.postDelayed(republish, it) }
         _playingApps.value = watches.filter { it.state.isPlaying() }.mapTo(HashSet()) { it.controller.packageName }
         shown = chosen
         if (chosen != null) lastShown = chosen.controller.sessionToken
@@ -235,6 +246,8 @@ class MediaSessions(
             }
     }
 
+    private val republish = Runnable { publish() }
+
     private class Track(val title: String?, val artist: String?, val art: Bitmap?, val duration: Long? = null)
 
     /** Una sesión y lo último que ha dicho de sí misma. */
@@ -243,10 +256,25 @@ class MediaSessions(
         var state: PlaybackState? = null
         val appLabel: String = labelOf(controller.packageName)
 
+        // Desde cuándo suena (playingSinceAfter): reloj desde el arranque, KNOWN_PLAYING si ya sonaba
+        // al empezar a escuchar, `null` si no suena.
+        private var playingSince: Long? = null
+
+        /** Cuánto lleva sonando; 0 si no suena. */
+        fun playingFor(now: Long): Long = playingSince?.let { now - it } ?: 0L
+
+        // [known]: la sesión ya existía al empezar a escuchar (watch() llama a setControllers antes de
+        // poner _watching a true). Se supone que una que ya sonaba no está arrancando y sale sin
+        // esperar al título; una app que arranca justo al empezar a escuchar sale vacía, como antes.
+        private fun notePlaying(state: PlaybackState?, known: Boolean) {
+            playingSince = playingSinceAfter(playingSince, state.isPlaying(), known, SystemClock.elapsedRealtime())
+        }
+
         fun start() {
             try {
                 track = controller.metadata.toTrack()
                 state = controller.playbackState
+                notePlaying(state, known = !_watching.value)
                 controller.registerCallback(this, mainHandler)
             } catch (e: RuntimeException) {
                 Log.w(TAG, "No se ha podido leer una sesión multimedia", e)
@@ -264,6 +292,7 @@ class MediaSessions(
 
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             this.state = state
+            notePlaying(state, known = false)
             publish()
         }
     }
