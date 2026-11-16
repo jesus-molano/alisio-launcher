@@ -20,8 +20,10 @@ class LiveSignals(
 )
 
 // Categorías de Android para cosas en curso. One UI publica muchas sin la marca de Live Update, así
-// que estas se aceptan también si llevan progreso o cronómetro.
-private val LIVE_CATEGORIES = setOf("navigation", "progress", "transport", "stopwatch")
+// que estas se aceptan también si llevan progreso o cronómetro. «call» es la llamada en curso, que
+// cuenta el tiempo con cronómetro: con la barra de estado oculta, el Inicio no tendría otro aviso de
+// ella. La llamada que aún suena no lleva cronómetro y no entra: la saca a pantalla completa el sistema.
+private val LIVE_CATEGORIES = setOf("navigation", "progress", "transport", "stopwatch", "call")
 
 /**
  * Si la notificación cuenta como algo en curso. Un reproductor nunca: ya tiene su placa. Lo marcado

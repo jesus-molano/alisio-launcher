@@ -33,6 +33,12 @@ class LiveTest {
     }
 
     @Test
+    fun `una llamada en curso cuenta, la que aun suena no`() {
+        assertTrue(isLive(signals(category = "call", chronometer = true)))
+        assertFalse(isLive(signals(category = "call")))
+    }
+
+    @Test
     fun `un reproductor no es algo en curso`() {
         assertFalse(isLive(signals(promoted = true, media = true)))
     }
