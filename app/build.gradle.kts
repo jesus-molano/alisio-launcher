@@ -14,8 +14,8 @@ android {
         applicationId = "dev.jesusmolano.alisio"
         minSdk = 31
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.7.1"
+        versionCode = 4
+        versionName = "0.8.0"
     }
 
     buildTypes {
