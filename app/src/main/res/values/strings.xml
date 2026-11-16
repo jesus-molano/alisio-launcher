@@ -128,7 +128,7 @@
     <string name="player_play">Play</string>
     <string name="player_pause">Pause</string>
     <string name="player_next">Next track</string>
-    <string name="player_hide">Hide player</string>
+    <string name="player_hide">Pause and hide player</string>
     <string name="player_subtitle" translatable="false">%1$s · %2$s</string>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_notification_access">Notification access</string>

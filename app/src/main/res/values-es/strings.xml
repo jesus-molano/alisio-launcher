@@ -124,7 +124,7 @@
     <string name="player_play">Reproducir</string>
     <string name="player_pause">Pausar</string>
     <string name="player_next">Pista siguiente</string>
-    <string name="player_hide">Ocultar reproductor</string>
+    <string name="player_hide">Pausar y ocultar reproductor</string>
     <string name="settings_notifications">Notificaciones</string>
     <string name="settings_notification_access">Acceso a notificaciones</string>
     <string name="settings_notification_access_hint">Hace falta para el reproductor y los puntos de no leído</string>

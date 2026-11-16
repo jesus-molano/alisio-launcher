@@ -86,7 +86,9 @@ internal fun PlayerBar(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = PlayerMinHeight)
-                // Deslizarla a un lado la aparta: una sesión en pausa puede quedarse horas en el Inicio.
+                // Deslizarla a un lado la aparta y pausa lo que suena (HomeViewModel.hidePlayer): una
+                // sesión en pausa puede quedarse horas en el Inicio, y la música puesta sin abrir la app
+                // no se puede cerrar desde Recientes.
                 .pointerInput(Unit) {
                     val hideAt = HideDrag.toPx()
                     awaitEachGesture {
@@ -102,13 +104,19 @@ internal fun PlayerBar(
                             change.consume()
                             break
                         }
+                        // El recorrido se suma aquí y no sobre `slide.value`: cada `snapTo` va en su
+                        // corrutina y varios leerían el mismo valor viejo, así que se perdía arrastre y
+                        // al soltar no llegaba al umbral.
+                        var offset = slide.value
                         // `horizontalDrag` da `false` si el gesto se cancela: entonces no se aparta.
                         val finished =
                             horizontalDrag(down.id) { change ->
-                                scope.launch { slide.snapTo(slide.value + change.positionChange().x) }
+                                offset += change.positionChange().x
+                                val target = offset
+                                scope.launch { slide.snapTo(target) }
                                 change.consume()
                             }
-                        if (finished && abs(slide.value) >= hideAt) hide()
+                        if (finished && abs(offset) >= hideAt) hide()
                         scope.launch { slide.animateTo(0f, AlisioMotion.follow()) }
                     }
                 }

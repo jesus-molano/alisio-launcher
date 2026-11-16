@@ -603,9 +603,15 @@ class HomeViewModel(
 
     fun skipToNext() = mediaSessions.skipToNext()
 
-    /** Aparta el reproductor del Inicio hasta que algo vuelva a sonar. */
+    /**
+     * Aparta el reproductor del Inicio y pausa lo que suena: es la forma de «cerrar» la música que
+     * Alisio puso sin abrir la app, que entonces no sale en Recientes. Sigue oculto hasta que algo
+     * vuelva a sonar (`hiddenAfter`: apartado sonando, la pausa no lo devuelve).
+     */
     fun hidePlayer() {
-        playerHidden.value = mediaSessions.playing.value?.seen()
+        val shown = mediaSessions.playing.value
+        playerHidden.value = shown?.seen()
+        if (shown?.playing == true) mediaSessions.pause()
     }
 
     private fun NowPlaying.seen() = PlayerSeen(packageName, playing)

@@ -147,6 +147,9 @@ class MediaSessions(
 
     fun skipToNext() = control { skipToNext() }
 
+    /** Pausa la sesión que se enseña. */
+    fun pause() = control { pause() }
+
     /** Abre la app de la sesión que se enseña. Devuelve `false` si no se ha podido. */
     fun openApp(): Boolean {
         val packageName = shown?.controller?.packageName ?: return false
